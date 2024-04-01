@@ -1,0 +1,25 @@
+name = "ClimaDiagnostics"
+uuid = "1ecacbb8-0713-4841-9a07-eb5aa8a2d53f"
+authors = ["Gabriele Bozzola <gbozzola@caltech.edu>"]
+version = "0.1.0"
+
+[deps]
+ClimaComms = "3a4d1b5c-c61d-41fd-a00a-5873ba7a1b0d"
+ClimaCore = "d414da3d-4745-48bb-8d80-42e94e092884"
+NCDatasets = "85f8d34a-cbdd-5861-8df4-14fed0d494ab"
+
+[compat]
+Aqua = "0.8"
+ClimaComms = "0.5"
+ClimaCore = "0.13"
+JuliaFormatter = "1"
+NCDatasets = "0.13, 0.14"
+SafeTestsets = "0.1"
+Test = "1"
+julia = "1.9"
+
+[extras]
+Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
+JuliaFormatter = "98e50ef6-434e-11e9-1051-2b60c6c9e899"
+SafeTestsets = "1bc83da4-3b8d-516f-aca4-4fe02f6d838f"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
