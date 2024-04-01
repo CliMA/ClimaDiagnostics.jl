@@ -1,18 +1,12 @@
 import ClimaComms
-
-##############
-# HDF5Writer #
-##############
+import ClimaCore.InputOutput
 
 """
     HDF5Writer()
 
-
 Save a `ScheduledDiagnostic` to a HDF5 file inside the `output_dir` of the simulation.
 
-
-TODO: This is a very barebone HDF5Writer. Do not consider this implementation as the "final
-word".
+TODO: This is a very barebone HDF5Writer!
 
 We need to implement the following features/options:
 - Toggle for write new files/append
@@ -27,8 +21,9 @@ We need to implement the following features/options:
 - ...more features/options
 
 """
-struct HDF5Writer end
-
+struct HDF5Writer <: AbstractWriter
+    output_dir::String
+end
 
 """
     close(writer::HDF5Writer)
@@ -37,20 +32,14 @@ Close all the files open in `writer`. (Currently no-op.)
 """
 Base.close(writer::HDF5Writer) = nothing
 
-function write_field!(
-    writer::HDF5Writer,
-    field,
-    diagnostic,
-    u,
-    p,
-    t,
-    output_dir,
-)
+function write_field!(writer::HDF5Writer, field, diagnostic, u, p, t)
     var = diagnostic.variable
     time = t
 
-    output_path =
-        joinpath(output_dir, "$(diagnostic.output_short_name)_$(time).h5")
+    output_path = joinpath(
+        writer.output_dir,
+        "$(diagnostic.output_short_name)_$(time).h5",
+    )
 
     comms_ctx = ClimaComms.context(u.c)
     hdfwriter = InputOutput.HDF5Writer(output_path, comms_ctx)
