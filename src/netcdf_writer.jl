@@ -20,9 +20,6 @@ import ClimaCore.Remapping: Remapper, interpolate, interpolate!
 
 import NCDatasets
 
-###################
-# NetCDFWriter #
-##################
 """
     add_dimension!(nc::NCDatasets.NCDataset,
                    name::String,
@@ -464,7 +461,10 @@ and `domain` (e.g., `ClimaCore.Geometry.LatLongPoint`s).
 """
 function hcoords_from_horizontal_space(space, domain, hpts) end
 
-struct NetCDFWriter{T, TS, DI}
+struct NetCDFWriter{T, TS, DI} <: AbstractWriter
+
+    # The base folder where to save the files.
+    output_dir::String
 
     # TODO: At the moment, each variable gets its remapper. This is a little bit of a waste
     # because we probably only need a handful of remappers since the same remapper can be
@@ -509,8 +509,7 @@ Base.close(writer::NetCDFWriter) =
     map(NCDatasets.close, values(writer.open_files))
 
 """
-    NetCDFWriter()
-
+    NetCDFWriter(output_dir)
 
 Save a `ScheduledDiagnostic` to a NetCDF file inside the `output_dir` of the simulation by
 performing a pointwise (non-conservative) remapping first.
@@ -519,6 +518,7 @@ Keyword arguments
 ==================
 
 - `cspace`: Center space of fields.
+- `output_dir`: The base folder where the files should be saved.
 - `num_points`: How many points to use along the different dimensions to interpolate the
                 fields. This is a tuple of integers, typically having meaning Long-Lat-Z,
                 or X-Y-Z (the details depend on the configuration being simulated).
@@ -529,8 +529,9 @@ Keyword arguments
   is maximum compression).
 
 """
-function NetCDFWriter(;
+function NetCDFWriter(
     cspace,
+    output_dir;
     num_points = (180, 90, 50),
     disable_vertical_interpolation = false,
     compression_level = 0,
@@ -584,6 +585,7 @@ function NetCDFWriter(;
         typeof(interpolated_physical_z),
         typeof(preallocated_arrays),
     }(
+        output_dir,
         Dict{String, Remapper}(),
         num_points,
         compression_level,
@@ -681,7 +683,6 @@ function save_diagnostic_to_disk!(
     u,
     p,
     t,
-    output_dir,
 )
     # Only the root process has to write
     ClimaComms.iamroot(ClimaComms.context(field)) || return nothing
@@ -691,7 +692,7 @@ function save_diagnostic_to_disk!(
     space = axes(field)
     FT = Spaces.undertype(space)
 
-    output_path = outpath_name(output_dir, diagnostic)
+    output_path = outpath_name(writer.output_dir, diagnostic)
 
     if !haskey(writer.open_files, output_path)
         # Append or write a new file
@@ -751,16 +752,8 @@ function save_diagnostic_to_disk!(
     return nothing
 end
 
-function write_field!(
-    writer::NetCDFWriter,
-    field,
-    diagnostic,
-    u,
-    p,
-    t,
-    output_dir,
-)
+function write_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
     interpolate_field!(writer, field, diagnostic, u, p, t)
-    save_diagnostic_to_disk!(writer, field, diagnostic, u, p, t, output_dir)
+    save_diagnostic_to_disk!(writer, field, diagnostic, u, p, t)
     return nothing
 end
