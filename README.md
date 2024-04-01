@@ -1,2 +1,4 @@
-# ClimaDiagnostics
-Diagnostics support for CliMA ESM component models
+<h1 align="center">
+  <img src="logo.svg" width="180px"> <br>
+ClimaDiagnostics.jl
+</h1>
