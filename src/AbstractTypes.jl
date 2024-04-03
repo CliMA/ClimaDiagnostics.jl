@@ -7,9 +7,9 @@ An object that knows how to save some output.
 
 `AbstractWriter`s have to provide one function, `write_field!`
 
-The function has to have singature
-`write_field!(writer::Writer, field, diagnostic::ScheduledDiagnostic, u, p, t)`
+The function has to have signature
+`write_field!(writer::Writer, field, diagnostic, u, p, t)`
 
-It is up to the writer to implment this
+It is up to the `Writer` to implement this.
 """
 abstract type AbstractWriter end

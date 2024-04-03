@@ -1,10 +1,10 @@
 name: Documentation
 
 on:
+  pull_request:
   push:
     branches:
       - main
-    pull_request:
     tags: '*'
 
 concurrency:
@@ -19,6 +19,7 @@ jobs:
       - uses: julia-actions/setup-julia@latest
         with:
           version: 1
+      - uses: julia-actions/cache@v1
       - name: Install dependencies
         run: julia --project=docs/ -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd())); Pkg.instantiate()'
       - name: Build and deploy

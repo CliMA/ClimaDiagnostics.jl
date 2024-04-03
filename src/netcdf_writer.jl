@@ -463,7 +463,7 @@ function hcoords_from_horizontal_space(space, domain, hpts) end
 
 struct NetCDFWriter{T, TS, DI} <: AbstractWriter
 
-    # The base folder where to save the files.
+    """The base folder where to save the files."""
     output_dir::String
 
     # TODO: At the moment, each variable gets its remapper. This is a little bit of a waste
@@ -474,42 +474,44 @@ struct NetCDFWriter{T, TS, DI} <: AbstractWriter
     # construction time is quite difficult.
     remappers::Dict{String, Remapper}
 
-    # Tuple/Array of integers that identifies how many points to use for interpolation along
-    # the various dimensions. It has to have the same size as the target interpolation
-    # space.
+    """ Tuple/Array of integers that identifies how many points to use for interpolation
+    along the various dimensions. It has to have the same size as the target interpolation
+    space."""
     num_points::T
 
-    # How much to compress the data in the final NetCDF file: 0 no compression, 9 max
-    # compression.
+    """How much to compress the data in the final NetCDF file: 0 no compression, 9 max
+    compression."""
     compression_level::Int
 
-    # An array with size num_points with the physical altitude of any given target point.
+    """An array with size num_points with the physical altitude of any given target
+    point."""
     interpolated_physical_z::TS
 
-    # NetCDF files that are currently open. Only the root process uses this field.
+    """NetCDF files that are currently open. Only the root process uses this field."""
     open_files::Dict{String, NCDatasets.NCDataset}
 
-    # Do not interpolate on the z direction, instead evaluate on the levels.
-    # When disable_vertical_interpolation is true, the num_points on the vertical direction
-    # is ignored.
+    """ Do not interpolate on the z direction, instead evaluate on the levels. When
+    disable_vertical_interpolation is true, the num_points on the vertical direction is
+    ignored."""
     disable_vertical_interpolation::Bool
 
-    # Areas of memory preallocated where the interpolation output is saved. Only the root
-    # process uses this
+    """Areas of memory preallocated where the interpolation output is saved. Only the root
+    process uses this"""
     preallocated_output_arrays::DI
 end
 
 """
     close(writer::NetCDFWriter)
 
-
-Close all the files open in `writer`.
+Close all the open files in `writer`.
 """
-Base.close(writer::NetCDFWriter) =
-    map(NCDatasets.close, values(writer.open_files))
+function Base.close(writer::NetCDFWriter)
+    foreach(NCDatasets.close, values(writer.open_files))
+    return nothing
+end
 
 """
-    NetCDFWriter(output_dir)
+    NetCDFWriter(cspace, output_dir)
 
 Save a `ScheduledDiagnostic` to a NetCDF file inside the `output_dir` of the simulation by
 performing a pointwise (non-conservative) remapping first.
@@ -517,7 +519,7 @@ performing a pointwise (non-conservative) remapping first.
 Keyword arguments
 ==================
 
-- `cspace`: Center space of fields.
+- `cspace`: Space where the `Fields` are defined.
 - `output_dir`: The base folder where the files should be saved.
 - `num_points`: How many points to use along the different dimensions to interpolate the
                 fields. This is a tuple of integers, typically having meaning Long-Lat-Z,
@@ -672,10 +674,6 @@ function interpolate_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
     return nothing
 end
 
-function outpath_name(output_dir, diagnostic)
-    joinpath(output_dir, "$(diagnostic.output_short_name).nc")
-end
-
 function save_diagnostic_to_disk!(
     writer::NetCDFWriter,
     field,
@@ -692,7 +690,9 @@ function save_diagnostic_to_disk!(
     space = axes(field)
     FT = Spaces.undertype(space)
 
-    output_path = outpath_name(writer.output_dir, diagnostic)
+    output_short_name = output_short_name(diagnostic)
+
+    output_path = joinpath(writer.output_dir, "$(output_short_name).nc")
 
     if !haskey(writer.open_files, output_path)
         # Append or write a new file
@@ -752,6 +752,11 @@ function save_diagnostic_to_disk!(
     return nothing
 end
 
+"""
+    write_field!(writer::NetCDFWriter, field::Fields.Field, diagnostic, u, p, t)
+
+Resample `field` and save it to file as directed by the `writer`.
+"""
 function write_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
     interpolate_field!(writer, field, diagnostic, u, p, t)
     save_diagnostic_to_disk!(writer, field, diagnostic, u, p, t)

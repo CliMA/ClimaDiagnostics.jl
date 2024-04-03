@@ -1,5 +1,5 @@
 # This file defines group identities (technically _monoid identities_) and is included in
-# Diagnostics.jl.
+# clima_diagnostics.jl.
 #
 # Several diagnostics require performing reductions, such as taking the maximum or the
 # average. Since it is not feasible to store all the lists of all the intermediate values,

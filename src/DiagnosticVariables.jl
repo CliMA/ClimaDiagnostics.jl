@@ -78,6 +78,15 @@ function short_name(dv::DiagnosticVariable)
 end
 
 """
+    long_name(dv::DiagnosticVariable)
+
+Return the long name associated to the given `DiagnosticVariable`.
+"""
+function long_name(dv::DiagnosticVariable)
+    return dv.long_name
+end
+
+"""
     average_pre_output_hook!
 
 Function to use as `pre_output_hook!` for a `ScheduledDiagnostic` to compute an arithmetic average.

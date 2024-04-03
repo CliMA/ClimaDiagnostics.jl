@@ -172,7 +172,8 @@ end
 """
     EveryDtSchedule(integrator)
 
-Returns true if `integrator.step` is evenly divided by the divisor.
+Returns true if `integrator.t >= last_t + dt`, where `last_t` is the last time
+this function was true and `dt` is the schedule interval time.
 """
 function (schedule::EveryDtSchedule)(integrator)
     next_t = schedule.t_last[] + schedule.dt

@@ -1,7 +1,11 @@
-# Writers.jl
-#
-# This file defines generic writers for diagnostics with opinionated defaults.
+"""
+The `Writers` module defines generic writers for diagnostics with opinionated defaults.
 
+Currently, it implements:
+- `DictWriter`, for in-memory, dictionary-based writing
+- `HDF5Writer`, to save raw `ClimaCore` `Fields` to HDF5 files
+- `NetCDFWriter`, to save remapped `ClimaCore` `Fields` to NetCDF files
+"""
 module Writers
 
 import ..AbstractWriter, ..ScheduledDiagnostic

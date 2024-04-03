@@ -1,0 +1,169 @@
+# What do I have to do to use `ClimaDiagnostics`?
+
+In this page, we describe the low level interface that `ClimaDiagnostics` offers
+to work with diagnostics. Most packages implement addition interface to
+streamline computing and outputting diagnostics, so you should first refer to
+the manual of your package of interest. Come back here if you want to go beyond
+what the package developers offer and unlock the full power of
+`ClimaDiagnostics`.
+
+There are two fundamental objects in `ClimaDiagnostics`: the
+`DiagnosticVariable`, and the `ScheduledDiagnostic`.
+
+#### `DiagnosticVariable`s
+
+A `DiagnosticVariable` is a recipe on how to compute something alongside with
+some metadata.
+
+For example, a `DiagnosticVariable` might be the air temperature. In pseudocode,
+some of the information we might want to include attach to the air temperature
+are:
+```yaml
+short_name: "ta"
+long_name: "Air Temperature"
+units: "K"
+how_to_compute: state.ta
+...
+```
+
+The definition of what a `DiagnosticVariable` is. Conceptually, a
+`DiagnosticVariable` is a variable we know how to compute from the state. We
+attach more information to it for documentation and to reference to it with its
+short name. `DiagnosticVariables` can exist irrespective of the existence of an
+actual simulation that is being run. Science packages are encourage to define
+their set of pre-made `DiagnosticVariables`, for example, `ClimaAtmos` comes with
+several diagnostics already defined (in the `ALL_DIAGNOSTICS` dictionary).
+
+Let us see how we would define a `DiagnosticVariable`
+```julia
+import ClimaDiagnostics: DiagnosticVariable
+
+function compute_ta!(out, state, cache, time)
+    if isnothing(out)
+        return copy(state.ta)
+    else
+        out .= state.ta
+    end
+end
+
+var = DiagnosticVariable(;
+    short_name = "ta",
+    long_name = "Air Temperature",
+    standard_name = "air_temperature",
+    comments = "Measured assuming that the air is in quantum equilibrium with the metaverse",
+    units = "K",
+    compute! = compute_ta!
+)
+```
+
+`compute_ta!` is the key function here. It determines how the variable should be
+computed from the `state`, `cache`, and `time` of the simulation. Typically,
+these are packaged within an `integrator` object (e.g., `state = integrator.u`
+or `integrator.Y`).
+
+`compute_ta!` takes another argument, `out`. `out` is an area of memory managed
+by `ClimaDiagnostics` that is used to reduce the number of allocations needed
+when working with diagnostics. The first time the diagnostic is called, an area
+of memory is allocated and filled with the value (this is when `out` is
+`nothing`). All the subsequent times, the same space is overwritten, leading to
+much better performance. You should follow this pattern in all your diagnostics.
+
+> Note, in the future, we hope to improve this rather clumsy way to write
+> diagnostics. Hopefully, at some you will just have to write something like
+> `state.ta` and not worry about the `out` at all.
+
+A `DiagnosticVariable` defines what a variable is and how to compute it, but
+does not specify when to compute/output it. For that, we need
+`ScheduledDiagnostic`s.
+
+#### `ScheduledDiagnostic`s
+
+A `ScheduledDiagnostic` is a `DiagnosticVariable` with attached a schedule on
+when it should be computed and output, as well as what reductions should be
+performed and how the file should be written.
+
+Continuing our example on `ta`. Suppose we want to compute the average of the
+air temperature over a month. We would package this in a `ScheduledDiagnostic`
+that knows that we want to compute the air temperature, and we want it averaged
+over a month.
+
+Let us examine what is in a `ScheduledDiagnostic` in more details:
+- `variable`, the `DiagnosticVariable` we want to compute.
+- two `schedule` functions that determine when the variable should be computed
+  and output (`compute_schedule_func` and `output_schedule_func`). We have two
+  separate entries one for compute and one for output because we might want to
+  control them separately. For instance, we might want to take the average of
+  something every 10 steps, and output it the average every 100 iterations.
+  `schedule` functions are powerful, so there is an entire section dedicated to
+  them below. `compute_schedule_func` and `output_schedule_func` are likely
+  going to the same unless there are temporal reductions.
+- an `output_writer`, an object that knows how what to do with the output.
+  Examples of writers might be the `DictWriter`, which saves the output to a
+  dictionary, or the `NetCDFWriter`, which saves the output to NetCDF files. A
+  more complete description of the available writers is in [Saving the
+  diagnostics](@ref) page.
+- `output_short_name` and `output_long_name`, two strings that specify the names
+  that should be used for the output. Typically, `output_short_name` is used for
+  file/key names, `output_long_name` is used for descriptive attributes. If none
+  is provided, one is automatically generated by the [`output_short_name`](@ref)
+  and [`output_long_name`](@ref) functions.
+- `reduction_time_func`, a function that implements a temporal reduction.
+  Discussed later. This is what you need to implement operations like arithmetic
+  averages. A `pre_output_hook!` function can also be passed to do some basic
+  normalization operations.
+
+Note that we can have multiple `ScheduledDiagnostic`s for the same
+`DiagnosticVariable` (e.g., daily and monthly average temperatures).
+
+##### `Schedules`
+
+`ScheduledDiagnostic`s contain two arguments `compute_schedule_func` and
+`output_schedule_func` which dictate when the variable should be computed and
+when it should be output.
+
+##### Temporal reductions
+
+It is often useful to compute aggregate data (e.g., monthly averages). In
+`ClimaDiagnostics`, this is implemented with through temporal reductions.
+
+Let us assume we want to compute the maximum of the air temperature within a
+month. To achieve this, we simply pass the `max` function to
+`reduction_time_func` and choose our window in the `output_schedule_func`.
+
+The only temporal reductions allowed are ones defined by associative operations,
+that is, functions `f` so that `f(a, b, c, d, ...) = f(a, f(b, f(c, f(d,
+...))))` (such as the sum). The reason for this restriction comes from the fact
+that we do not store all the intermediate values (which would lead to large
+consumption of memory). Instead, we accumulate intermediate results. So, the
+only statistics that can be computed are the ones that can be computed by adding
+one element at the time.
+
+More specifically, when a `ScheduledDiagnostic` is created with a
+`reduction_time_func`, `ClimaDiagnostics` allocates an extra area of space
+`accumulated` for the accumulated value. Every time `compute_schedule_func` is
+true, the `DiagnosticVariable` is computed and saved to `out`. Then,
+`accumulated` is updated with the return value of
+`reduction_time_func(accumulated, out)`. When `output_schedule_func` is true,
+the accumulated value is written with the `writer` and the state reset to the
+neutral state.
+
+To allow for greater flexibility, `ClimaDiagnostics` also provides the option to
+evaluate a function before the output is saved.
+
+Pseudo code:
+```
+At the end of every time step:
+    if compute_schedule_func is true:
+        out = compute!
+        if reduction_time_func is not nothing:
+            accumulated_value = reduction_time_func(accumulated_value, out)
+            counter += 1
+    if output_schedule_func is true:
+        pre_output_hook(accumulated_value, counter)
+        dump(accumulated_value)
+        reset(accumulated_value)
+        reset(counter)
+```
+
+
+

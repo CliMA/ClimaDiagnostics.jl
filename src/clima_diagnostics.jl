@@ -1,46 +1,3 @@
-
-# This file contains:
-#
-# - The definition of what a DiagnosticVariable is. Conceptually, a DiagnosticVariable is a
-#   variable we know how to compute from the state. We attach more information to it for
-#   documentation and to reference to it with its short name. DiagnosticVariables can exist
-#   irrespective of the existence of an actual simulation that is being run. Science
-#   packages are encourage to define their set of pre-made `DiagnosticVariables`, for
-#   example, ClimaAtmos comes with several diagnostics already defined (in the
-#   `ALL_DIAGNOSTICS` dictionary).
-#
-# - A dictionary `ALL_DIAGNOSTICS` with all the diagnostics we know how to compute, keyed
-#   over their short name. If you want to add more diagnostics, look at the included files.
-#   You can add your own file if you want to define several new diagnostics that are
-#   conceptually related. The dictionary `ALL_DIAGNOSTICS` should be considered an
-#   implementation detail.
-#
-# - The definition of what a ScheduledDiagnostics is. Conceptually, a ScheduledDiagnostics is a
-#   DiagnosticVariable we want to compute in a given simulation. For example, it could be
-#   the temperature averaged over a day. We can have multiple ScheduledDiagnostics for the
-#   same DiagnosticVariable (e.g., daily and monthly average temperatures).
-#
-#   We provide two types of ScheduledDiagnostics: ScheduledDiagnosticIterations and
-#   ScheduledDiagnosticTime, with the difference being only in what domain the recurrence
-#   time is defined (are we doing something at every N timesteps or every T seconds?). It is
-#   much cleaner and simpler to work with ScheduledDiagnosticIterations because iterations
-#   are well defined and consistent. On the other hand, working in the time domain requires
-#   dealing with what happens when the timestep is not lined up with the output period.
-#   Possible solutions to this problem include: uneven output, interpolation, or restricting
-#   the user from picking specific combinations of timestep/output period. In the current
-#   implementation, we choose the third option. So, ScheduledDiagnosticTime is provided
-#   because it is the physically interesting quantity. If we know what is the timestep, we
-#   can convert between the two and check if the diagnostics are well-posed in terms of the
-#   relationship between the periods and the timesteps. In some sense, you can think of
-#   ScheduledDiagnosticIterations as an internal representation and ScheduledDiagnosticTime
-#   as the external interface.
-#
-# - A function to convert a list of ScheduledDiagnosticIterations into a list of
-#   AtmosCallbacks. This function takes three arguments: the list of diagnostics and two
-#   dictionaries that map each scheduled diagnostic to an area of memory where to save the
-#   result and where to keep track of how many times the function was called (so that we
-#   can compute stuff like averages).
-
 import .Callbacks:
     Callback, CallbackOrchestrator, DivisorSchedule, EveryDtSchedule
 import .Writers: write_field!, AbstractWriter
@@ -157,9 +114,9 @@ struct DiagnosticsHandler{SD, STORAGE <: Dict, ACC <: Dict, COUNT <: Dict}
     area of memory where to accumulate results."""
     accumulators::ACC
 
-    """Dictionary that maps a given `ScheduledDiagnosticIterations` to the counter that
-    tracks how many times the given diagnostics was computed from the last time it was
-    output to disk."""
+    """Dictionary that maps a given `ScheduledDiagnostic` to the counter that tracks how
+    many times the given diagnostics was computed from the last time it was output to
+    disk."""
     counters::COUNT
 end
 
