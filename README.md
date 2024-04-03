@@ -1,5 +1,10 @@
 <h1 align="center">
-  <img src="logo.svg" width="180px"> <br>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="logo-white.svg">
+  <source media="(prefers-color-scheme: light)" srcset="logo.svg">
+  <img alt="Shows the logo of ClimaDiagnostics, with a globe and magnifying glasses" src="logo.svg" width="180px">
+</picture>
+
 ClimaDiagnostics.jl
 </h1>
 
