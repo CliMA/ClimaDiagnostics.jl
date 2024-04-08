@@ -38,21 +38,6 @@ include("TestTools.jl")
         accumulated_value_field = ones(space)
         accumulated_value_array = fill!(similar(array), 1)
 
-        @test isnothing(
-            ClimaDiagnostics.accumulate!(
-                accumulated_value_field,
-                field,
-                nothing,
-            ),
-        )
-        @test isnothing(
-            ClimaDiagnostics.accumulate!(
-                accumulated_value_array,
-                array,
-                nothing,
-            ),
-        )
-
         ClimaDiagnostics.accumulate!(accumulated_value_field, field, +)
         @test extrema(accumulated_value_field) == (FT(2), FT(2))
 

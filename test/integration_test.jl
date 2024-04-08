@@ -1,0 +1,121 @@
+using Test
+using Profile
+using ProfileCanvas
+
+import SciMLBase
+import NCDatasets
+
+import ClimaDiagnostics
+
+include("TestTools.jl")
+
+function setup_integrator(output_dir)
+    t0 = 0.0
+    tf = 10.0
+    dt = 1.0
+    space = SphericalShellSpace()
+    args, kwargs = create_problem(space; t0, tf, dt)
+
+    @info "Writing output to $output_dir"
+
+    h5_writer = ClimaDiagnostics.Writers.HDF5Writer(output_dir)
+    nc_writer = ClimaDiagnostics.Writers.NetCDFWriter(
+        space,
+        output_dir;
+        num_points = (10, 5, 3),
+    )
+
+    function compute_my_var!(out, u, p, t)
+        if isnothing(out)
+            return copy(u.my_var)
+        else
+            out .= u.my_var
+            return nothing
+        end
+    end
+
+    simple_var = ClimaDiagnostics.DiagnosticVariable(;
+        compute! = compute_my_var!,
+        short_name = "YO",
+        long_name = "YO YO",
+    )
+
+    average_diagnostic = ClimaDiagnostics.ScheduledDiagnostic(
+        variable = simple_var,
+        output_writer = nc_writer,
+        reduction_time_func = (+),
+        output_schedule_func = ClimaDiagnostics.Callbacks.DivisorSchedule(2),
+        pre_output_hook! = ClimaDiagnostics.average_pre_output_hook!,
+    )
+    inst_diagnostic = ClimaDiagnostics.ScheduledDiagnostic(
+        variable = simple_var,
+        output_writer = nc_writer,
+    )
+    inst_every3s_diagnostic = ClimaDiagnostics.ScheduledDiagnostic(
+        variable = simple_var,
+        output_writer = nc_writer,
+        output_schedule_func = ClimaDiagnostics.Callbacks.EveryDtSchedule(
+            3.0,
+            t_start = t0,
+        ),
+    )
+    inst_diagnostic_h5 = ClimaDiagnostics.ScheduledDiagnostic(
+        variable = simple_var,
+        output_writer = h5_writer,
+    )
+    scheduled_diagnostics = [
+        average_diagnostic,
+        inst_diagnostic,
+        inst_diagnostic_h5,
+        inst_every3s_diagnostic,
+    ]
+
+    return ClimaDiagnostics.IntegratorWithDiagnostics(
+        SciMLBase.init(args...; kwargs...),
+        scheduled_diagnostics,
+    )
+end
+
+@testset "A full problem" begin
+    mktempdir() do output_dir
+        integrator = setup_integrator(output_dir)
+
+        SciMLBase.solve!(integrator)
+
+        NCDatasets.NCDataset(joinpath(output_dir, "YO_1it_inst.nc")) do nc
+            @test nc["YO"].attrib["short_name"] == "YO"
+            @test nc["YO"].attrib["long_name"] == "YO YO, Instantaneous"
+            @test size(nc["YO"]) == (11, 10, 5, 3)
+        end
+
+        NCDatasets.NCDataset(joinpath(output_dir, "YO_2it_average.nc")) do nc
+            @test nc["YO"].attrib["short_name"] == "YO"
+            @test nc["YO"].attrib["long_name"] ==
+                  "YO YO, average within every 2 iterations"
+            @test size(nc["YO"]) == (5, 10, 5, 3)
+        end
+
+        NCDatasets.NCDataset(joinpath(output_dir, "YO_3s_inst.nc")) do nc
+            @test nc["YO"].attrib["short_name"] == "YO"
+            @test nc["YO"].attrib["long_name"] == "YO YO, Instantaneous"
+            @test size(nc["YO"]) == (4, 10, 5, 3)
+        end
+    end
+end
+
+@testset "Performance" begin
+    mktempdir() do output_dir
+        # Flame
+        integrator = setup_integrator(output_dir)
+        prof = Profile.@profile SciMLBase.solve!(integrator)
+        results = Profile.fetch()
+        ProfileCanvas.html_file("flame.html", results)
+
+        # Allocations
+        integrator = setup_integrator(output_dir)
+        prof = Profile.Allocs.@profile SciMLBase.solve!(integrator)
+        results = Profile.Allocs.fetch()
+        allocs = ProfileCanvas.view_allocs(results)
+        ProfileCanvas.html_file("allocs.html", allocs)
+    end
+end

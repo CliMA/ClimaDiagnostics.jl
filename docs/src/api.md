@@ -3,8 +3,7 @@
 ## `ClimaDiagnostics`
 
 ```@docs
-ClimaDiagnostics.DiagnosticsHandler
-ClimaDiagnostics.DiagnosticsCallback
+ClimaDiagnostics.IntegratorWithDiagnostics
 ```
 
 ## `Callbacks`

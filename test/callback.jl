@@ -21,7 +21,8 @@ include("TestTools.jl")
     tf = 1.0
     dt = 1e-3
 
-    args, kwargs = create_problem(; t0, tf, dt)
+    space = ColumnCenterFiniteDifferenceSpace()
+    args, kwargs = create_problem(space; t0, tf, dt)
 
     expected_called = convert(Int, (tf - t0) / dt)
 
@@ -49,7 +50,8 @@ end
     tf = 1.0
     dt = 1e-3
 
-    args, kwargs = create_problem(; t0, tf, dt)
+    space = ColumnCenterFiniteDifferenceSpace()
+    args, kwargs = create_problem(space; t0, tf, dt)
 
     expected_called = convert(Int, (tf - t0) / (divisor * dt))
 
@@ -81,7 +83,7 @@ end
     callback_dt = Callback(callback_func, scheduled_func)
     callback_dt2 = Callback(callback_func2, scheduled_func2)
 
-    args, kwargs = create_problem(; t0, tf, dt)
+    args, kwargs = create_problem(space; t0, tf, dt)
 
     expected_called = convert(Int, (tf - t0) / dt_callback)
     expected_called2 = convert(Int, floor((tf - t0 - t_start2) / dt_callback2))

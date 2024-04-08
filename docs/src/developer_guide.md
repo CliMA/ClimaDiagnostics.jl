@@ -16,38 +16,23 @@ There are three components needed to add support for `ClimaDiagnostics.jl` in yo
 ## An example for steps 2. and 3.
 
 Let us assume that `scheduled_diagnostics` is the list of `ScheduledDiagnostic`s
-obtained from step 1. (more on this later), `Y` is the simulation initial state,
-`p`, the cache, `t0` the initial time, and `dt` the timestep.
+obtained from step 1. (more on this later), and `integrator` a `SciML`
+integrator.
 
-Schematically, what we need to do is
+All we need to do to add diagnostics is
 ```julia
-import ClimaDiagnostics: DiagnosticsHandler, DiagnosticsCallback
+import ClimaDiagnostics: IntegratorWithDiagnostics
 
-# Initialize the diagnostics, can be expensive
-diagnostic_handler = ClimaDiagnostics.DiagnosticsHandler(
-        scheduled_diagnostics,
-        Y,
-        p,
-        t0;
-        dt,
-    )
-
-# Prepare the SciML callback
-diag_cb = ClimaDiagnostics.DiagnosticsCallback(diagnostic_handler)
-
-SciMLBase.init(args...; kwargs..., callback = diag_cb)
+integrator = IntegratorWithDiagnostics(integrator, scheduled_diagnostics)
 ```
-with `args` and `kwargs` the argument and keyword argument needed to set up the
-target simulation.
+Creating an `IntegratorWithDiagnostics` results in calling all the diagnostics
+once. Therefore, the compile and runtime of this function can be significant if
+you have a large number of diagnostics.
 
-In `DiagnosticsHandler`, `dt` is used exclusively for consistency checks.
-Suppose your timestep is `50s` and you request a variable to be output every
-`70s`, if you pass `dt`, `DiagnosticsHandler` will catch this and error out. If
-you don't pass `dt`, `DiagnosticsHandler` will warn you about that.
-
-Creating a `DiagnosticsHandler` results in calling all the diagnostics once.
-Therefore, the compile and runtime of this function can be significant if you
-have a large number of diagnostics.
+`IntegratorWithDiagnostics` assumes that the state is in `integrator.u` and the
+cache in `integrator.p`. This assumption can be adjusted with keyword arguments.
+For instance, if the state is in `integrator.Y`, pass the `state_name = :Y`
+argument to `IntegratorWithDiagnostics`.
 
 You can learn about what is happening under the hook in the [Internals](@ref)
 page.
@@ -304,14 +289,7 @@ Allowing users to just call `monthly_average("hus", writer, t_start)`.
 > Note: `ClimaDiagnostics` will probably provided these schedules natively at
 > some point in the future.
 
-### Level 2: Provide defaults
-
-Once you built your database of variables, it is a good idea to provide
-reasonable defaults too.
-
-TODO: Fill this
-
-### Level 3: Provide higher-level interfaces (e.g., YAML)
+### Level 2: Provide higher-level interfaces (e.g., YAML)
 
 Finally, you can set in place that parses user input (e.g., from command line or
 text files) into `ScheduledDiagnostics` using the short names in your database.
@@ -432,7 +410,6 @@ YAML-specified ones.
 ## API
 
 ```@docs
-ClimaDiagnostics.DiagnosticsHandler
-ClimaDiagnostics.DiagnosticsCallback
+ClimaDiagnostics.IntegratorWithDiagnostics
 ```
 

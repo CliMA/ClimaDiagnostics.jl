@@ -119,7 +119,72 @@ Note that we can have multiple `ScheduledDiagnostic`s for the same
 
 `ScheduledDiagnostic`s contain two arguments `compute_schedule_func` and
 `output_schedule_func` which dictate when the variable should be computed and
-when it should be output.
+when it should be output. These objects have to be functions that take a single
+argument (the integrator) and return a boolean value.
+
+For example, if we want to call a callback every even step, we could pass
+```julia
+function compute_every_even(integrator)
+    return mod(integrator.step, 2) == 0
+end
+```
+Schedules can be arbitrary. For example, we might want to compute something if
+the value of the variable `var` is greater than 100 anywhere. The relevant
+schedule for this would be
+```julia
+function compute_if_larger_than100(integrator)
+    return maximum(integrator.u.var) > 100
+end
+```
+
+Strictly speaking, schedules do not have to functions, but callable objects. For
+example, the `compute_every_even` schedule we defined earlier could be written
+for a more general divisor
+```julia
+struct EveryDivisor
+    divisor::Int
+end
+
+function (schedule::EveryDivisor)(integrator)
+    return mod(integrator.step, schedule.divisor) == 0
+end
+
+compute_every_even = EveryDivisor(2)
+```
+This gives schedules great flexibility because it allows them to contain a state
+that can be changed.
+
+`ClimaDiagnostics` define an `AbstractSchedule` type to implement generic
+schedules following the pattern just illustrated. One of the main roles of
+`AbstractSchedule`s is to have meaningful names that can be used in
+files/datasets/error messages, and so on. For this reason, `Schedule`s in
+`ClimaDiagnostics` define methods for `short_name` and `long_name`.
+
+If you define your own schedule, you are encouraged to define those methods too.
+
+Let us see a complete example of a new schedule that returns true when a
+variable is greater than a threshold.
+```julia
+import ClimaDiagnostics
+
+struct ExceedThresholdSchedule <: ClimaDiagnostics.AbstractSchedule
+    var::Symbol
+    threshold::Float64
+end
+
+function (schedule::ExceedThresholdSchedule)(integrator)
+    return maximum(getproperty(integrator.u, schedule.var)) > schedule.threshold
+end
+
+function ClimaDiagnostics.Callback.short_name(schedule::ExceedThresholdSchedule)
+    return "$(schedule.var)_more_than_$(schedule.threshold)"
+end
+
+function ClimaDiagnostics.Callback.long_name(schedule::ExceedThresholdSchedule)
+    return "when max($(schedule.var)) >= $(schedule.threshold)"
+end
+```
+Names are not too important, but they should be meaningful to you.
 
 ##### Temporal reductions
 
@@ -148,22 +213,28 @@ the accumulated value is written with the `writer` and the state reset to the
 neutral state.
 
 To allow for greater flexibility, `ClimaDiagnostics` also provides the option to
-evaluate a function before the output is saved.
+evaluate a function before the output is saved. This is the `pre_output_hook!`
+function that can be provided when defining a `ScheduledDiagnostic`. The
+signature for `pre_output_hook!` has to be `pre_output_hook!(accumulated_value,
+counter)`, where `counter` is the number of times the diagnostic was called.
+Given this, the arithmetic average is obtained with a `+` time reduction and a
+`pre_output_hook! = (acc, counter) -> acc .= acc ./ counter`. Given that
+averages are very common operations, `ClimaDiagnostics` directly provides the
+`pre_output_hook`. So, to define an average, you can directly import and use
+`ClimaDiagnostics.average_pre_output_hook!`.
 
-Pseudo code:
+The following is a sketch of what happens at the end of each step for each
+`ScheduledDiagnostic`:
 ```
-At the end of every time step:
-    if compute_schedule_func is true:
-        out = compute!
-        if reduction_time_func is not nothing:
-            accumulated_value = reduction_time_func(accumulated_value, out)
-            counter += 1
-    if output_schedule_func is true:
-        pre_output_hook(accumulated_value, counter)
-        dump(accumulated_value)
-        reset(accumulated_value)
-        reset(counter)
+if compute_schedule_func is true:
+    out = compute!
+    if reduction_time_func is not nothing:
+        accumulated_value = reduction_time_func(accumulated_value, out)
+        counter += 1
+if output_schedule_func is true:
+    pre_output_hook(accumulated_value, counter)
+    dump(accumulated_value)
+    reset(accumulated_value)
+    reset(counter)
 ```
-
-
 

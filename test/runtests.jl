@@ -11,6 +11,8 @@ using Test
 @safetestset "Callbacks and Schdules" begin @time include("callback.jl") end
 @safetestset "DiagnosticVariable" begin @time include("diagnostic_variable.jl") end
 @safetestset "SchduledDiagnostics" begin @time include("diagnostics.jl") end
+
+@safetestset "Integration test" begin @time include("integration_test.jl") end
 #! format: on
 
 return nothing

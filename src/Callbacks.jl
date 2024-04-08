@@ -1,3 +1,16 @@
+"""
+The `Callbacks` module contains infrastructure to manage and run our callback
+system independently of SciML.
+
+We define a `Callback` object that contains the function that to be execute and
+a function that determines under which condition such function should be run.
+Then, we have `CallbackOrchestrator` that loops over the callbacks at the end of
+every step and calls what needs to be called.
+
+The `Callbacks` module also contains a collection of predefined schedule
+functions to implement the most common behaviors (e.g., run the callback every N
+steps).
+"""
 module Callbacks
 
 import ..seconds_to_str_short, ..seconds_to_str_long
@@ -31,11 +44,8 @@ Loop over all the `callbacks`, for each, check it the condition to trigger the c
 `callbacks` has to be a container of `Callback`s.
 """
 function orchestrate_callbacks(integrator, callbacks)
-    for callback in callbacks
-        if callback.schedule_func(integrator)
-            callback.callback_func(integrator)
-        end
-    end
+    active_callbacks = filter(c -> c.schedule_func(integrator), callbacks)
+    foreach(c -> c.callback_func(integrator), active_callbacks)
     return nothing
 end
 
@@ -108,7 +118,7 @@ end
 
 Returns true if `integrator.step` is evenly divided by the divisor.
 """
-function (schedule::DivisorSchedule)(integrator)
+function (schedule::DivisorSchedule)(integrator)::Bool
     return rem(integrator.step, schedule.divisor) == 0
 end
 
@@ -153,7 +163,7 @@ Note, this function performs no checks on whether the step is aligned with `dt` 
 """
 struct EveryDtSchedule{T} <: AbstractSchedule
     """The integrator time the last time this function returned true."""
-    t_last::Ref{T}
+    t_last::Base.RefValue{T}
 
     """The interval of time needed to elapse for the next time that this function will
     return true."""
@@ -164,7 +174,7 @@ struct EveryDtSchedule{T} <: AbstractSchedule
 
     True every time the current time is larger than the previous time this schedule was true + dt.
     """
-    function EveryDtSchedule(dt; t_start = zero(dt))
+    function EveryDtSchedule(dt::T; t_start::T = zero(dt)) where {T}
         new{typeof(dt)}(Ref(t_start), dt)
     end
 end
@@ -175,7 +185,7 @@ end
 Returns true if `integrator.t >= last_t + dt`, where `last_t` is the last time
 this function was true and `dt` is the schedule interval time.
 """
-function (schedule::EveryDtSchedule)(integrator)
+function (schedule::EveryDtSchedule)(integrator)::Bool
     next_t = schedule.t_last[] + schedule.dt
     # Dealing with floating point precision...
     if integrator.t > next_t || integrator.t ≈ next_t
