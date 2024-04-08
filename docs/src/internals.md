@@ -79,6 +79,8 @@ end
 (Or add this to the `reduction_identities.jl` file.)
 
 
-### Add discussion on possible alternative designs
+## Add discussion on possible alternative designs
 
-AAA
+The current design has at least one limitation:
+
+All the diagnostics have to be initialized at the very beginning. 

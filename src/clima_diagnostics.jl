@@ -1,4 +1,5 @@
 import Accessors
+import SciMLBase
 
 import .Callbacks:
     Callback, CallbackOrchestrator, DivisorSchedule, EveryDtSchedule
