@@ -2,24 +2,11 @@ import ClimaComms
 import ClimaCore.InputOutput
 
 """
-    HDF5Writer()
+    HDF5Writer(output_dir)
 
-Save a `ScheduledDiagnostic` to a HDF5 file inside the `output_dir` of the simulation.
+Save a `ScheduledDiagnostic` to a HDF5 file inside the `output_dir`.
 
 TODO: This is a very barebone HDF5Writer!
-
-We need to implement the following features/options:
-- Toggle for write new files/append
-- Checks for existing files
-- Check for new subfolders that have to be created
-- More meaningful naming conventions (keeping in mind that we can have multiple variables
-  with different reductions)
-- All variables in one file/each variable in its own file
-- All timesteps in one file/each timestep in its own file
-- Writing the correct attributes
-- Overriding simulation.output_dir (e.g., if the path starts with /)
-- ...more features/options
-
 """
 struct HDF5Writer <: AbstractWriter
     output_dir::String
@@ -32,6 +19,16 @@ Close all the files open in `writer`. (Currently no-op.)
 """
 Base.close(writer::HDF5Writer) = nothing
 
+"""
+    HDF5Writer(output_dir)
+
+Save a `ScheduledDiagnostic` to a HDF5 file inside the `output_dir`.
+
+The name of the file is determined by the `output_short_name` of the output
+`ScheduledDiagnostic`. New files are created for each timestep.
+
+`Field`s can be read back using the `InputOutput` module in `ClimaCore`.
+"""
 function write_field!(writer::HDF5Writer, field, diagnostic, u, p, t)
     var = diagnostic.variable
     time = t
@@ -41,11 +38,12 @@ function write_field!(writer::HDF5Writer, field, diagnostic, u, p, t)
         "$(diagnostic.output_short_name)_$(time).h5",
     )
 
-    comms_ctx = ClimaComms.context(u.c)
+    comms_ctx = ClimaComms.context(field)
     hdfwriter = InputOutput.HDF5Writer(output_path, comms_ctx)
     InputOutput.write!(hdfwriter, field, "$(diagnostic.output_short_name)")
     attributes = Dict(
         "time" => time,
+        "short_name" => diagnostic.output_short_name,
         "long_name" => diagnostic.output_long_name,
         "variable_units" => var.units,
         "standard_variable_name" => var.standard_name,

@@ -12,10 +12,12 @@ If you are a user of a package that is already using `ClimaDiagnostics.jl`, you
 can jump to the User guide page.
 
 If you are a developer interested in adding support for `ClimaDiagnostics.jl` in
-your package or learning about the internal design of this package, please read the Developer guide page.
+your package or learning about the internal design of this package, please read
+the Developer guide page.
 
 ## Features
 
+- Define diagnostics as function of the integrator state and the cache;
 - Accumulate diagnostics over period of times with associative binary temporal
   reductions (eg, averages);
 - Allow users to define arbitrary new diagnostics;

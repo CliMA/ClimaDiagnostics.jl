@@ -6,7 +6,7 @@ Convert a time in seconds to a string representing the time in "short" units.
 Examples:
 ========
 
-```jldoctest
+```julia
 julia> seconds_to_str_short(0)
 "0s"
 
@@ -50,7 +50,7 @@ Convert a time in seconds to a string representing the time in "longer" units.
 Examples:
 ========
 
-```jldoctest
+```julia
 julia> seconds_to_str_long(0)
 "0 Seconds"
 

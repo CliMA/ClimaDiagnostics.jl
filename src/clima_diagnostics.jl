@@ -1,6 +1,8 @@
 import Accessors
 import SciMLBase
 
+import UnrolledUtilities
+
 import .Callbacks:
     Callback, CallbackOrchestrator, DivisorSchedule, EveryDtSchedule
 import .Writers: write_field!, AbstractWriter
@@ -49,27 +51,27 @@ function accumulate!(
     return nothing
 end
 
-# When the reduction is nothing, we do not need to accumulate anything
-accumulate!(_, _, reduction_time_func::Nothing) = nothing
-
-
 function compute_callback!(
     integrator,
-    accumulators,
+    accumulator,
     storage,
-    diag,
-    counters,
+    counter,
     compute!,
+    reduction_time_func,
 )
     compute!(storage, integrator.u, integrator.p, integrator.t)
-
-    # accumulator[diag] is not defined for non-reductions
-    diag_accumulator = get(accumulators, diag, nothing)
-
-    accumulate!(diag_accumulator, storage, diag.reduction_time_func)
-    counters[diag] += 1
+    accumulate!(accumulator, storage, reduction_time_func)
+    counter[] += 1
     return nothing
 end
+
+# For non-time reductions
+function compute_callback!(integrator, storage, counter, compute!)
+    compute!(storage, integrator.u, integrator.p, integrator.t)
+    counter[] += 1
+    return nothing
+end
+
 
 function output_callback!(integrator, accumulators, storage, diag, counters)
     # Move accumulated value to storage so that we can output it (for reductions). This
@@ -105,6 +107,12 @@ function output_callback!(integrator, accumulators, storage, diag, counters)
     return nothing
 end
 
+"""
+    DiagnosticsHandler
+
+A struct that contains the scheduled diagnostics, ancillary data and areas of memory needed
+to store and accumulate results.
+"""
 struct DiagnosticsHandler{SD, STORAGE <: Dict, ACC <: Dict, COUNT <: Dict}
     """An iterable with the `ScheduledDiagnostic`s that are scheduled."""
     scheduled_diagnostics::SD
@@ -124,11 +132,15 @@ struct DiagnosticsHandler{SD, STORAGE <: Dict, ACC <: Dict, COUNT <: Dict}
 end
 
 """
+    DiagnosticsHandler(scheduled_diagnostics, Y, p, t; dt = nothing)
 
-The `DiagnosticsHandler` initializes the diagnostics by calling the  `compute!`
-function.
+An object to instantiate and manage storage spaces for `ScheduledDiagnostics`.
 
-Note: initializing a `DiagnosticsHandler` can be expensive!
+The `DiagnosticsHandler` calls `compute!(nothing, Y, p, t)` for each diagnostic. The result
+is used to allocate the areas of memory for storage and accumulation. For diagnostics
+without reduction, `write_field!(output_writer, result, diagnostic, Y, p, t)` is called too.
+
+Note: initializing a `DiagnosticsHandler` can be expensive.
 
 Keyword arguments
 ===================
@@ -189,7 +201,7 @@ function DiagnosticsHandler(scheduled_diagnostics, Y, p, t; dt = nothing)
     end
 
     return DiagnosticsHandler(
-        scheduled_diagnostics,
+        Tuple(scheduled_diagnostics),
         storage,
         accumulators,
         counters,
@@ -206,18 +218,36 @@ function DiagnosticsCallback(diagnostics_handler::DiagnosticsHandler)
     # TODO: We have two types of callbacks: to compute and accumulate diagnostics, and to
     # dump them to disk. At the moment, they all end up in the same place, but we might want
     # to keep them separate
-    callback_arrays = map(diagnostics_handler.scheduled_diagnostics) do diag
-        compute_callback =
-            integrator -> begin
-                compute_callback!(
-                    integrator,
-                    diagnostics_handler.accumulators,
-                    diagnostics_handler.storage[diag],
-                    diag,
-                    diagnostics_handler.counters,
-                    diag.variable.compute!,
-                )
-            end
+
+    # UnrolledUtilities.unrolled_flatmap helps with type stability
+
+    callbacks = UnrolledUtilities.unrolled_flatmap(
+        diagnostics_handler.scheduled_diagnostics,
+    ) do diag
+        isa_time_reduction = !isnothing(diag.reduction_time_func)
+        if isa_time_reduction
+            compute_callback =
+                integrator -> begin
+                    compute_callback!(
+                        integrator,
+                        diagnostics_handler.accumulators[diag],
+                        diagnostics_handler.storage[diag],
+                        Ref(diagnostics_handler.counters[diag]),
+                        diag.variable.compute!,
+                        diag.reduction_time_func,
+                    )
+                end
+        else
+            compute_callback =
+                integrator -> begin
+                    compute_callback!(
+                        integrator,
+                        diagnostics_handler.storage[diag],
+                        Ref(diagnostics_handler.counters[diag]),
+                        diag.variable.compute!,
+                    )
+                end
+        end
         output_callback =
             integrator -> begin
                 output_callback!(
@@ -228,32 +258,56 @@ function DiagnosticsCallback(diagnostics_handler::DiagnosticsHandler)
                     diagnostics_handler.counters,
                 )
             end
-        [
+        (
             Callback(compute_callback, diag.compute_schedule_func),
             Callback(output_callback, diag.output_schedule_func),
-        ]
+        )
     end
 
-    return CallbackOrchestrator(vcat(callback_arrays...))
+    return CallbackOrchestrator(callbacks)
 end
 
 """
+    IntegratorWithDiagnostics(integrator,
+                              scheduled_diagnostics;
+                              state_name = :u,
+                              cache_name = :p)
 
-Add string
+Return a new `integrator` with diagnostics defined by `scheduled_diagnostics`.
+
+`IntegratorWithDiagnostics` is conceptually similar to defining a `DiagnosticsHandler`,
+constructing its associated `DiagnosticsCallback`, and adding such callback to a given
+integrator.
+
+The new integrator is identical to the previous one with the only difference that it has a
+new callback called after all the other callbacks to accumulate/output diagnostics.
+
+`IntegratorWithDiagnostics` ensures that the diagnostic callbacks are initialized and called
+after everything else is initialized and computed.
+
+`IntegratorWithDiagnostics` assumes that the state is `integrator.u` and the cache is
+`integrator.p`. This behavior can be customized by passing the `state_name` and `cache_name`
+keyword arguments.
 """
-function IntegratorWithDiagnostics(integrator,
-                                   scheduled_diagnostics;
-                                   state_name = :u,
-                                   cache_name = :p)
+function IntegratorWithDiagnostics(
+    integrator,
+    scheduled_diagnostics;
+    state_name::Symbol = :u,
+    cache_name::Symbol = :p,
+)
 
-    diagnostics_handler = DiagnosticsHandler(scheduled_diagnostics,
-                                             getproperty(integrator, state_name),
-                                             getproperty(integrator, cache_name),
-                                             integrator.t; integrator.dt)
+    diagnostics_handler = DiagnosticsHandler(
+        scheduled_diagnostics,
+        getproperty(integrator, state_name),
+        getproperty(integrator, cache_name),
+        integrator.t;
+        integrator.dt,
+    )
     diagnostics_callback = DiagnosticsCallback(diagnostics_handler)
 
     continuous_callbacks = integrator.callback.continuous_callbacks
-    discrete_callbacks = (integrator.callback.discrete_callbacks..., diagnostics_callback)
+    discrete_callbacks =
+        (integrator.callback.discrete_callbacks..., diagnostics_callback)
     callback = SciMLBase.CallbackSet(continuous_callbacks, discrete_callbacks)
 
     Accessors.@reset integrator.callback = callback

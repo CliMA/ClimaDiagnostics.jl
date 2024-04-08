@@ -39,3 +39,10 @@ jobs:
           files: lcov.info
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+      - name: Archive production artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: flamegraphs
+          path: |
+            test/flame.html
+            test/allocs.html
