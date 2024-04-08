@@ -79,3 +79,6 @@ end
 (Or add this to the `reduction_identities.jl` file.)
 
 
+### Add discussion on possible alternative designs
+
+AAA

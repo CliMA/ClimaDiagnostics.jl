@@ -1,3 +1,5 @@
+import Accessors
+
 import .Callbacks:
     Callback, CallbackOrchestrator, DivisorSchedule, EveryDtSchedule
 import .Writers: write_field!, AbstractWriter
@@ -233,4 +235,28 @@ function DiagnosticsCallback(diagnostics_handler::DiagnosticsHandler)
     end
 
     return CallbackOrchestrator(vcat(callback_arrays...))
+end
+
+"""
+
+Add string
+"""
+function add_diagnostics!(integrator,
+                          scheduled_diagnostics;
+                          state_name = :u,
+                          cache_name = :p)
+
+    diagnostics_handler = DiagnosticsHandler(scheduled_diagnostics,
+                                             getproperty(integrator, state_name),
+                                             getproperty(integrator, cache_name),
+                                             integrator.t; integrator.dt)
+    diagnostics_callback = DiagnosticsCallback(diagnostics_handler)
+
+    continuous_callbacks = integrator.callback.continuous_callbacks
+    discrete_callbacks = (integrator.callback.discrete_callbacks..., diagnostics_callback)
+    callback = SciMLBase.CallbackSet(continuous_callbacks, discrete_callbacks)
+
+    Accessors.@set integrator.callback = callback
+
+    return nothing
 end

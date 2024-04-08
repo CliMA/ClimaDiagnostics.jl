@@ -690,9 +690,7 @@ function save_diagnostic_to_disk!(
     space = axes(field)
     FT = Spaces.undertype(space)
 
-    output_short_name = output_short_name(diagnostic)
-
-    output_path = joinpath(writer.output_dir, "$(output_short_name).nc")
+    output_path = joinpath(writer.output_dir, "$(output_short_name(diagnostic)).nc")
 
     if !haskey(writer.open_files, output_path)
         # Append or write a new file
