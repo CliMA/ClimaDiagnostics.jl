@@ -1,7 +1,8 @@
 # I am a developer, how do I add `ClimaDiagnostics.jl` to my package?
 
-Before reading this section, make sure you are familiar with the terminology.
-You know to know what a [`DiagnosticVariable`](@ref) and a
+This page provides additional documentation on abstractions to use
+`ClimaDiagnostics`. Before reading this page, make sure you are familiar with
+the terminology. You know to know what a [`DiagnosticVariable`](@ref) and a
 [`ScheduledDiagnostic`](@ref) are.
 
 There are three components needed to add support for `ClimaDiagnostics.jl` in your package.

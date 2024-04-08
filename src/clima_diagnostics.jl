@@ -206,7 +206,6 @@ function DiagnosticsCallback(diagnostics_handler::DiagnosticsHandler)
     # TODO: We have two types of callbacks: to compute and accumulate diagnostics, and to
     # dump them to disk. At the moment, they all end up in the same place, but we might want
     # to keep them separate
-
     callback_arrays = map(diagnostics_handler.scheduled_diagnostics) do diag
         compute_callback =
             integrator -> begin
@@ -242,10 +241,10 @@ end
 
 Add string
 """
-function add_diagnostics!(integrator,
-                          scheduled_diagnostics;
-                          state_name = :u,
-                          cache_name = :p)
+function IntegratorWithDiagnostics(integrator,
+                                   scheduled_diagnostics;
+                                   state_name = :u,
+                                   cache_name = :p)
 
     diagnostics_handler = DiagnosticsHandler(scheduled_diagnostics,
                                              getproperty(integrator, state_name),
@@ -257,7 +256,7 @@ function add_diagnostics!(integrator,
     discrete_callbacks = (integrator.callback.discrete_callbacks..., diagnostics_callback)
     callback = SciMLBase.CallbackSet(continuous_callbacks, discrete_callbacks)
 
-    Accessors.@set integrator.callback = callback
+    Accessors.@reset integrator.callback = callback
 
-    return nothing
+    return integrator
 end
