@@ -1,8 +1,6 @@
 import Accessors
 import SciMLBase
 
-import UnrolledUtilities
-
 import .Callbacks:
     Callback, CallbackOrchestrator, DivisorSchedule, EveryDtSchedule
 import .Writers: write_field!, AbstractWriter
@@ -219,50 +217,47 @@ function DiagnosticsCallback(diagnostics_handler::DiagnosticsHandler)
     # dump them to disk. At the moment, they all end up in the same place, but we might want
     # to keep them separate
 
-    # UnrolledUtilities.unrolled_flatmap helps with type stability
-
-    callbacks = UnrolledUtilities.unrolled_flatmap(
-        diagnostics_handler.scheduled_diagnostics,
-    ) do diag
-        isa_time_reduction = !isnothing(diag.reduction_time_func)
-        if isa_time_reduction
-            compute_callback =
-                integrator -> begin
-                    compute_callback!(
-                        integrator,
-                        diagnostics_handler.accumulators[diag],
-                        diagnostics_handler.storage[diag],
-                        Ref(diagnostics_handler.counters[diag]),
-                        diag.variable.compute!,
-                        diag.reduction_time_func,
-                    )
-                end
-        else
-            compute_callback =
-                integrator -> begin
-                    compute_callback!(
-                        integrator,
-                        diagnostics_handler.storage[diag],
-                        Ref(diagnostics_handler.counters[diag]),
-                        diag.variable.compute!,
-                    )
-                end
-        end
-        output_callback =
-            integrator -> begin
-                output_callback!(
-                    integrator,
-                    diagnostics_handler.accumulators,
-                    diagnostics_handler.storage[diag],
-                    diag,
-                    diagnostics_handler.counters,
-                )
+    callbacks =
+        Iterators.flatmap(diagnostics_handler.scheduled_diagnostics) do diag
+            isa_time_reduction = !isnothing(diag.reduction_time_func)
+            if isa_time_reduction
+                compute_callback =
+                    integrator -> begin
+                        compute_callback!(
+                            integrator,
+                            diagnostics_handler.accumulators[diag],
+                            diagnostics_handler.storage[diag],
+                            Ref(diagnostics_handler.counters[diag]),
+                            diag.variable.compute!,
+                            diag.reduction_time_func,
+                        )
+                    end
+            else
+                compute_callback =
+                    integrator -> begin
+                        compute_callback!(
+                            integrator,
+                            diagnostics_handler.storage[diag],
+                            Ref(diagnostics_handler.counters[diag]),
+                            diag.variable.compute!,
+                        )
+                    end
             end
-        (
-            Callback(compute_callback, diag.compute_schedule_func),
-            Callback(output_callback, diag.output_schedule_func),
-        )
-    end
+            output_callback =
+                integrator -> begin
+                    output_callback!(
+                        integrator,
+                        diagnostics_handler.accumulators,
+                        diagnostics_handler.storage[diag],
+                        diag,
+                        diagnostics_handler.counters,
+                    )
+                end
+            (
+                Callback(compute_callback, diag.compute_schedule_func),
+                Callback(output_callback, diag.output_schedule_func),
+            )
+        end
 
     return CallbackOrchestrator(callbacks)
 end
