@@ -259,7 +259,7 @@ function DiagnosticsCallback(diagnostics_handler::DiagnosticsHandler)
             )
         end
 
-    return CallbackOrchestrator(callbacks)
+    return CallbackOrchestrator(Tuple(callbacks))
 end
 
 """
