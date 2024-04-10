@@ -233,6 +233,7 @@ if compute_schedule_func is true:
         counter += 1
 if output_schedule_func is true:
     pre_output_hook(accumulated_value, counter)
+    interpolate(accumulated_value)
     dump(accumulated_value)
     reset(accumulated_value)
     reset(counter)

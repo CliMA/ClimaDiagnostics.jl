@@ -116,7 +116,11 @@ function NetCDFWriter(
         hpts = target_coordinates(space, num_points)
         vpts = []
     else
-        hpts, vpts = target_coordinates(space, num_points)
+        hpts, vpts = target_coordinates(
+            space,
+            num_points;
+            disable_vertical_interpolation,
+        )
     end
 
     hcoords = hcoords_from_horizontal_space(
@@ -181,7 +185,11 @@ function interpolate_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
             hpts = target_coordinates(space, writer.num_points)
             vpts = []
         else
-            hpts, vpts = target_coordinates(space, writer.num_points)
+            hpts, vpts = target_coordinates(
+                space,
+                writer.num_points;
+                writer.disable_vertical_interpolation,
+            )
         end
 
         hcoords = hcoords_from_horizontal_space(
@@ -228,18 +236,13 @@ function interpolate_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
 end
 
 """
-    save_diagnostic_to_disk!(
-        writer::NetCDFWriter,
-        field,
-        diagnostic,
-        u,
-        p,
-        t,
-    )
+    write_field!(writer::NetCDFWriter, field::Fields.Field, diagnostic, u, p, t)
 
 Save the resampled `field` produced by `diagnostic` as directed by the `writer`.
 
 Only the root process does something here.
+
+Note: It assumes that the field is already resampled.
 
 The target file is determined by `output_short_name(diagnostic)`. If the target file already
 exists, append to it. If not, create a new file. If the file does not contain dimensions,
@@ -252,14 +255,7 @@ Attributes are appended to the dataset:
 - `comments`
 - `start_date`
 """
-function save_diagnostic_to_disk!(
-    writer::NetCDFWriter,
-    field,
-    diagnostic,
-    u,
-    p,
-    t,
-)
+function write_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
     # Only the root process has to write
     ClimaComms.iamroot(ClimaComms.context(field)) || return nothing
 
@@ -287,6 +283,7 @@ function save_diagnostic_to_disk!(
         nc,
         space,
         writer.num_points;
+        writer.disable_vertical_interpolation,
         writer.interpolated_physical_z,
     )
 
@@ -305,7 +302,7 @@ function save_diagnostic_to_disk!(
             deflatelevel = writer.compression_level,
         )
         v.attrib["short_name"] = var.short_name::String
-        v.attrib["long_name"] = diagnostic.output_long_name::String
+        v.attrib["long_name"] = output_long_name(diagnostic)::String
         v.attrib["units"] = var.units::String
         v.attrib["comments"] = var.comments::String
         # FIXME: We are hardcoding p.start_date !
@@ -320,7 +317,8 @@ function save_diagnostic_to_disk!(
     nc["time"][time_index] = t
 
     # FIXME: We are hardcoding p.start_date !
-    nc["date"][time_index] = string(p.start_date + Dates.Second(t))
+    # FIXME: We are rounding t
+    nc["date"][time_index] = string(p.start_date + Dates.Second(round(t)))
 
     # TODO: It would be nice to find a cleaner way to do this
     if length(dim_names) == 3
@@ -330,17 +328,6 @@ function save_diagnostic_to_disk!(
     elseif length(dim_names) == 1
         v[time_index, :] = interpolated_field
     end
-    return nothing
-end
-
-"""
-    write_field!(writer::NetCDFWriter, field::Fields.Field, diagnostic, u, p, t)
-
-Resample `field` and save it to file as directed by the `writer`.
-"""
-function write_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
-    interpolate_field!(writer, field, diagnostic, u, p, t)
-    save_diagnostic_to_disk!(writer, field, diagnostic, u, p, t)
     return nothing
 end
 

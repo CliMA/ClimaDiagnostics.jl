@@ -56,3 +56,8 @@ function write_field!(writer::HDF5Writer, field, diagnostic, u, p, t)
     Base.close(hdfwriter)
     return nothing
 end
+
+function interpolate_field!(writer::HDF5Writer, field, diagnostic, u, p, t)
+    # Nothing to be done here :)
+    return nothing
+end

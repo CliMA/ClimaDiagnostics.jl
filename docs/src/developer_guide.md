@@ -8,12 +8,9 @@ the terminology. You know to know what a [`DiagnosticVariable`](@ref) and a
 There are three components needed to add support for `ClimaDiagnostics.jl` in your package.
 
 1. A way to convert users' intentions to a list of [`ScheduledDiagnostic`](@ref)
-2. A call to [`DiagnosticsHandler`](@ref) after the initial state `Y` and cache
-   `p` are prepared. This initializes the diagnostics and creates an object
-   `DiagnosticsHandler`.
-3. Adding `DiagnosticsCallback(DiagnosticsHandler)` to the `SciML` integrator.
+2. A call to [`IntegratorWithDiagnostics`](@ref)
 
-## An example for steps 2. and 3.
+## Step 2
 
 Let us assume that `scheduled_diagnostics` is the list of `ScheduledDiagnostic`s
 obtained from step 1. (more on this later), and `integrator` a `SciML`
@@ -29,15 +26,10 @@ Creating an `IntegratorWithDiagnostics` results in calling all the diagnostics
 once. Therefore, the compile and runtime of this function can be significant if
 you have a large number of diagnostics.
 
-`IntegratorWithDiagnostics` assumes that the state is in `integrator.u` and the
-cache in `integrator.p`. This assumption can be adjusted with keyword arguments.
-For instance, if the state is in `integrator.Y`, pass the `state_name = :Y`
-argument to `IntegratorWithDiagnostics`.
-
 You can learn about what is happening under the hook in the [Internals](@ref)
 page.
 
-This is pretty much all that you need to know about steps 2 and 3!
+This is pretty much all that you need to know about step 2.
 
 ## Step 1
 

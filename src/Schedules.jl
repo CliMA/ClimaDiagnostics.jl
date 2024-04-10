@@ -1,82 +1,20 @@
 """
-The `Callbacks` module contains infrastructure to manage and run our callback
-system independently of SciML.
-
-We define a `Callback` object that contains the function that to be execute and
-a function that determines under which condition such function should be run.
-Then, we have `CallbackOrchestrator` that loops over the callbacks at the end of
-every step and calls what needs to be called.
-
-The `Callbacks` module also contains a collection of predefined schedule
+The `Schedules` module also contain a collection of predefined schedule
 functions to implement the most common behaviors (e.g., run the callback every N
 steps).
 """
-module Callbacks
+module Schedules
 
 import ..seconds_to_str_short, ..seconds_to_str_long
 
 import SciMLBase
 
 """
-    Callback
-
-A lightweight struct that contains two functions, `callback_func`, the function that has to
-be called, and `schedule_func`, a boolean function that determines if it is time to call
-`func` or not.
-"""
-struct Callback{FUNC <: Function, SCHEDULE}
-    """Function to be called. It has to take one argument, the integrator."""
-    callback_func::FUNC
-
-    """Boolean function (or, more often, a callable struct, e.g., an `AbstractSchedule`) that
-    determines whether `callback_func` should be called or not. It has to take one argument,
-    the integrator. Most typically, only `integrator.t` or `integrator.step` are used."""
-    schedule_func::SCHEDULE
-end
-
-"""
-    orchestrate_diagnostics(integrator, callbacks)
-
-Loop over all the `callbacks`, for each, check it the condition to trigger the call is met
-(by calling `callback.schedule_func(integrator)`). If yes, call
-`callback.callback_func(integrator)`.
-
-`callbacks` has to be a container of `Callback`s.
-"""
-function orchestrate_callbacks(integrator, callbacks)
-    active_callbacks = filter(c -> c.schedule_func(integrator), callbacks)
-    foreach(c -> c.callback_func(integrator), active_callbacks)
-    return nothing
-end
-
-"""
-    CallbackOrchestrator(callbacks)
-
-Return a `SciMLBase.Callback` that executes the diagnostic callbacks specified by
-`diagnostics_callbacks` according to their schedules.
-
-`callbacks` has to be a container of `Callback`s.
-"""
-function CallbackOrchestrator(callbacks)
-    sciml_callback(integrator) = orchestrate_callbacks(integrator, callbacks)
-
-    # SciMLBase.DiscreteCallback checks if the given condition is true at the end of each
-    # step. So, we set a condition that is always true, the callback is called at the end of
-    # every step. This callback runs `orchestrate_callbacks`, which manages which
-    # diagnostics functions to call
-    condition = (_, _, _) -> true
-
-    return SciMLBase.DiscreteCallback(condition, sciml_callback)
-end
-
-#############
-# Schedules #
-#############
-"""
     AbstractSchedule
 
 `AbstractSchedule`s are structs that behave like functions and are used for the purpose of
-defining a schedule to be used in `Callback`. They also may contain additional information.
+defining a schedule to be used in `ScheduledDiagnostics`. They also may contain additional
+information.
 """
 abstract type AbstractSchedule end
 

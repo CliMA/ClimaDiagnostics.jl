@@ -1,7 +1,7 @@
 module ScheduledDiagnostics
 
 import ..AbstractWriter
-import ..Callbacks: EveryStepSchedule
+import ..Schedules: EveryStepSchedule
 import ..DiagnosticVariables:
     DiagnosticVariable, descriptive_short_name, descriptive_long_name
 

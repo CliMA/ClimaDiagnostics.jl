@@ -9,7 +9,13 @@ import ClimaDiagnostics
 
 include("TestTools.jl")
 
-function setup_integrator(output_dir)
+"""
+Set up a full test problem
+
+Increasing `more_compute_diagnostics` adds more copies of a compute diagnostic with no output.
+Useful to stress allocations.
+"""
+function setup_integrator(output_dir; more_compute_diagnostics = 0)
     t0 = 0.0
     tf = 10.0
     dt = 1.0
@@ -18,6 +24,7 @@ function setup_integrator(output_dir)
 
     @info "Writing output to $output_dir"
 
+    dummy_writer = ClimaDiagnostics.Writers.DummyWriter()
     h5_writer = ClimaDiagnostics.Writers.HDF5Writer(output_dir)
     nc_writer = ClimaDiagnostics.Writers.NetCDFWriter(
         space,
@@ -44,7 +51,7 @@ function setup_integrator(output_dir)
         variable = simple_var,
         output_writer = nc_writer,
         reduction_time_func = (+),
-        output_schedule_func = ClimaDiagnostics.Callbacks.DivisorSchedule(2),
+        output_schedule_func = ClimaDiagnostics.Schedules.DivisorSchedule(2),
         pre_output_hook! = ClimaDiagnostics.average_pre_output_hook!,
     )
     inst_diagnostic = ClimaDiagnostics.ScheduledDiagnostic(
@@ -54,7 +61,7 @@ function setup_integrator(output_dir)
     inst_every3s_diagnostic = ClimaDiagnostics.ScheduledDiagnostic(
         variable = simple_var,
         output_writer = nc_writer,
-        output_schedule_func = ClimaDiagnostics.Callbacks.EveryDtSchedule(
+        output_schedule_func = ClimaDiagnostics.Schedules.EveryDtSchedule(
             3.0,
             t_start = t0,
         ),
@@ -68,6 +75,16 @@ function setup_integrator(output_dir)
         inst_diagnostic,
         inst_diagnostic_h5,
         inst_every3s_diagnostic,
+    ]
+
+    # Add more weight, useful for stressing allocations
+    compute_diagnostic = ClimaDiagnostics.ScheduledDiagnostic(
+        variable = simple_var,
+        output_writer = dummy_writer,
+    )
+    scheduled_diagnostics = [
+        scheduled_diagnostics...,
+        [compute_diagnostic for _ in 1:more_compute_diagnostics]...,
     ]
 
     return ClimaDiagnostics.IntegratorWithDiagnostics(

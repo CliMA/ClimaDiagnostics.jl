@@ -8,7 +8,7 @@ using Test
 
 @safetestset "Writers" begin @time include("writers.jl") end
 
-@safetestset "Callbacks and Schdules" begin @time include("callback.jl") end
+@safetestset "Schedules" begin @time include("schedules.jl") end
 @safetestset "DiagnosticVariable" begin @time include("diagnostic_variable.jl") end
 @safetestset "SchduledDiagnostics" begin @time include("diagnostics.jl") end
 

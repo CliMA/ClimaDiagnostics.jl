@@ -1,50 +1,12 @@
 using Test
 import ClimaDiagnostics
-import ClimaDiagnostics.Callbacks
+import ClimaDiagnostics.Schedules
 import ClimaDiagnostics.ScheduledDiagnostics
 import ClimaDiagnostics.Writers
 
 import SciMLBase
 
 include("TestTools.jl")
-
-@testset "Utils" begin
-    @test ClimaDiagnostics.identity_of_reduction(max) == -Inf
-    @test ClimaDiagnostics.identity_of_reduction(min) == +Inf
-    @test ClimaDiagnostics.identity_of_reduction(+) == 0
-    @test ClimaDiagnostics.identity_of_reduction(*) == 1
-
-    for FT in (Float32, Float64)
-        space = ColumnCenterFiniteDifferenceSpace(; FT)
-        field = FT(10) .* ones(space)
-        array = FT.(collect(1:10))
-        # No time reduction
-        @test isnothing(ClimaDiagnostics.reset_accumulator!(field, nothing))
-        @test isnothing(ClimaDiagnostics.reset_accumulator!(array, nothing))
-        # +
-        ClimaDiagnostics.reset_accumulator!(field, +)
-        @test extrema(field) == (FT(0), FT(0))
-
-        ClimaDiagnostics.reset_accumulator!(array, +)
-        @test extrema(array) == (FT(0), FT(0))
-        # *
-        ClimaDiagnostics.reset_accumulator!(field, *)
-        @test extrema(field) == (FT(1), FT(1))
-
-        ClimaDiagnostics.reset_accumulator!(array, *)
-        @test extrema(array) == (FT(1), FT(1))
-
-        # Now everything is reset to 1, let's test the accumulator
-        accumulated_value_field = ones(space)
-        accumulated_value_array = fill!(similar(array), 1)
-
-        ClimaDiagnostics.accumulate!(accumulated_value_field, field, +)
-        @test extrema(accumulated_value_field) == (FT(2), FT(2))
-
-        ClimaDiagnostics.accumulate!(accumulated_value_array, array, +)
-        @test extrema(accumulated_value_array) == (FT(2), FT(2))
-    end
-end
 
 @testset "Diagnostics" begin
     t0 = 0.0
@@ -125,7 +87,7 @@ end
         variable = simple_var,
         output_writer = dict_writer,
         reduction_time_func = +,
-        output_schedule_func = Callbacks.DivisorSchedule(5),
+        output_schedule_func = Schedules.DivisorSchedule(5),
     )
     short_name =
         ScheduledDiagnostics.output_short_name(diagnostic_accumulate_every_step)
@@ -161,7 +123,7 @@ end
         variable = simple_var,
         output_writer = dict_writer,
         reduction_time_func = +,
-        output_schedule_func = Callbacks.EveryDtSchedule(1.5dt),
+        output_schedule_func = Schedules.EveryDtSchedule(1.5dt),
     )
     @test_throws ErrorException ClimaDiagnostics.DiagnosticsHandler(
         [diagnostic_incompatible_timestep],
@@ -175,7 +137,7 @@ end
         variable = simple_var,
         output_writer = dict_writer,
         reduction_time_func = +,
-        compute_schedule_func = Callbacks.EveryDtSchedule(1.5dt),
+        compute_schedule_func = Schedules.EveryDtSchedule(1.5dt),
     )
     @test_throws ErrorException ClimaDiagnostics.DiagnosticsHandler(
         [diagnostic_incompatible_timestep],
