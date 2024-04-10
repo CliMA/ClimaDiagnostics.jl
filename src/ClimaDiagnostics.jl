@@ -3,7 +3,7 @@ module ClimaDiagnostics
 include("AbstractTypes.jl")
 
 include("utils.jl")
-include("Callbacks.jl")
+include("Schedules.jl")
 include("DiagnosticVariables.jl")
 import .DiagnosticVariables: DiagnosticVariable, average_pre_output_hook!
 include("ScheduledDiagnostics.jl")

@@ -1,109 +1,11 @@
 import Accessors
 import SciMLBase
 
-import .Callbacks:
-    Callback, CallbackOrchestrator, DivisorSchedule, EveryDtSchedule
-import .Writers: write_field!, AbstractWriter
+import .Schedules: DivisorSchedule, EveryDtSchedule
+import .Writers: interpolate_field!, write_field!, AbstractWriter
 
 # We define all the known identities in reduction_identities.jl
 include("reduction_identities.jl")
-
-"""
-    reset_accumulator!(accumulated_value, reduction_time_func)
-
-Reset the `accumulated_value` to the identity of `reduction_time_func`.
-
-It requires that a method for `identity_of_reduction` is defined for `reduction_time_func`.
-These functions are defined in `reduction_identities.jl`.
-
-Users can define their own by providing a method to `Diagnostics.identity_of_reduction`
-"""
-function reset_accumulator!(accumulated_value, reduction_time_func)
-    # identity_of_reduction works by dispatching over operation.
-    # The function is defined in reduction_identities.jl
-    identity = identity_of_reduction(reduction_time_func)
-    fill!(parent(accumulated_value), identity)
-    return nothing
-end
-
-# When the reduction is nothing, do nothing
-reset_accumulator!(_, reduction_time_func::Nothing) = nothing
-
-"""
-    accumulate!(accumulated_value, latest_computed_value, reduction_time_func)
-
-Apply the binary `reduction_time_func` to `accumulated_value` and `latest_computed_value`
-and store the output to `accumulated_value`.
-
-For example, if `reduction_time_func = max`, this computes the max between the previous max
-and the newly computed value and stores it to `accumulated_value` (so that it can be used in
-the next iteration).
-"""
-function accumulate!(
-    accumulated_value,
-    latest_computed_value,
-    reduction_time_func,
-)
-    accumulated_value .=
-        reduction_time_func.(accumulated_value, latest_computed_value)
-    return nothing
-end
-
-function compute_callback!(
-    integrator,
-    accumulator,
-    storage,
-    counter,
-    compute!,
-    reduction_time_func,
-)
-    compute!(storage, integrator.u, integrator.p, integrator.t)
-    accumulate!(accumulator, storage, reduction_time_func)
-    counter[] += 1
-    return nothing
-end
-
-# For non-time reductions
-function compute_callback!(integrator, storage, counter, compute!)
-    compute!(storage, integrator.u, integrator.p, integrator.t)
-    counter[] += 1
-    return nothing
-end
-
-
-function output_callback!(integrator, accumulators, storage, diag, counters)
-    # Move accumulated value to storage so that we can output it (for reductions). This
-    # provides a unified interface to pre_output_hook! and output, at the cost of an
-    # additional copy. If this copy turns out to be too expensive, we can move the if
-    # statement below.
-    isnothing(diag.reduction_time_func) || (storage .= accumulators[diag])
-
-    # Any operations we have to perform before writing to output? Here is where we would
-    # divide by N to obtain an arithmetic average
-    diag.pre_output_hook!(storage, counters[diag])
-
-    # Write to disk
-    write_field!(
-        diag.output_writer,
-        storage,
-        diag,
-        integrator.u,
-        integrator.p,
-        integrator.t,
-    )
-
-    # accumulator[diag] is not defined for non-reductions, in which case we return `nothing`
-    # The dispatch in reset_accumulator! knows how to handle this
-    diag_accumulator = get(accumulators, diag, nothing)
-
-    # If we have a reduction, we have to reset the accumulator to its neutral state. (If we
-    # don't have a reduction, we don't have to do anything, but this is handled by dispatch.)
-    reset_accumulator!(diag_accumulator, diag.reduction_time_func)
-
-    # Reset counter too
-    counters[diag] = 0
-    return nothing
-end
 
 """
     DiagnosticsHandler
@@ -111,7 +13,12 @@ end
 A struct that contains the scheduled diagnostics, ancillary data and areas of memory needed
 to store and accumulate results.
 """
-struct DiagnosticsHandler{SD, STORAGE <: Dict, ACC <: Dict, COUNT <: Dict}
+struct DiagnosticsHandler{
+    SD <: Tuple,
+    STORAGE <: Dict,
+    ACC <: Dict,
+    COUNT <: Dict,
+}
     """An iterable with the `ScheduledDiagnostic`s that are scheduled."""
     scheduled_diagnostics::SD
 
@@ -179,12 +86,12 @@ function DiagnosticsHandler(scheduled_diagnostics, Y, p, t; dt = nothing)
 
         # The first time we call compute! we use its return value. All the subsequent times
         # (in the callbacks), we will write the result in place
-        # TODO: Use lazy broadcasted expressions here
         storage[diag] = variable.compute!(nothing, Y, p, t)
         counters[diag] = 1
 
         # If it is not a reduction, call the output writer as well
         if !isa_time_reduction
+            interpolate_field!(diag.output_writer, storage[diag], diag, Y, p, t)
             write_field!(diag.output_writer, storage[diag], diag, Y, p, t)
         else
             # Add to the accumulator
@@ -206,6 +113,112 @@ function DiagnosticsHandler(scheduled_diagnostics, Y, p, t; dt = nothing)
     )
 end
 
+"""
+    orchestrate_diagnostics(integrator, diagnostic_handler::DiagnosticsHandler)
+
+Loop over all the `ScheduledDiagnostics` in `diagnostic_handler` and run compute
+and output according to their schedule functions.
+"""
+function orchestrate_diagnostics(
+    integrator,
+    diagnostic_handler::DiagnosticsHandler,
+)
+    scheduled_diagnostics = diagnostic_handler.scheduled_diagnostics
+    active_compute = Bool[]
+    active_output = Bool[]
+    for diag in scheduled_diagnostics
+        push!(active_compute, diag.compute_schedule_func(integrator))
+        push!(active_output, diag.output_schedule_func(integrator))
+    end
+
+    # Compute
+    for diag_index in 1:length(scheduled_diagnostics)
+        active_compute[diag_index] || continue
+        diag = scheduled_diagnostics[diag_index]
+
+        diag.variable.compute!(
+            diagnostic_handler.storage[diag],
+            integrator.u,
+            integrator.p,
+            integrator.t,
+        )
+        diagnostic_handler.counters[diag] += 1
+
+        isa_time_reduction = !isnothing(diag.reduction_time_func)
+        if isa_time_reduction
+            diagnostic_handler.accumulators[diag] .=
+                diag.reduction_time_func.(
+                    diagnostic_handler.accumulators[diag],
+                    diagnostic_handler.storage[diag],
+                )
+        end
+    end
+
+    # Pre-output (averages/interpolation)
+    for diag_index in 1:length(scheduled_diagnostics)
+        active_output[diag_index] || continue
+        diag = scheduled_diagnostics[diag_index]
+
+        # Move accumulated value to storage so that we can output it (for reductions). This
+        # provides a unified interface to pre_output_hook! and output, at the cost of an
+        # additional copy. If this copy turns out to be too expensive, we can move the if
+        # statement below.
+        isnothing(diag.reduction_time_func) || (
+            diagnostic_handler.storage[diag] .=
+                diagnostic_handler.accumulators[diag]
+        )
+
+        # Any operations we have to perform before writing to output? Here is where we would
+        # divide by N to obtain an arithmetic average
+        diag.pre_output_hook!(
+            diagnostic_handler.storage[diag],
+            diagnostic_handler.counters[diag],
+        )
+
+        interpolate_field!(
+            diag.output_writer,
+            diagnostic_handler.storage[diag],
+            diag,
+            integrator.u,
+            integrator.p,
+            integrator.t,
+        )
+    end
+
+    # Save to disk
+    for diag_index in 1:length(scheduled_diagnostics)
+        active_output[diag_index] || continue
+        diag = scheduled_diagnostics[diag_index]
+
+        write_field!(
+            diag.output_writer,
+            diagnostic_handler.storage[diag],
+            diag,
+            integrator.u,
+            integrator.p,
+            integrator.t,
+        )
+    end
+
+    # Post-output clean-up
+    for diag_index in 1:length(scheduled_diagnostics)
+        active_output[diag_index] || continue
+        diag = scheduled_diagnostics[diag_index]
+
+        # Reset accumulator
+        isa_time_reduction = !isnothing(diag.reduction_time_func)
+        if isa_time_reduction
+            # identity_of_reduction works by dispatching over operation.
+            # The function is defined in reduction_identities.jl
+            identity = identity_of_reduction(diag.reduction_time_func)
+            fill!(parent(diagnostic_handler.accumulators[diag]), identity)
+        end
+        # Reset counter
+        diagnostic_handler.counters[diag] = 0
+    end
+
+    return nothing
+end
 
 """
     DiagnosticsCallback(diagnostics_handler::DiagnosticsHandler)
@@ -213,60 +226,21 @@ end
 Translate a `DiagnosticsHandler` into a SciML callback ready to be used.
 """
 function DiagnosticsCallback(diagnostics_handler::DiagnosticsHandler)
-    # TODO: We have two types of callbacks: to compute and accumulate diagnostics, and to
-    # dump them to disk. At the moment, they all end up in the same place, but we might want
-    # to keep them separate
+    sciml_callback(integrator) =
+        orchestrate_diagnostics(integrator, diagnostics_handler)
 
-    callbacks =
-        Iterators.flatmap(diagnostics_handler.scheduled_diagnostics) do diag
-            isa_time_reduction = !isnothing(diag.reduction_time_func)
-            if isa_time_reduction
-                compute_callback =
-                    integrator -> begin
-                        compute_callback!(
-                            integrator,
-                            diagnostics_handler.accumulators[diag],
-                            diagnostics_handler.storage[diag],
-                            Ref(diagnostics_handler.counters[diag]),
-                            diag.variable.compute!,
-                            diag.reduction_time_func,
-                        )
-                    end
-            else
-                compute_callback =
-                    integrator -> begin
-                        compute_callback!(
-                            integrator,
-                            diagnostics_handler.storage[diag],
-                            Ref(diagnostics_handler.counters[diag]),
-                            diag.variable.compute!,
-                        )
-                    end
-            end
-            output_callback =
-                integrator -> begin
-                    output_callback!(
-                        integrator,
-                        diagnostics_handler.accumulators,
-                        diagnostics_handler.storage[diag],
-                        diag,
-                        diagnostics_handler.counters,
-                    )
-                end
-            (
-                Callback(compute_callback, diag.compute_schedule_func),
-                Callback(output_callback, diag.output_schedule_func),
-            )
-        end
+    # SciMLBase.DiscreteCallback checks if the given condition is true at the end of each
+    # step. So, we set a condition that is always true, the callback is called at the end of
+    # every step. This callback runs `orchestrate_callbacks`, which manages which
+    # diagnostics functions to call
+    condition = (_, _, _) -> true
 
-    return CallbackOrchestrator(Tuple(callbacks))
+    return SciMLBase.DiscreteCallback(condition, sciml_callback)
 end
 
 """
     IntegratorWithDiagnostics(integrator,
-                              scheduled_diagnostics;
-                              state_name = :u,
-                              cache_name = :p)
+                              scheduled_diagnostics)
 
 Return a new `integrator` with diagnostics defined by `scheduled_diagnostics`.
 
@@ -284,17 +258,11 @@ after everything else is initialized and computed.
 `integrator.p`. This behavior can be customized by passing the `state_name` and `cache_name`
 keyword arguments.
 """
-function IntegratorWithDiagnostics(
-    integrator,
-    scheduled_diagnostics;
-    state_name::Symbol = :u,
-    cache_name::Symbol = :p,
-)
-
+function IntegratorWithDiagnostics(integrator, scheduled_diagnostics)
     diagnostics_handler = DiagnosticsHandler(
         scheduled_diagnostics,
-        getproperty(integrator, state_name),
-        getproperty(integrator, cache_name),
+        integrator.u,
+        integrator.p,
         integrator.t;
         integrator.dt,
     )

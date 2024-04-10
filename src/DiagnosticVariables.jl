@@ -1,6 +1,6 @@
 module DiagnosticVariables
 
-import ..Callbacks: AbstractSchedule, long_name
+import ..Schedules: AbstractSchedule, long_name
 
 """
     DiagnosticVariable

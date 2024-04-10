@@ -44,7 +44,10 @@ function dimension_exists(
 )
     if haskey(nc, name)
         if size(nc[name]) != expected_size
-            error("Incompatible $name dimension already exists in file")
+            file_path = NCDatasets.path(nc)
+            error(
+                "Incompatible $name dimension already exists in file $file_path",
+            )
         else
             return true
         end
@@ -112,11 +115,16 @@ function target_coordinates(space, num_points) end
 
 function target_coordinates(
     space::S,
-    num_points,
+    num_points;
+    disable_vertical_interpolation,
 ) where {
     S <:
     Union{Spaces.CenterFiniteDifferenceSpace, Spaces.FaceFiniteDifferenceSpace},
 }
+    if disable_vertical_interpolation
+        return Array(parent(Fields.coordinate_field(space).z))[:, 1]
+    end
+
     # Exponentially spaced with base e
     #
     # We mimic something that looks like pressure levels
@@ -143,12 +151,17 @@ function add_space_coordinates_maybe!(
     nc::NCDatasets.NCDataset,
     space::Spaces.FiniteDifferenceSpace,
     num_points_z;
+    disable_vertical_interpolation,
     names = ("z",),
 )
     name, _... = names
     z_dimension_exists = dimension_exists(nc, name, (num_points_z,))
     if !z_dimension_exists
-        zpts = target_coordinates(space, num_points_z)
+        zpts = target_coordinates(
+            space,
+            num_points_z;
+            disable_vertical_interpolation,
+        )
         add_dimension!(nc, name, zpts, units = "m", axis = "Z")
     end
     return [name]
@@ -291,6 +304,7 @@ function add_space_coordinates_maybe!(
     nc::NCDatasets.NCDataset,
     space::Spaces.ExtrudedFiniteDifferenceSpace,
     num_points;
+    disable_vertical_interpolation,
     interpolated_physical_z = nothing,
 )
 
@@ -311,14 +325,19 @@ function add_space_coordinates_maybe!(
     )
 
     if Spaces.grid(space).hypsography isa Grids.Flat
-        vdims_names =
-            add_space_coordinates_maybe!(nc, vertical_space, num_points_vertic)
+        vdims_names = add_space_coordinates_maybe!(
+            nc,
+            vertical_space,
+            num_points_vertic;
+            disable_vertical_interpolation,
+        )
     else
         vdims_names = add_space_coordinates_maybe!(
             nc,
             vertical_space,
             num_points_vertic,
             interpolated_physical_z;
+            disable_vertical_interpolation,
             names = ("z_reference",),
             depending_on_dimensions = hdims_names,
         )
@@ -351,6 +370,7 @@ function add_space_coordinates_maybe!(
     num_points,
     interpolated_physical_z;
     names = ("z_reference",),
+    disable_vertical_interpolation,
     depending_on_dimensions,
 )
     num_points_z = num_points
@@ -361,7 +381,11 @@ function add_space_coordinates_maybe!(
         dimension_exists(nc, name, (num_points_z,))
 
     if !z_reference_dimension_dimension_exists
-        reference_altitudes = target_coordinates(space, num_points_z)
+        reference_altitudes = target_coordinates(
+            space,
+            num_points_z;
+            disable_vertical_interpolation,
+        )
         add_dimension!(nc, name, reference_altitudes; units = "m", axis = "Z")
     end
 
@@ -396,7 +420,8 @@ end
 # and combines the resulting dictionaries
 function target_coordinates(
     space::Spaces.ExtrudedFiniteDifferenceSpace,
-    num_points,
+    num_points;
+    disable_vertical_interpolation,
 )
 
     hcoords = vcoords = ()
@@ -410,7 +435,11 @@ function target_coordinates(
         Spaces.vertical_topology(space),
         Spaces.staggering(space),
     )
-    vcoords = target_coordinates(vertical_space, num_points_vertic)
+    vcoords = target_coordinates(
+        vertical_space,
+        num_points_vertic;
+        disable_vertical_interpolation,
+    )
 
     hcoords == vcoords == () && error("Found empty space")
 

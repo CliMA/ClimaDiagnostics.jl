@@ -6,17 +6,15 @@
 ClimaDiagnostics.IntegratorWithDiagnostics
 ```
 
-## `Callbacks`
+## `Schedules`
 
 ```@docs
-ClimaDiagnostics.Callbacks.Callback
-ClimaDiagnostics.Callbacks.CallbackOrchestrator
-ClimaDiagnostics.Callbacks.AbstractSchedule
-ClimaDiagnostics.Callbacks.short_name
-ClimaDiagnostics.Callbacks.long_name
-ClimaDiagnostics.Callbacks.DivisorSchedule
-ClimaDiagnostics.Callbacks.EveryStepSchedule
-ClimaDiagnostics.Callbacks.EveryDtSchedule
+ClimaDiagnostics.Schedules.AbstractSchedule
+ClimaDiagnostics.Schedules.short_name
+ClimaDiagnostics.Schedules.long_name
+ClimaDiagnostics.Schedules.DivisorSchedule
+ClimaDiagnostics.Schedules.EveryStepSchedule
+ClimaDiagnostics.Schedules.EveryDtSchedule
 
 ```
 
@@ -46,6 +44,7 @@ ClimaDiagnostics.AbstractWriter
 ClimaDiagnostics.Writers.DictWriter
 ClimaDiagnostics.Writers.NetCDFWriter
 ClimaDiagnostics.Writers.HDF5Writer
+ClimaDiagnostics.Writers.interpolate_field!
 ClimaDiagnostics.Writers.write_field!
 Base.close
 ```

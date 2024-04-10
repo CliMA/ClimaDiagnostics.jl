@@ -1,6 +1,18 @@
 # Saving the diagnostics
 
-Do not forget to close your writers to avoid file corruption!
+Writers are needed to save the computed diagnostics.
+
+`ClimaDiagnostics` comes with three writers:
+- `NetCDFWriter`, to interpolate and save to NetCDF files;
+- `DictWriter`, to save `Field`s to dictionaries in memory;
+- `HDF5Writer`, to save `Field`s to HDF5 files.
+
+(There is an additional `DummyWriter` that does nothing. It is mostly used internally for testing and debugging.)
+
+Users are welcome to implement their own writers. A writer has to be a subtype
+of `AbstractWriter`and has to implement the `interpolate_field!` and
+`write_field!` methods. `interpolate_field!` can return `nothing` is no
+interpolation is needed.
 
 ## `NetCDFWriter`
 
@@ -27,11 +39,14 @@ files have names like `ta_1d_max.nc`, `ha_20s_inst.nc`, et cetera. The files
 define their dimensions (`lon`, `lat`, `z`, ...). Time is always the first
 dimension is any dataset.
 
+Do not forget to close your writers to avoid file corruption!
+
 Variables are saved as datasets with attributes, where the attributes include
 `long_name`, `standard_name`, `units`...
 
 ```@docs
 ClimaDiagnostics.Writers.NetCDFWriter
+ClimaDiagnostics.Writers.interpolate_field!
 ClimaDiagnostics.Writers.write_field!
 Base.close
 ```
