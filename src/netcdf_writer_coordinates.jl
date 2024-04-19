@@ -122,7 +122,8 @@ function target_coordinates(
     Union{Spaces.CenterFiniteDifferenceSpace, Spaces.FaceFiniteDifferenceSpace},
 }
     if disable_vertical_interpolation
-        return Array(parent(Fields.coordinate_field(space).z))[:, 1]
+        cspace = Spaces.space(space, Grids.CellCenter())
+        return Array(parent(Fields.coordinate_field(cspace).z))[:, 1]
     end
 
     # Exponentially spaced with base e

@@ -207,7 +207,10 @@ function interpolate_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
                 parent(
                     space.grid.vertical_grid.center_local_geometry.coordinates,
                 ),
-            )
+            )[
+                :,
+                1,
+            ]
         end
 
         zcoords = [Geometry.ZPoint(p) for p in vpts]
