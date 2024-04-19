@@ -3,7 +3,14 @@ module DiagnosticVariables
 import ..Schedules: AbstractSchedule, long_name
 
 """
-    DiagnosticVariable
+    DiagnosticVariable(;
+        compute!,
+        short_name = "",
+        long_name = "",
+        standard_name = "",
+        units = "",
+        comments = ""
+    )
 
 A recipe to compute a diagnostic variable from the state, along with some useful metadata.
 
@@ -40,32 +47,13 @@ Keyword arguments
 - `comments`: More verbose explanation of what the variable is, or comments related to how
               it is defined or computed.
 """
-struct DiagnosticVariable{T <: Function}
+Base.@kwdef struct DiagnosticVariable{T <: Function}
     compute!::T
-    short_name::String
-    long_name::String
-    standard_name::String
-    units::String
-    comments::String
-end
-
-
-function DiagnosticVariable(;
-    compute!,
-    short_name::String = "",
-    long_name::String = "",
-    standard_name::String = "",
-    units::String = "",
-    comments::String = "",
-)
-    DiagnosticVariable{typeof(compute!)}(
-        compute!,
-        short_name,
-        long_name,
-        standard_name,
-        units,
-        comments,
-    )
+    short_name::String = ""
+    long_name::String = ""
+    standard_name::String = ""
+    units::String = ""
+    comments::String = ""
 end
 
 """
