@@ -263,7 +263,10 @@ function write_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
     ClimaComms.iamroot(ClimaComms.context(field)) || return nothing
 
     var = diagnostic.variable
-    interpolated_field = writer.preallocated_output_arrays[var.short_name]
+    maybe_move_to_cpu =
+        ClimaComms.device(field) isa ClimaComms.CUDADevice ? Array : identity
+    interpolated_field =
+        maybe_move_to_cpu(writer.preallocated_output_arrays[var.short_name])
     space = axes(field)
     FT = Spaces.undertype(space)
 
