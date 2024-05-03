@@ -136,8 +136,8 @@ function NetCDFWriter(
         interpolate(remapper, Fields.coordinate_field(space).z)
 
     preallocated_arrays =
-        ClimaComms.iamroot(ClimaComms.context(space)) ? Dict{String, Array}() :
-        Dict{String, Nothing}()
+        ClimaComms.iamroot(ClimaComms.context(space)) ?
+        Dict{String, ClimaComms.array_type(space)}() : Dict{String, Nothing}()
 
     return NetCDFWriter{
         typeof(num_points),
