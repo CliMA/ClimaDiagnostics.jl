@@ -2,10 +2,10 @@
 
 This page provides additional documentation on abstractions to use
 `ClimaDiagnostics`. Before reading this page, make sure you are familiar with
-the terminology. You know to know what a [`DiagnosticVariable`](@ref ClimaDiagnostics.DiagnosticVariables.DiagnosticVariable) and a
+the terminology. You need to know what a [`DiagnosticVariable`](@ref ClimaDiagnostics.DiagnosticVariables.DiagnosticVariable) and a
 [`ScheduledDiagnostic`](@ref ClimaDiagnostics.ScheduledDiagnostics.ScheduledDiagnostic) are.
 
-There are three components needed to add support for `ClimaDiagnostics.jl` in your package.
+There are two components needed to add support for `ClimaDiagnostics.jl` in your package.
 
 1. A way to convert users' intentions to a list of [`ScheduledDiagnostic`](@ref ClimaDiagnostics.ScheduledDiagnostics.ScheduledDiagnostic)
 2. A call to [`IntegratorWithDiagnostics`](@ref ClimaDiagnostics.IntegratorWithDiagnostics)

@@ -26,11 +26,10 @@ how_to_compute: state.ta
 ...
 ```
 
-The definition of what a `DiagnosticVariable` is. Conceptually, a
-`DiagnosticVariable` is a variable we know how to compute from the state. We
-attach more information to it for documentation and to reference to it with its
+Conceptually, a `DiagnosticVariable` is a variable we know how to compute from the state.
+We attach more information to it for documentation and to reference to it with its
 short name. `DiagnosticVariables` can exist irrespective of the existence of an
-actual simulation that is being run. Science packages are encourage to define
+actual simulation that is being run. Science packages are encouraged to define
 their set of pre-made `DiagnosticVariables`, for example, `ClimaAtmos` comes with
 several diagnostics already defined (in the `ALL_DIAGNOSTICS` dictionary).
 
@@ -69,7 +68,7 @@ of memory is allocated and filled with the value (this is when `out` is
 much better performance. You should follow this pattern in all your diagnostics.
 
 > Note, in the future, we hope to improve this rather clumsy way to write
-> diagnostics. Hopefully, at some you will just have to write something like
+> diagnostics. Hopefully, at some point you will just have to write something like
 > `state.ta` and not worry about the `out` at all.
 
 A `DiagnosticVariable` defines what a variable is and how to compute it, but
@@ -92,12 +91,12 @@ Let us examine what is in a `ScheduledDiagnostic` in more details:
 - two `schedule` functions that determine when the variable should be computed
   and output (`compute_schedule_func` and `output_schedule_func`). We have two
   separate entries one for compute and one for output because we might want to
-  control them separately. For instance, we might want to take the average of
+  control them separately. For example, we might want to take the average of
   something every 10 steps, and output it the average every 100 iterations.
   `schedule` functions are powerful, so there is an entire section dedicated to
   them below. `compute_schedule_func` and `output_schedule_func` are likely
-  going to the same unless there are temporal reductions.
-- an `output_writer`, an object that knows how what to do with the output.
+  going to be the same unless there are temporal reductions.
+- an `output_writer`, an object that knows what to do with the output.
   Examples of writers might be the `DictWriter`, which saves the output to a
   dictionary, or the `NetCDFWriter`, which saves the output to NetCDF files. A
   more complete description of the available writers is in [Saving the
@@ -137,7 +136,7 @@ function compute_if_larger_than100(integrator)
 end
 ```
 
-Strictly speaking, schedules do not have to functions, but callable objects. For
+Strictly speaking, schedules do not have to be functions, but callable objects. For
 example, the `compute_every_even` schedule we defined earlier could be written
 for a more general divisor
 ```julia
