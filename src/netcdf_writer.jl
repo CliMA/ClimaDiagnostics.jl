@@ -132,8 +132,12 @@ function NetCDFWriter(
 
     remapper = Remapper(space, hcoords, zcoords)
 
-    interpolated_physical_z =
-        interpolate(remapper, Fields.coordinate_field(space).z)
+    coords_z = Fields.coordinate_field(space).z
+
+    maybe_move_to_cpu =
+        ClimaComms.device(coords_z) isa ClimaComms.CUDADevice ? Array : identity
+
+    interpolated_physical_z = maybe_move_to_cpu(interpolate(remapper, coords_z))
 
     preallocated_arrays =
         ClimaComms.iamroot(ClimaComms.context(space)) ?
