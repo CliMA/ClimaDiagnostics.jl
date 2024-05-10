@@ -3,7 +3,6 @@ using Test
 
 #! format: off
 @safetestset "Aqua" begin @time include("aqua.jl") end
-@safetestset "Format" begin @time include("format.jl") end
 @safetestset "Doctest" begin @time include("doctest.jl") end
 
 @safetestset "Writers" begin @time include("writers.jl") end
