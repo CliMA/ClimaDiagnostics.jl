@@ -145,8 +145,8 @@ function NetCDFWriter(
     end
 
     preallocated_arrays =
-        ClimaComms.iamroot(ctx) ?
-        Dict{String, ClimaComms.array_type(space)}() : Dict{String, Nothing}()
+        ClimaComms.iamroot(ctx) ? Dict{String, ClimaComms.array_type(space)}() :
+        Dict{String, Nothing}()
 
     return NetCDFWriter{
         typeof(num_points),
