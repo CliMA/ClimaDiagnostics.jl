@@ -15,8 +15,7 @@ include("TestTools.jl")
 
 # The temporary directory where we write the file cannot be in /tmp, it has
 # to be on disk
-output_dir = "netcdf_writer_performance_test"
-Base.mkpath(output_dir)
+output_dir = mktempdir(".")
 
 @testset "DictWriter" begin
     writer = Writers.DictWriter()
@@ -191,5 +190,3 @@ end
     show(stdout, MIME"text/plain"(), timing_ncdataset)
     println()
 end
-
-Base.rm(output_dir, force = true, recursive = true)
