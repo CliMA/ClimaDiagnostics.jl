@@ -7,6 +7,14 @@ import NCDatasets
 
 import ClimaDiagnostics
 
+import ClimaComms
+@static if pkgversion(ClimaComms) >= v"0.6"
+    ClimaComms.@import_required_backends
+end
+
+const context = ClimaComms.context()
+ClimaComms.init(context)
+
 include("TestTools.jl")
 
 """
@@ -15,11 +23,11 @@ Set up a full test problem
 Increasing `more_compute_diagnostics` adds more copies of a compute diagnostic with no output.
 Useful to stress allocations.
 """
-function setup_integrator(output_dir; more_compute_diagnostics = 0)
+function setup_integrator(output_dir; context, more_compute_diagnostics = 0)
     t0 = 0.0
     tf = 10.0
     dt = 1.0
-    space = SphericalShellSpace()
+    space = SphericalShellSpace(; context)
     args, kwargs = create_problem(space; t0, tf, dt)
 
     @info "Writing output to $output_dir"
@@ -95,44 +103,55 @@ end
 
 @testset "A full problem" begin
     mktempdir() do output_dir
-        integrator = setup_integrator(output_dir)
+        output_dir = ClimaComms.bcast(context, output_dir)
+
+        integrator = setup_integrator(output_dir; context)
 
         SciMLBase.solve!(integrator)
 
-        NCDatasets.NCDataset(joinpath(output_dir, "YO_1it_inst.nc")) do nc
-            @test nc["YO"].attrib["short_name"] == "YO"
-            @test nc["YO"].attrib["long_name"] == "YO YO, Instantaneous"
-            @test size(nc["YO"]) == (11, 10, 5, 3)
-        end
+        if ClimaComms.iamroot(context)
+            NCDatasets.NCDataset(joinpath(output_dir, "YO_1it_inst.nc")) do nc
+                @test nc["YO"].attrib["short_name"] == "YO"
+                @test nc["YO"].attrib["long_name"] == "YO YO, Instantaneous"
+                @test size(nc["YO"]) == (11, 10, 5, 3)
+            end
 
-        NCDatasets.NCDataset(joinpath(output_dir, "YO_2it_average.nc")) do nc
-            @test nc["YO"].attrib["short_name"] == "YO"
-            @test nc["YO"].attrib["long_name"] ==
-                  "YO YO, average within every 2 iterations"
-            @test size(nc["YO"]) == (5, 10, 5, 3)
-        end
+            NCDatasets.NCDataset(
+                joinpath(output_dir, "YO_2it_average.nc"),
+            ) do nc
+                @test nc["YO"].attrib["short_name"] == "YO"
+                @test nc["YO"].attrib["long_name"] ==
+                      "YO YO, average within every 2 iterations"
+                @test size(nc["YO"]) == (5, 10, 5, 3)
+            end
 
-        NCDatasets.NCDataset(joinpath(output_dir, "YO_3s_inst.nc")) do nc
-            @test nc["YO"].attrib["short_name"] == "YO"
-            @test nc["YO"].attrib["long_name"] == "YO YO, Instantaneous"
-            @test size(nc["YO"]) == (4, 10, 5, 3)
+            NCDatasets.NCDataset(joinpath(output_dir, "YO_3s_inst.nc")) do nc
+                @test nc["YO"].attrib["short_name"] == "YO"
+                @test nc["YO"].attrib["long_name"] == "YO YO, Instantaneous"
+                @test size(nc["YO"]) == (4, 10, 5, 3)
+            end
         end
     end
 end
 
 @testset "Performance" begin
     mktempdir() do output_dir
+        output_dir = ClimaComms.bcast(context, output_dir)
+
         # Flame
-        integrator = setup_integrator(output_dir)
+        integrator = setup_integrator(output_dir; context)
         prof = Profile.@profile SciMLBase.solve!(integrator)
-        results = Profile.fetch()
-        ProfileCanvas.html_file("flame.html", results)
+        ClimaComms.iamroot(context) && (results = Profile.fetch())
+        ClimaComms.iamroot(context) &&
+            ProfileCanvas.html_file("flame.html", results)
 
         # Allocations
-        integrator = setup_integrator(output_dir)
+        integrator = setup_integrator(output_dir; context)
         prof = Profile.Allocs.@profile SciMLBase.solve!(integrator)
-        results = Profile.Allocs.fetch()
-        allocs = ProfileCanvas.view_allocs(results)
-        ProfileCanvas.html_file("allocs.html", allocs)
+        ClimaComms.iamroot(context) && (results = Profile.Allocs.fetch())
+        ClimaComms.iamroot(context) &&
+            (allocs = ProfileCanvas.view_allocs(results))
+        ClimaComms.iamroot(context) &&
+            ProfileCanvas.html_file("allocs.html", allocs)
     end
 end

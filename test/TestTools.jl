@@ -31,7 +31,7 @@ function SphericalShellSpace(;
     nelements = 10,
     zelem = 10,
     npolynomial = 4,
-    context = ClimaComms.SingletonCommsContext(),
+    context = ClimaComms.context(),
     FT = Float64,
 )
     vertdomain = ClimaCore.Domains.IntervalDomain(
