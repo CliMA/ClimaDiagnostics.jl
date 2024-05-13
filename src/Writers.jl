@@ -7,15 +7,36 @@ Currently, it implements:
 - `HDF5Writer`, to save raw `ClimaCore` `Fields` to HDF5 files
 - `NetCDFWriter`, to save remapped `ClimaCore` `Fields` to NetCDF files
 
-Writers are expected to implement:
+Writers can implement:
 - `interpolate_field!`
 - `write_field!`
 - `Base.close`
+- `sync`
 """
 module Writers
 
 import ..AbstractWriter, ..ScheduledDiagnostic
 import ..ScheduledDiagnostics: output_short_name, output_long_name
+
+function write_field!(writer::AbstractWriter, field, diagnostic, u, p, t)
+    # Nothing to be done here :)
+    return nothing
+end
+
+function Base.close(writer::AbstractWriter)
+    # Nothing to be done here :)
+    return nothing
+end
+
+function interpolate_field!(writer::AbstractWriter, field, diagnostic, u, p, t)
+    # Nothing to be done here :)
+    return nothing
+end
+
+function sync(writer::AbstractWriter)
+    # Nothing to be done here :)
+    return nothing
+end
 
 include("dummy_writer.jl")
 include("dict_writer.jl")
