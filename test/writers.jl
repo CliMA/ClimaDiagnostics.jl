@@ -36,8 +36,12 @@ end
     # Number of interpolation points
     NUM = 100
 
-    writer =
-        Writers.NetCDFWriter(space, output_dir; num_points = (NUM, NUM, NUM))
+    writer = Writers.NetCDFWriter(
+        space,
+        output_dir;
+        num_points = (NUM, NUM, NUM),
+        sync_schedule = ClimaDiagnostics.Schedules.DivisorSchedule(2),
+    )
 
     writer_no_vert_interpolation = Writers.NetCDFWriter(
         space,
@@ -73,6 +77,12 @@ end
     )
     Writers.interpolate_field!(writer, field, diagnostic, u, p, t)
     Writers.write_field!(writer, field, diagnostic, u, p, t)
+
+    @test writer.unsynced_datasets ==
+          Set((writer.open_files[joinpath(output_dir, "my_short_name.nc")],))
+
+    Writers.sync(writer)
+    @test writer.unsynced_datasets == Set{NCDatasets.NCDataset}()
 
     NCDatasets.NCDataset(joinpath(output_dir, "my_short_name.nc")) do nc
         @test nc["ABC"].attrib["short_name"] == "ABC"

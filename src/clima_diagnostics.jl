@@ -2,7 +2,7 @@ import Accessors
 import SciMLBase
 
 import .Schedules: DivisorSchedule, EveryDtSchedule
-import .Writers: interpolate_field!, write_field!, AbstractWriter
+import .Writers: interpolate_field!, write_field!, sync, AbstractWriter
 
 # We define all the known identities in reduction_identities.jl
 include("reduction_identities.jl")
@@ -113,6 +113,15 @@ function DiagnosticsHandler(scheduled_diagnostics, Y, p, t; dt = nothing)
     )
 end
 
+# Does the writer associated to `diag` need to be synced?
+# It does only when it has a sync_schedule that is a callable and that
+# callable returns true when called on the integrator
+function _needs_sync(diag, integrator)
+    hasproperty(diag.output_writer, :sync_schedule) || return false
+    isnothing(diag.output_writer.sync_schedule) && return false
+    return diag.output_writer.sync_schedule(integrator)
+end
+
 """
     orchestrate_diagnostics(integrator, diagnostic_handler::DiagnosticsHandler)
 
@@ -126,9 +135,12 @@ function orchestrate_diagnostics(
     scheduled_diagnostics = diagnostic_handler.scheduled_diagnostics
     active_compute = Bool[]
     active_output = Bool[]
+    active_sync = Bool[]
+
     for diag in scheduled_diagnostics
         push!(active_compute, diag.compute_schedule_func(integrator))
         push!(active_output, diag.output_schedule_func(integrator))
+        push!(active_sync, _needs_sync(diag, integrator))
     end
 
     # Compute
@@ -202,8 +214,14 @@ function orchestrate_diagnostics(
 
     # Post-output clean-up
     for diag_index in 1:length(scheduled_diagnostics)
-        active_output[diag_index] || continue
         diag = scheduled_diagnostics[diag_index]
+
+        # First, maybe call sync for the writer. This might happen regardless of
+        # whether the diagnostic was active or not (because diagnostics
+        # typically share writers)
+        active_sync[diag_index] && sync(diag.output_writer)
+
+        active_output[diag_index] || continue
 
         # Reset accumulator
         isa_time_reduction = !isnothing(diag.reduction_time_func)

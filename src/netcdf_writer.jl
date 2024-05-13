@@ -2,6 +2,7 @@ import Dates
 
 import ClimaCore: Domains, Geometry, Grids, Fields, Meshes, Spaces
 import ClimaCore.Remapping: Remapper, interpolate, interpolate!
+import ..Schedules: EveryStepSchedule
 
 import NCDatasets
 
@@ -15,7 +16,7 @@ include("netcdf_writer_coordinates.jl")
 A struct to remap `ClimaCore` `Fields` to rectangular grids and save the output to NetCDF
 files.
 """
-struct NetCDFWriter{T, TS, DI} <: AbstractWriter
+struct NetCDFWriter{T, TS, DI, SYNC} <: AbstractWriter
     """The base folder where to save the files."""
     output_dir::String
 
@@ -52,6 +53,17 @@ struct NetCDFWriter{T, TS, DI} <: AbstractWriter
     """Areas of memory preallocated where the interpolation output is saved. Only the root
     process uses this."""
     preallocated_output_arrays::DI
+
+    """Callable that determines when to call NetCDF.sync. NetCDF.sync is needed to flush the
+    output to disk. Usually, the NetCDF is able to determine when to write the output to
+    disk, but this sometimes fails (e.g., on GPUs). In that case, it is convenient to force
+    NetCDF to write to disk. When `sync_schedule = nothing`, it is up to NetCDF to manage
+    when to write to disk. Alternatively, pass a `schedule`, a function that takes the
+    integrator as input and returns a boolean"""
+    sync_schedule::SYNC
+
+    """Set of datasets that need to be synced. Useful when `sync_schedule` is not `nothing`."""
+    unsynced_datasets::Set{NCDatasets.NCDataset}
 end
 
 """
@@ -65,7 +77,7 @@ function Base.close(writer::NetCDFWriter)
 end
 
 """
-    NetCDFWriter(cspace, output_dir)
+    NetCDFWriter(space, output_dir)
 
 Save a `ScheduledDiagnostic` to a NetCDF file inside the `output_dir` of the simulation by
 performing a pointwise (non-conservative) remapping first.
@@ -82,8 +94,13 @@ Keyword arguments
                                     at on levels. When disable_vertical_interpolation is true,
                                     the num_points on the vertical direction is ignored.
 - `compression_level`: How much to compress the output NetCDF file (0 is no compression, 9
-  is maximum compression).
-
+                       is maximum compression).
+- `sync_schedule`: Schedule that determines when to call `NetCDF.sync` (to flush the output
+                   to disk). When `NetCDF.sync` is called, you can guarantee that the bits
+                   are written to disk (instead of being buffered in memory). A schedule is
+                   a boolean callable that takes as a single argument the `integrator`.
+                   `sync_schedule` can also be set as `nothing`, in which case we let
+                   handling buffered writes to disk.
 """
 function NetCDFWriter(
     space,
@@ -91,6 +108,8 @@ function NetCDFWriter(
     num_points = (180, 90, 50),
     disable_vertical_interpolation = false,
     compression_level = 9,
+    sync_schedule = ClimaComms.device(space) isa ClimaComms.CUDADevice ?
+                    EveryStepSchedule() : nothing,
 )
     horizontal_space = Spaces.horizontal_space(space)
     is_horizontal_space = horizontal_space == space
@@ -145,10 +164,13 @@ function NetCDFWriter(
         ClimaComms.iamroot(comms_ctx) ?
         Dict{String, ClimaComms.array_type(space)}() : Dict{String, Nothing}()
 
+    unsynced_datasets = Set{NCDatasets.NCDataset}()
+
     return NetCDFWriter{
         typeof(num_points),
         typeof(interpolated_physical_z),
         typeof(preallocated_arrays),
+        typeof(sync_schedule),
     }(
         output_dir,
         Dict{String, Remapper}(),
@@ -158,6 +180,8 @@ function NetCDFWriter(
         Dict{String, NCDatasets.NCDataset}(),
         disable_vertical_interpolation,
         preallocated_arrays,
+        sync_schedule,
+        unsynced_datasets,
     )
 end
 
@@ -340,6 +364,22 @@ function write_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
     elseif length(dim_names) == 1
         v[time_index, :] = interpolated_field
     end
+
+    # Add file to list of files that might need manual sync
+    push!(writer.unsynced_datasets, nc)
+
+    return nothing
+end
+
+"""
+    sync(writer::NetCDFWriter)
+
+Call `NCDatasets.sync` on all the files in the `writer.unsynced_datasets` list.
+`NCDatasets.sync` ensures that the values are written to file.
+"""
+function sync(writer::NetCDFWriter)
+    foreach(NCDatasets.sync, writer.unsynced_datasets)
+    empty!(writer.unsynced_datasets)
     return nothing
 end
 

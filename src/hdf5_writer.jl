@@ -17,7 +17,9 @@ end
 
 Close all the files open in `writer`. (Currently no-op.)
 """
-Base.close(writer::HDF5Writer) = nothing
+function Base.close(writer::HDF5Writer)
+    return nothing
+end
 
 """
     HDF5Writer(output_dir)
@@ -54,10 +56,5 @@ function write_field!(writer::HDF5Writer, field, diagnostic, u, p, t)
     end
 
     Base.close(hdfwriter)
-    return nothing
-end
-
-function interpolate_field!(writer::HDF5Writer, field, diagnostic, u, p, t)
-    # Nothing to be done here :)
     return nothing
 end

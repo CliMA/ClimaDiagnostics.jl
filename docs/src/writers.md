@@ -41,6 +41,20 @@ dimension is any dataset.
 
 Do not forget to close your writers to avoid file corruption!
 
+To help reducing data loss, `NetCDFWriter` can force __syncing__, i.e. flushing
+the values to disk. Usually, NetCDF buffers writes to disk (because they are
+expensive), meaning values are not immediately written but are saved to disk in
+batch. This can result in data loss, and it is often useful to force NetCDF to
+write to disk (this is especially the case when working with GPUs). To do so,
+you can pass the `sync_schedule` function to the constructor of `NetCDFWriter`.
+When not `nothing`, `sync_schedule` is a callable that takes one argument (the
+`integrator`) and returns a bool. When the bool is true, the files that were
+modified since the last `sync` will be `sync`ed. For example, to force sync
+every 1000 steps, you can pass the
+`ClimaDiagnostics.Schedules.DivisorSchedule(1000)` schedule. By default, on
+GPUs, we call `sync` at the end of every time step for those files that need to
+be synced.
+
 Variables are saved as datasets with attributes, where the attributes include
 `long_name`, `standard_name`, `units`...
 
@@ -48,6 +62,7 @@ Variables are saved as datasets with attributes, where the attributes include
 ClimaDiagnostics.Writers.NetCDFWriter
 ClimaDiagnostics.Writers.interpolate_field!
 ClimaDiagnostics.Writers.write_field!
+ClimaDiagnostics.Writers.sync
 Base.close
 ```
 

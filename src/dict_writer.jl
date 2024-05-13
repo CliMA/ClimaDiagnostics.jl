@@ -56,13 +56,3 @@ end
 function Base.getindex(writer::DictWriter, key)
     return Base.getindex(writer.dict, key)
 end
-
-function Base.close(writer::DictWriter)
-    # Nothing to be done here :)
-    return nothing
-end
-
-function interpolate_field!(writer::DictWriter, field, diagnostic, u, p, t)
-    # Nothing to be done here :)
-    return nothing
-end
