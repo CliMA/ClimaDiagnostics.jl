@@ -142,6 +142,19 @@ function NetCDFWriter(
         )
     end
 
+    if is_horizontal_space
+        interpolated_physical_z = []
+    else
+        coords_z = Fields.coordinate_field(space).z
+        comms_ctx = ClimaComms.context(space)
+        maybe_move_to_cpu =
+            ClimaComms.device(coords_z) isa ClimaComms.CUDADevice &&
+            ClimaComms.iamroot(comms_ctx) ? Array : identity
+
+        interpolated_physical_z = maybe_move_to_cpu(interpolate(remapper, coords_z))
+    end
+
+    #=
     hcoords = hcoords_from_horizontal_space(
         horizontal_space,
         Meshes.domain(Spaces.topology(horizontal_space)),
@@ -150,7 +163,7 @@ function NetCDFWriter(
     zcoords = Geometry.ZPoint.(vpts)
 
     remapper = Remapper(space, hcoords, zcoords)
-
+    
     coords_z = Fields.coordinate_field(space).z
 
     comms_ctx = ClimaComms.context(space)
@@ -159,11 +172,15 @@ function NetCDFWriter(
         ClimaComms.iamroot(comms_ctx) ? Array : identity
 
     interpolated_physical_z = maybe_move_to_cpu(interpolate(remapper, coords_z))
+    =#
+
+    comms_ctx = ClimaComms.context(space)
 
     preallocated_arrays =
         ClimaComms.iamroot(comms_ctx) ?
         Dict{String, ClimaComms.array_type(space)}() : Dict{String, Nothing}()
 
+    
     unsynced_datasets = Set{NCDatasets.NCDataset}()
 
     return NetCDFWriter{

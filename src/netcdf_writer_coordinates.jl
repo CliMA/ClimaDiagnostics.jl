@@ -121,10 +121,13 @@ function target_coordinates(
     S <:
     Union{Spaces.CenterFiniteDifferenceSpace, Spaces.FaceFiniteDifferenceSpace},
 }
+    
+    # HACK 1
     if disable_vertical_interpolation
         cspace = Spaces.space(space, Grids.CellCenter())
         return Array(parent(Fields.coordinate_field(cspace).z))[:, 1]
     end
+    # 
 
     # Exponentially spaced with base e
     #
@@ -136,6 +139,8 @@ function target_coordinates(
     H_EARTH = 7000
 
     num_points_z = num_points[]
+
+    # HACK 2
     FT = Spaces.undertype(space)
     topology = Spaces.topology(space)
     vert_domain = topology.mesh.domain
@@ -144,6 +149,7 @@ function target_coordinates(
     z_min = max(z_min, 100)
     exp_z_min = exp(-z_min / H_EARTH)
     exp_z_max = exp(-z_max / H_EARTH)
+
     return collect(-H_EARTH * log.(range(exp_z_min, exp_z_max, num_points_z)))
 end
 
