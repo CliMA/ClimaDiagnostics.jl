@@ -148,12 +148,21 @@ function NetCDFWriter(
         hpts,
     )
     zcoords = Geometry.ZPoint.(vpts)
-
     remapper = Remapper(space, hcoords, zcoords)
-
-    coords_z = Fields.coordinate_field(space).z
-
     comms_ctx = ClimaComms.context(space)
+
+    if is_horizontal_space
+        interpolated_physical_z = []
+    else
+        coords_z = Fields.coordinate_field(space).z
+        maybe_move_to_cpu =
+            ClimaComms.device(coords_z) isa ClimaComms.CUDADevice &&
+            ClimaComms.iamroot(comms_ctx) ? Array : identity
+
+        interpolated_physical_z =
+            maybe_move_to_cpu(interpolate(remapper, coords_z))
+    end
+
     maybe_move_to_cpu =
         ClimaComms.device(coords_z) isa ClimaComms.CUDADevice &&
         ClimaComms.iamroot(comms_ctx) ? Array : identity
