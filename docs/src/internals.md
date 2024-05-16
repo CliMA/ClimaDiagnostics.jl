@@ -1,4 +1,4 @@
-# Some notes about the internals of `ClimaDiagnostics`
+# [Some notes about the internals of `ClimaDiagnostics`](@id internals_header)
 
 There are multiple moving parts to this package. In this page, we provide some
 notes about the internal design. This page also aims at _clarifying the whys_,
@@ -20,7 +20,7 @@ this:
 1. Most realistic schedules need to hold additional data (e.g., the last time the function was called)
 2. We want to attach names to use in the output
 
-Most of the details regarding schedules are described in the [user guide](@ref).
+Most of the details regarding schedules are described in the [user guide](@ref user_guide_header).
 An internal detail that is not there is related to names. We define a method for
 `show` for `AbstractSchedules`. This method calls the `short_name` function.
 ```julia

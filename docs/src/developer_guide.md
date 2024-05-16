@@ -2,13 +2,13 @@
 
 This page provides additional documentation on abstractions to use
 `ClimaDiagnostics`. Before reading this page, make sure you are familiar with
-the terminology. You know to know what a [`DiagnosticVariable`](@ref) and a
-[`ScheduledDiagnostic`](@ref) are.
+the terminology. You know to know what a [`DiagnosticVariable`](@ref ClimaDiagnostics.DiagnosticVariables.DiagnosticVariable) and a
+[`ScheduledDiagnostic`](@ref ClimaDiagnostics.ScheduledDiagnostics.ScheduledDiagnostic) are.
 
 There are three components needed to add support for `ClimaDiagnostics.jl` in your package.
 
-1. A way to convert users' intentions to a list of [`ScheduledDiagnostic`](@ref)
-2. A call to [`IntegratorWithDiagnostics`](@ref)
+1. A way to convert users' intentions to a list of [`ScheduledDiagnostic`](@ref ClimaDiagnostics.ScheduledDiagnostics.ScheduledDiagnostic)
+2. A call to [`IntegratorWithDiagnostics`](@ref ClimaDiagnostics.IntegratorWithDiagnostics)
 
 ## Step 2
 
@@ -26,7 +26,7 @@ Creating an `IntegratorWithDiagnostics` results in calling all the diagnostics
 once. Therefore, the compile and runtime of this function can be significant if
 you have a large number of diagnostics.
 
-You can learn about what is happening under the hook in the [Internals](@ref)
+You can learn about what is happening under the hook in the [Internals](@ref internals_header)
 page.
 
 This is pretty much all that you need to know about step 2.
