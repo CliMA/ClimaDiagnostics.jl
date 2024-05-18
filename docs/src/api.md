@@ -45,6 +45,6 @@ ClimaDiagnostics.Writers.DictWriter
 ClimaDiagnostics.Writers.NetCDFWriter
 ClimaDiagnostics.Writers.HDF5Writer
 ClimaDiagnostics.Writers.interpolate_field!
-ClimaDiagnostics.Writers.write_field!
+ClimaDiagnostics.Writers.write_field
 Base.close
 ```

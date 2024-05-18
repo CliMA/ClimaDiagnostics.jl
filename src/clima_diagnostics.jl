@@ -2,7 +2,7 @@ import Accessors
 import SciMLBase
 
 import .Schedules: DivisorSchedule, EveryDtSchedule
-import .Writers: interpolate_field!, write_field!, sync, AbstractWriter
+import .Writers: interpolate_field!, write_field, sync, AbstractWriter
 
 # We define all the known identities in reduction_identities.jl
 include("reduction_identities.jl")
@@ -43,7 +43,7 @@ An object to instantiate and manage storage spaces for `ScheduledDiagnostics`.
 
 The `DiagnosticsHandler` calls `compute!(nothing, Y, p, t)` for each diagnostic. The result
 is used to allocate the areas of memory for storage and accumulation. For diagnostics
-without reduction, `write_field!(output_writer, result, diagnostic, Y, p, t)` is called too.
+without reduction, `write_field(output_writer, result, diagnostic, Y, p, t)` is called too.
 
 Note: initializing a `DiagnosticsHandler` can be expensive.
 
@@ -92,7 +92,7 @@ function DiagnosticsHandler(scheduled_diagnostics, Y, p, t; dt = nothing)
         # If it is not a reduction, call the output writer as well
         if !isa_time_reduction
             interpolate_field!(diag.output_writer, storage[diag], diag, Y, p, t)
-            write_field!(diag.output_writer, storage[diag], diag, Y, p, t)
+            write_field(diag.output_writer, storage[diag], diag, Y, p, t)
         else
             # Add to the accumulator
 
@@ -202,7 +202,7 @@ function orchestrate_diagnostics(
         active_output[diag_index] || continue
         diag = scheduled_diagnostics[diag_index]
 
-        write_field!(
+        write_field(
             diag.output_writer,
             diagnostic_handler.storage[diag],
             diag,

@@ -21,11 +21,11 @@ output_dir = mktempdir(".")
     writer = Writers.DictWriter()
 
     # Test with some strings and floats instead of actual Fields and ScheduledDiagnostics
-    Writers.write_field!(writer, 10.0, "mytest", nothing, nothing, 0.0)
+    Writers.write_field(writer, 10.0, "mytest", nothing, nothing, 0.0)
     @test writer.dict["mytest"][0.0] == 10.0
-    Writers.write_field!(writer, 20.0, "mytest", nothing, nothing, 2.0)
+    Writers.write_field(writer, 20.0, "mytest", nothing, nothing, 2.0)
     @test writer.dict["mytest"][2.0] == 20.0
-    Writers.write_field!(writer, 50.0, "mytest2", nothing, nothing, 8.0)
+    Writers.write_field(writer, 50.0, "mytest2", nothing, nothing, 8.0)
     @test writer.dict["mytest2"][8.0] == 50.0
 end
 
@@ -76,7 +76,7 @@ end
         output_writer = writer,
     )
     Writers.interpolate_field!(writer, field, diagnostic, u, p, t)
-    Writers.write_field!(writer, field, diagnostic, u, p, t)
+    Writers.write_field(writer, field, diagnostic, u, p, t)
 
     @test writer.unsynced_datasets ==
           Set((writer.open_files[joinpath(output_dir, "my_short_name.nc")],))
@@ -114,7 +114,7 @@ end
         p,
         t,
     )
-    Writers.write_field!(
+    Writers.write_field(
         writer_no_vert_interpolation,
         field,
         diagnostic_novert,
@@ -123,7 +123,7 @@ end
         t,
     )
     # Write a second time
-    Writers.write_field!(
+    Writers.write_field(
         writer_no_vert_interpolation,
         field,
         diagnostic_novert,
@@ -149,18 +149,12 @@ end
     Profile.clear()
 
     # Profile write
-    Profile.@profile Writers.write_field!(writer, field, diagnostic, u, p, t)
+    Profile.@profile Writers.write_field(writer, field, diagnostic, u, p, t)
     ProfileCanvas.html_file("flame_write_netcdf.html", Profile.fetch())
 
     # Benchmark write
-    timing_write_field = @benchmark Writers.write_field!(
-        $writer,
-        $field,
-        $diagnostic,
-        $u,
-        $p,
-        $t,
-    )
+    timing_write_field =
+        @benchmark Writers.write_field($writer, $field, $diagnostic, $u, $p, $t)
 
     # Compare against pure NCDatasets
     function add_nc(nc, outarray, p)

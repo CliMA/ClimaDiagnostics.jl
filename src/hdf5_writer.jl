@@ -31,7 +31,7 @@ The name of the file is determined by the `output_short_name` of the output
 
 `Field`s can be read back using the `InputOutput` module in `ClimaCore`.
 """
-function write_field!(writer::HDF5Writer, field, diagnostic, u, p, t)
+function write_field(writer::HDF5Writer, field, diagnostic, u, p, t)
     var = diagnostic.variable
     time = t
 

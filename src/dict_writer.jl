@@ -30,7 +30,7 @@ function DictWriter()
 end
 
 """
-    write_field!(writer::DictWriter, field, diagnostic, u, p, t)
+    write_field(writer::DictWriter, field, diagnostic, u, p, t)
 
 Add an entry to the `writer` at time `t` for the current `diagnostic` with value
 `field`.
@@ -44,7 +44,7 @@ that value.
 `DictWriter` implements a basic read-only dictionary interface to access the
 times and values.
 """
-function write_field!(writer::DictWriter, field, diagnostic, u, p, t)
+function write_field(writer::DictWriter, field, diagnostic, u, p, t)
     key_name =
         diagnostic isa ScheduledDiagnostic ? output_short_name(diagnostic) :
         diagnostic

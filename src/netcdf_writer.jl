@@ -272,7 +272,7 @@ function interpolate_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
 end
 
 """
-    write_field!(writer::NetCDFWriter, field::Fields.Field, diagnostic, u, p, t)
+    write_field(writer::NetCDFWriter, field::Fields.Field, diagnostic, u, p, t)
 
 Save the resampled `field` produced by `diagnostic` as directed by the `writer`.
 
@@ -291,7 +291,7 @@ Attributes are appended to the dataset:
 - `comments`
 - `start_date`
 """
-function write_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
+function write_field(writer::NetCDFWriter, field, diagnostic, u, p, t)
     # Only the root process has to write
     ClimaComms.iamroot(ClimaComms.context(field)) || return nothing
 

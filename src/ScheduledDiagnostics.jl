@@ -30,7 +30,7 @@ struct ScheduledDiagnostic{
     output_schedule_func::T1
 
     """Struct that controls out to save the computed diagnostic variable to disk.
-    `output_writer` has to implement a method `write_field!` that takes three arguments: the
+    `output_writer` has to implement a method `write_field` that takes three arguments: the
     value that has to be output, the `ScheduledDiagnostic`, and the integrator. Internally,
     the integrator contains extra information (such as the current timestep). It is
     responsibility of the `output_writer` to properly use the provided information for

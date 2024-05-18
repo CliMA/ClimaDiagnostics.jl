@@ -11,7 +11,7 @@ Writers are needed to save the computed diagnostics.
 
 Users are welcome to implement their own writers. A writer has to be a subtype
 of `AbstractWriter`and has to implement the `interpolate_field!` and
-`write_field!` methods. `interpolate_field!` can return `nothing` is no
+`write_field` methods. `interpolate_field!` can return `nothing` is no
 interpolation is needed.
 
 ## `NetCDFWriter`
@@ -61,7 +61,7 @@ Variables are saved as datasets with attributes, where the attributes include
 ```@docs
 ClimaDiagnostics.Writers.NetCDFWriter
 ClimaDiagnostics.Writers.interpolate_field!
-ClimaDiagnostics.Writers.write_field!
+ClimaDiagnostics.Writers.write_field
 ClimaDiagnostics.Writers.sync
 Base.close
 ```
@@ -73,7 +73,7 @@ interactive work and debugging.
 
 ```@docs
 ClimaDiagnostics.Writers.DictWriter
-ClimaDiagnostics.Writers.write_field!
+ClimaDiagnostics.Writers.write_field
 ```
 
 ## `HDF5Writer`
@@ -90,5 +90,5 @@ is being output.
 
 ```@docs
 ClimaDiagnostics.Writers.HDF5Writer
-ClimaDiagnostics.Writers.write_field!
+ClimaDiagnostics.Writers.write_field
 ```

@@ -9,7 +9,7 @@ Currently, it implements:
 
 Writers can implement:
 - `interpolate_field!`
-- `write_field!`
+- `write_field`
 - `Base.close`
 - `sync`
 """
@@ -18,7 +18,7 @@ module Writers
 import ..AbstractWriter, ..ScheduledDiagnostic
 import ..ScheduledDiagnostics: output_short_name, output_long_name
 
-function write_field!(writer::AbstractWriter, field, diagnostic, u, p, t)
+function write_field(writer::AbstractWriter, field, diagnostic, u, p, t)
     # Nothing to be done here :)
     return nothing
 end
