@@ -165,7 +165,8 @@ function NetCDFWriter(
 
     preallocated_arrays =
         ClimaComms.iamroot(comms_ctx) ?
-        Dict{String, ClimaComms.array_type(space)}() : Dict{String, Nothing}()
+        Dict{ScheduledDiagnostic, ClimaComms.array_type(space)}() :
+        Dict{ScheduledDiagnostic, Nothing}()
 
     unsynced_datasets = Set{NCDatasets.NCDataset}()
 
@@ -258,14 +259,14 @@ function interpolate_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
     #
     # The first time we call this, we call interpolate and allocate a new array.
     # Future calls are in-place
-    if haskey(writer.preallocated_output_arrays, var.short_name)
+    if haskey(writer.preallocated_output_arrays, diagnostic)
         interpolate!(
-            writer.preallocated_output_arrays[var.short_name],
+            writer.preallocated_output_arrays[diagnostic],
             remapper,
             field,
         )
     else
-        writer.preallocated_output_arrays[var.short_name] =
+        writer.preallocated_output_arrays[diagnostic] =
             interpolate(remapper, field)
     end
     return nothing
@@ -299,7 +300,7 @@ function write_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
     maybe_move_to_cpu =
         ClimaComms.device(field) isa ClimaComms.CUDADevice ? Array : identity
     interpolated_field =
-        maybe_move_to_cpu(writer.preallocated_output_arrays[var.short_name])
+        maybe_move_to_cpu(writer.preallocated_output_arrays[diagnostic])
     space = axes(field)
     FT = Spaces.undertype(space)
 
