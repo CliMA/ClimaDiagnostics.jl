@@ -7,7 +7,8 @@ Writers are needed to save the computed diagnostics.
 - `DictWriter`, to save `Field`s to dictionaries in memory;
 - `HDF5Writer`, to save `Field`s to HDF5 files.
 
-(There is an additional `DummyWriter` that does nothing. It is mostly used internally for testing and debugging.)
+(There is an additional `DummyWriter` that does nothing. It is mostly used
+internally for testing and debugging.)
 
 Users are welcome to implement their own writers. A writer has to be a subtype
 of `AbstractWriter`and has to implement the `interpolate_field!` and
@@ -30,6 +31,15 @@ and the output directory where the files should be saved. By default, the
 `NetCDFWriter` appends to existing files and create new ones if they do not
 exist. The `NetCDFWriter` does not overwrite existing data and will error out if
 existing data is inconsistent with the new one.
+
+`NetCDFWriter`s take as one of the inputs the desired number of points along
+each of the dimensions. For the horizontal dimensions, points are sampled
+linearly. For the vertical dimension, the behavior can be customized by passing
+the `z_sampling_method` variable. When `z_sampling_method =
+ClimaDiagnostics.Writers.LevelMethod()`, points evaluated on the grid levels
+(and the provided number of points ignored), when `z_sampling_method =
+ClimaDiagnostics.Writers.FakePressureLevelMethod()`, points are sampled
+uniformly in simplified hydrostatic atmospheric model.
 
 The output in the `NetCDFWriter` roughly follows the CF conventions.
 
@@ -65,6 +75,15 @@ ClimaDiagnostics.Writers.write_field!
 ClimaDiagnostics.Writers.sync
 Base.close
 ```
+
+Sampling methods for the vertical direction:
+```@docs
+ClimaDiagnostics.Writers.AbstractZSamplingMethod
+ClimaDiagnostics.Writers.LevelsMethod
+ClimaDiagnostics.Writers.FakePressureLevelsMethod
+Base.close
+```
+
 
 ## `DictWriter`
 
