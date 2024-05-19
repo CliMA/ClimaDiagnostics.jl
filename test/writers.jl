@@ -41,13 +41,14 @@ end
         output_dir;
         num_points = (NUM, NUM, NUM),
         sync_schedule = ClimaDiagnostics.Schedules.DivisorSchedule(2),
+        z_sampling_method = ClimaDiagnostics.Writers.FakePressureLevelsMethod(),
     )
 
     writer_no_vert_interpolation = Writers.NetCDFWriter(
         space,
         output_dir;
         num_points = (NUM, NUM, NUM),
-        disable_vertical_interpolation = true,
+        z_sampling_method = ClimaDiagnostics.Writers.LevelsMethod(),
     )
 
     # Check Base.show

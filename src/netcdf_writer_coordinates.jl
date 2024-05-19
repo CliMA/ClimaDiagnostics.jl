@@ -1,4 +1,39 @@
 """
+    AbstractZSamplingMethod
+
+The `AbstractZInterpolationMethod` defines how points along the vertical axis should be
+sampled.
+
+In other words, if a column is defined between 0 and 100 and the target number of points is
+50. How should those 50 points be chosen?
+
+Available methods are:
+- `LevelMethod`: just use the grid levels
+- `FakePressureLevelsMethod`: linearly spaced in (very) approximate atmospheric pressure levels
+"""
+abstract type AbstractZSamplingMethod end
+
+"""
+    LevelsMethod
+
+Do not perform interpolation on `z`, use directly the grid levels instead.
+"""
+struct LevelsMethod <: AbstractZSamplingMethod end
+
+"""
+    FakePressureLevelsMethod
+
+Linearly sample points from `z_min` to `z_max` in pressure levels assuming a very simplified hydrostatic balance model.
+
+Pressure is approximated with
+
+p ~ p₀ exp(-z/H)
+
+H is assumed to be 7000 m, which is a good scale height for the Earth atmosphere.
+"""
+struct FakePressureLevelsMethod <: AbstractZSamplingMethod end
+
+"""
     add_dimension!(nc::NCDatasets.NCDataset,
                    name::String,
                    points;
@@ -115,17 +150,12 @@ function target_coordinates(space, num_points) end
 
 function target_coordinates(
     space::S,
-    num_points;
-    disable_vertical_interpolation,
+    num_points,
+    z_sampling_method::FakePressureLevelsMethod,
 ) where {
     S <:
     Union{Spaces.CenterFiniteDifferenceSpace, Spaces.FaceFiniteDifferenceSpace},
 }
-    if disable_vertical_interpolation
-        cspace = Spaces.space(space, Grids.CellCenter())
-        return Array(parent(Fields.coordinate_field(cspace).z))[:, 1]
-    end
-
     # Exponentially spaced with base e
     #
     # We mimic something that looks like pressure levels
@@ -147,22 +177,30 @@ function target_coordinates(
     return collect(-H_EARTH * log.(range(exp_z_min, exp_z_max, num_points_z)))
 end
 
+function target_coordinates(
+    space::S,
+    num_points,
+    z_sampling_method::LevelsMethod,
+) where {
+    S <:
+    Union{Spaces.CenterFiniteDifferenceSpace, Spaces.FaceFiniteDifferenceSpace},
+}
+    cspace = Spaces.space(space, Grids.CellCenter())
+    return Array(parent(Fields.coordinate_field(cspace).z))[:, 1]
+end
+
 # Column
 function add_space_coordinates_maybe!(
     nc::NCDatasets.NCDataset,
     space::Spaces.FiniteDifferenceSpace,
     num_points_z;
-    disable_vertical_interpolation,
+    z_sampling_method,
     names = ("z",),
 )
     name, _... = names
     z_dimension_exists = dimension_exists(nc, name, (num_points_z,))
     if !z_dimension_exists
-        zpts = target_coordinates(
-            space,
-            num_points_z;
-            disable_vertical_interpolation,
-        )
+        zpts = target_coordinates(space, num_points_z, z_sampling_method)
         add_dimension!(nc, name, zpts, units = "m", axis = "Z")
     end
     return [name]
@@ -305,7 +343,7 @@ function add_space_coordinates_maybe!(
     nc::NCDatasets.NCDataset,
     space::Spaces.ExtrudedFiniteDifferenceSpace,
     num_points;
-    disable_vertical_interpolation,
+    z_sampling_method,
     interpolated_physical_z = nothing,
 )
 
@@ -330,7 +368,7 @@ function add_space_coordinates_maybe!(
             nc,
             vertical_space,
             num_points_vertic;
-            disable_vertical_interpolation,
+            z_sampling_method,
         )
     else
         vdims_names = add_space_coordinates_maybe!(
@@ -338,7 +376,7 @@ function add_space_coordinates_maybe!(
             vertical_space,
             num_points_vertic,
             interpolated_physical_z;
-            disable_vertical_interpolation,
+            z_sampling_method,
             names = ("z_reference",),
             depending_on_dimensions = hdims_names,
         )
@@ -347,14 +385,14 @@ function add_space_coordinates_maybe!(
     return (hdims_names..., vdims_names...)
 end
 
-# Ignore the interpolated_physical_z/disable_vertical_interpolation keywords in the general
+# Ignore the interpolated_physical_z/z_sampling_method keywords in the general
 # case (we only case about the specialized one for extruded spaces)
 add_space_coordinates_maybe!(
     nc::NCDatasets.NCDataset,
     space,
     num_points;
     interpolated_physical_z = nothing,
-    disable_vertical_interpolation = false,
+    z_sampling_method = nothing,
 ) = add_space_coordinates_maybe!(nc::NCDatasets.NCDataset, space, num_points)
 
 # Elevation with topography
@@ -371,7 +409,7 @@ function add_space_coordinates_maybe!(
     num_points,
     interpolated_physical_z;
     names = ("z_reference",),
-    disable_vertical_interpolation,
+    z_sampling_method,
     depending_on_dimensions,
 )
     num_points_z = num_points
@@ -382,11 +420,8 @@ function add_space_coordinates_maybe!(
         dimension_exists(nc, name, (num_points_z,))
 
     if !z_reference_dimension_dimension_exists
-        reference_altitudes = target_coordinates(
-            space,
-            num_points_z;
-            disable_vertical_interpolation,
-        )
+        reference_altitudes =
+            target_coordinates(space, num_points_z, z_sampling_method)
         add_dimension!(nc, name, reference_altitudes; units = "m", axis = "Z")
     end
 
@@ -421,8 +456,8 @@ end
 # and combines the resulting dictionaries
 function target_coordinates(
     space::Spaces.ExtrudedFiniteDifferenceSpace,
-    num_points;
-    disable_vertical_interpolation,
+    num_points,
+    z_sampling_method,
 )
 
     hcoords = vcoords = ()
@@ -436,11 +471,8 @@ function target_coordinates(
         Spaces.vertical_topology(space),
         Spaces.staggering(space),
     )
-    vcoords = target_coordinates(
-        vertical_space,
-        num_points_vertic;
-        disable_vertical_interpolation,
-    )
+    vcoords =
+        target_coordinates(vertical_space, num_points_vertic, z_sampling_method)
 
     hcoords == vcoords == () && error("Found empty space")
 

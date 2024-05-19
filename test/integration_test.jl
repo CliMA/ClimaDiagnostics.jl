@@ -113,7 +113,7 @@ end
             NCDatasets.NCDataset(joinpath(output_dir, "YO_1it_inst.nc")) do nc
                 @test nc["YO"].attrib["short_name"] == "YO"
                 @test nc["YO"].attrib["long_name"] == "YO YO, Instantaneous"
-                @test size(nc["YO"]) == (11, 10, 5, 3)
+                @test size(nc["YO"]) == (11, 10, 5, 10)
             end
 
             NCDatasets.NCDataset(
@@ -122,13 +122,13 @@ end
                 @test nc["YO"].attrib["short_name"] == "YO"
                 @test nc["YO"].attrib["long_name"] ==
                       "YO YO, average within every 2 iterations"
-                @test size(nc["YO"]) == (5, 10, 5, 3)
+                @test size(nc["YO"]) == (5, 10, 5, 10)
             end
 
             NCDatasets.NCDataset(joinpath(output_dir, "YO_3s_inst.nc")) do nc
                 @test nc["YO"].attrib["short_name"] == "YO"
                 @test nc["YO"].attrib["long_name"] == "YO YO, Instantaneous"
-                @test size(nc["YO"]) == (4, 10, 5, 3)
+                @test size(nc["YO"]) == (4, 10, 5, 10)
             end
         end
     end

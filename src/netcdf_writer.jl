@@ -16,7 +16,8 @@ include("netcdf_writer_coordinates.jl")
 A struct to remap `ClimaCore` `Fields` to rectangular grids and save the output to NetCDF
 files.
 """
-struct NetCDFWriter{T, TS, DI, SYNC} <: AbstractWriter
+struct NetCDFWriter{T, TS, DI, SYNC, ZSM <: AbstractZSamplingMethod} <:
+       AbstractWriter
     """The base folder where to save the files."""
     output_dir::String
 
@@ -45,10 +46,9 @@ struct NetCDFWriter{T, TS, DI, SYNC} <: AbstractWriter
     """NetCDF files that are currently open. Only the root process uses this field."""
     open_files::Dict{String, NCDatasets.NCDataset}
 
-    """ Do not interpolate on the z direction, instead evaluate on the levels. When
-    disable_vertical_interpolation is true, the num_points on the vertical direction is
-    ignored."""
-    disable_vertical_interpolation::Bool
+    """Instance of a type that determines how the points along the vertical direction are
+    sampled."""
+    z_sampling_method::ZSM
 
     """Areas of memory preallocated where the interpolation output is saved. Only the root
     process uses this."""
@@ -90,9 +90,9 @@ Keyword arguments
 - `num_points`: How many points to use along the different dimensions to interpolate the
                 fields. This is a tuple of integers, typically having meaning Long-Lat-Z,
                 or X-Y-Z (the details depend on the configuration being simulated).
-- `disable_vertical_interpolation`: Do not interpolate on the z direction, instead evaluate
-                                    at on levels. When disable_vertical_interpolation is true,
-                                    the num_points on the vertical direction is ignored.
+- `z_sampling_method`: Instance of a `AbstractZSamplingMethod` that determines how points
+                       on the vertical direction should be chosen. By default, the vertical
+                       points are sampled on the grid levels.
 - `compression_level`: How much to compress the output NetCDF file (0 is no compression, 9
                        is maximum compression).
 - `sync_schedule`: Schedule that determines when to call `NetCDF.sync` (to flush the output
@@ -106,15 +106,15 @@ function NetCDFWriter(
     space,
     output_dir;
     num_points = (180, 90, 50),
-    disable_vertical_interpolation = false,
     compression_level = 9,
     sync_schedule = ClimaComms.device(space) isa ClimaComms.CUDADevice ?
                     EveryStepSchedule() : nothing,
+    z_sampling_method = LevelsMethod(),
 )
     horizontal_space = Spaces.horizontal_space(space)
     is_horizontal_space = horizontal_space == space
 
-    if disable_vertical_interpolation
+    if z_sampling_method isa LevelsMethod
         # It is a little tricky to override the number of vertical points because we don't
         # know if the vertical direction is the 2nd (as in a plane) or 3rd index (as in a
         # box or sphere). To set this value, we check if we are on a plane or not
@@ -135,11 +135,7 @@ function NetCDFWriter(
         hpts = target_coordinates(space, num_points)
         vpts = []
     else
-        hpts, vpts = target_coordinates(
-            space,
-            num_points;
-            disable_vertical_interpolation,
-        )
+        hpts, vpts = target_coordinates(space, num_points, z_sampling_method)
     end
 
     hcoords = hcoords_from_horizontal_space(
@@ -175,6 +171,7 @@ function NetCDFWriter(
         typeof(interpolated_physical_z),
         typeof(preallocated_arrays),
         typeof(sync_schedule),
+        typeof(z_sampling_method),
     }(
         output_dir,
         Dict{String, Remapper}(),
@@ -182,7 +179,7 @@ function NetCDFWriter(
         compression_level,
         interpolated_physical_z,
         Dict{String, NCDatasets.NCDataset}(),
-        disable_vertical_interpolation,
+        z_sampling_method,
         preallocated_arrays,
         sync_schedule,
         unsynced_datasets,
@@ -221,8 +218,8 @@ function interpolate_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
         else
             hpts, vpts = target_coordinates(
                 space,
-                writer.num_points;
-                writer.disable_vertical_interpolation,
+                writer.num_points,
+                writer.z_sampling_method,
             )
         end
 
@@ -234,7 +231,7 @@ function interpolate_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
 
         # When we disable vertical_interpolation, we override the vertical points with
         # the reference values for the vertical space.
-        if writer.disable_vertical_interpolation && !is_horizontal_space
+        if writer.z_sampling_method isa LevelsMethod && !is_horizontal_space
             # We need Array(parent()) because we want an array of values, not a DataLayout
             # of Points
             vpts = Array(
@@ -323,7 +320,7 @@ function write_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
         nc,
         space,
         writer.num_points;
-        writer.disable_vertical_interpolation,
+        writer.z_sampling_method,
         writer.interpolated_physical_z,
     )
 
