@@ -79,8 +79,17 @@ because it creates a new integrator obtained by copying all the fields of the
 old one and adding the diagnostics (with
 [`Accessors`](https://github.com/JuliaObjects/Accessors.jl)).
 
+The `DiagnosticsHandler` also contains three `BitVectors`: `active_compute`,
+`active_output`, `active_sync`. These `BitVectors` have the same length as the
+number of scheduled diagnostics and signal whether something should done at a
+given step. The `BitVectors` are defined and preallocated trying to reduce the
+inference allocations that result from operations like `filter` on lists of
+`ScheduledDiagnostics`. They are updated by a callback that is run before
+`orchestrate_diagnostics` and they can be used to determine if
+`orchestrate_diagnostics` should be run at all.
+
 ## Orchestrate diagnostics
 
 One of the design goals for `orchestrate_diagnostics` is to keep all the
 broadcasted expression in the same function scope. This opens a path to optimize
-the number of GPU kernel launches. 
+the number of GPU kernel launches.
