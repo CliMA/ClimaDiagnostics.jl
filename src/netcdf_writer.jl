@@ -344,8 +344,10 @@ function write_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
         v.attrib["long_name"] = output_long_name(diagnostic)::String
         v.attrib["units"] = var.units::String
         v.attrib["comments"] = var.comments::String
-        # FIXME: We are hardcoding p.start_date !
-        v.attrib["start_date"] = string(p.start_date)::String
+        if haskey(p, :start_date)
+            # FIXME: We are hardcoding p.start_date !
+            v.attrib["start_date"] = string(p.start_date)::String
+        end
         temporal_size = 0
     end
 
@@ -357,7 +359,9 @@ function write_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
 
     # FIXME: We are hardcoding p.start_date !
     # FIXME: We are rounding t
-    nc["date"][time_index] = string(p.start_date + Dates.Second(round(t)))
+    if haskey(p, :start_date)
+        nc["date"][time_index] = string(p.start_date + Dates.Second(round(t)))
+    end
 
     # TODO: It would be nice to find a cleaner way to do this
     if length(dim_names) == 3
