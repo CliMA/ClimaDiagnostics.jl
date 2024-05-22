@@ -341,7 +341,7 @@ function write_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
         v.attrib["long_name"] = output_long_name(diagnostic)::String
         v.attrib["units"] = var.units::String
         v.attrib["comments"] = var.comments::String
-        if haskey(p, :start_date)
+        if hasproperty(p, :start_date)
             # FIXME: We are hardcoding p.start_date !
             v.attrib["start_date"] = string(p.start_date)::String
         end
@@ -356,7 +356,7 @@ function write_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
 
     # FIXME: We are hardcoding p.start_date !
     # FIXME: We are rounding t
-    if haskey(p, :start_date)
+    if hasproperty(p, :start_date)
         nc["date"][time_index] = string(p.start_date + Dates.Second(round(t)))
     end
 
