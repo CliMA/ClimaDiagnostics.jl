@@ -1,6 +1,12 @@
 # NEWS
 
-v0.2.0
+v0.2.2
+-------
+
+- Fix support for caches that are not NamedTuples in `NetCDFWriter`.
+
+
+v0.2.1
 -------
 
 - Fix support for purely horziontal spaces in `NetCDFWriter`.
