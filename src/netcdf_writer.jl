@@ -114,27 +114,26 @@ function NetCDFWriter(
     horizontal_space = Spaces.horizontal_space(space)
     is_horizontal_space = horizontal_space == space
 
-    if z_sampling_method isa LevelsMethod
-        # It is a little tricky to override the number of vertical points because we don't
-        # know if the vertical direction is the 2nd (as in a plane) or 3rd index (as in a
-        # box or sphere). To set this value, we check if we are on a plane or not
-
-        # TODO: Get the number of dimensions directly from the space
-        num_horiz_dimensions =
-            Spaces.horizontal_space(space) isa Spaces.SpectralElementSpace1D ?
-            1 : 2
-
-        num_vpts = Meshes.nelements(Grids.vertical_topology(space).mesh)
-
-        @warn "Disabling vertical interpolation, the provided number of points is ignored (using $num_vpts)"
-        num_points = Tuple([num_points[1:num_horiz_dimensions]..., num_vpts])
-    end
-
-    # Interpolate physical zs
     if is_horizontal_space
         hpts = target_coordinates(space, num_points)
         vpts = []
     else
+        if z_sampling_method isa LevelsMethod
+            # It is a little tricky to override the number of vertical points because we don't
+            # know if the vertical direction is the 2nd (as in a plane) or 3rd index (as in a
+            # box or sphere). To set this value, we check if we are on a plane or not
+
+            # TODO: Get the number of dimensions directly from the space
+            num_horiz_dimensions =
+                Spaces.horizontal_space(space) isa
+                Spaces.SpectralElementSpace1D ? 1 : 2
+
+            num_vpts = Meshes.nelements(Grids.vertical_topology(space).mesh)
+
+            @warn "Disabling vertical interpolation, the provided number of points is ignored (using $num_vpts)"
+            num_points =
+                Tuple([num_points[1:num_horiz_dimensions]..., num_vpts])
+        end
         hpts, vpts = target_coordinates(space, num_points, z_sampling_method)
     end
 
