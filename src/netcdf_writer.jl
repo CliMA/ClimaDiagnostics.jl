@@ -85,7 +85,9 @@ performing a pointwise (non-conservative) remapping first.
 Keyword arguments
 ==================
 
-- `space`: `Space` where the `Fields` are defined.
+- `space`: `Space` where the `Fields` are defined. This is the most general space across the
+           `Fields`. In general, this is a 3D space. From a 3D space, you can take slices and
+            write 2D Fields, but the opposite is not true.
 - `output_dir`: The base folder where the files should be saved.
 - `num_points`: How many points to use along the different dimensions to interpolate the
                 fields. This is a tuple of integers, typically having meaning Long-Lat-Z,
