@@ -63,7 +63,7 @@ include("TestTools.jl")
         dt,
     )
 
-    diag_cb = ClimaDiagnostics.DiagnosticsCallback(diagnostic_handler)
+    diag_cbs = ClimaDiagnostics.DiagnosticsCallbacks(diagnostic_handler)
 
     prob = SciMLBase.ODEProblem(
         ClimaTimeSteppers.ClimaODEFunction(T_exp! = exp_tendency!),
@@ -71,9 +71,20 @@ include("TestTools.jl")
         (t0, tf),
         p,
     )
+
+    @test ClimaDiagnostics.check_callback_condition(
+        prob,
+        diagnostic_handler,
+    ) === false
+
     algo = ClimaTimeSteppers.ExplicitAlgorithm(ClimaTimeSteppers.RK4())
 
-    SciMLBase.solve(prob, algo, dt = dt, callback = diag_cb)
+    SciMLBase.solve(prob, algo, dt = dt, callback = diag_cbs)
+
+    @test ClimaDiagnostics.check_callback_condition(
+        prob,
+        diagnostic_handler,
+    ) === true
 
     @test length(keys(dict_writer.dict[short_name])) ==
           convert(Int, 1 + (tf - t0) / dt)
@@ -100,7 +111,7 @@ include("TestTools.jl")
         dt,
     )
 
-    diag_cb = ClimaDiagnostics.DiagnosticsCallback(diagnostic_handler)
+    diag_cbs = ClimaDiagnostics.DiagnosticsCallbacks(diagnostic_handler)
 
     prob = SciMLBase.ODEProblem(
         ClimaTimeSteppers.ClimaODEFunction(T_exp! = exp_tendency!),
@@ -110,7 +121,7 @@ include("TestTools.jl")
     )
     algo = ClimaTimeSteppers.ExplicitAlgorithm(ClimaTimeSteppers.RK4())
 
-    SciMLBase.solve(prob, algo, dt = dt, callback = diag_cb)
+    SciMLBase.solve(prob, algo, dt = dt, callback = diag_cbs)
 
     @test length(keys(dict_writer.dict[short_name])) ==
           convert(Int, (tf - t0) / 5dt)

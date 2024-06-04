@@ -34,6 +34,12 @@ struct DiagnosticsHandler{
     many times the given diagnostics was computed from the last time it was output to
     disk."""
     counters::COUNT
+
+    """Bitvectors that identify which diagnostics are active at the given step. This is here
+    mostly to reduce inference allocations that would result from operations like filter."""
+    active_compute::BitVector
+    active_output::BitVector
+    active_sync::BitVector
 end
 
 """
@@ -105,21 +111,20 @@ function DiagnosticsHandler(scheduled_diagnostics, Y, p, t; dt = nothing)
         end
     end
 
+    num_diagnostics = length(scheduled_diagnostics)
+    active_compute = BitVector(ntuple(_ -> false, num_diagnostics))
+    active_output = BitVector(ntuple(_ -> false, num_diagnostics))
+    active_sync = BitVector(ntuple(_ -> false, num_diagnostics))
+
     return DiagnosticsHandler(
         Tuple(scheduled_diagnostics),
         storage,
         accumulators,
         counters,
+        active_compute,
+        active_output,
+        active_sync,
     )
-end
-
-# Does the writer associated to `diag` need to be synced?
-# It does only when it has a sync_schedule that is a callable and that
-# callable returns true when called on the integrator
-function _needs_sync(diag, integrator)
-    hasproperty(diag.output_writer, :sync_schedule) || return false
-    isnothing(diag.output_writer.sync_schedule) && return false
-    return diag.output_writer.sync_schedule(integrator)
 end
 
 """
@@ -133,15 +138,10 @@ function orchestrate_diagnostics(
     diagnostic_handler::DiagnosticsHandler,
 )
     scheduled_diagnostics = diagnostic_handler.scheduled_diagnostics
-    active_compute = Bool[]
-    active_output = Bool[]
-    active_sync = Bool[]
 
-    for diag in scheduled_diagnostics
-        push!(active_compute, diag.compute_schedule_func(integrator))
-        push!(active_output, diag.output_schedule_func(integrator))
-        push!(active_sync, _needs_sync(diag, integrator))
-    end
+    active_compute = diagnostic_handler.active_compute
+    active_output = diagnostic_handler.active_output
+    active_sync = diagnostic_handler.active_sync
 
     # Compute
     for diag_index in 1:length(scheduled_diagnostics)
@@ -238,22 +238,92 @@ function orchestrate_diagnostics(
     return nothing
 end
 
-"""
-    DiagnosticsCallback(diagnostics_handler::DiagnosticsHandler)
+# Does the writer associated to `diag` need to be synced?
+# It does only when it has a sync_schedule that is a callable and that
+# callable returns true when called on the integrator
+function _needs_sync(diag, integrator)
+    hasproperty(diag.output_writer, :sync_schedule) || return false
+    isnothing(diag.output_writer.sync_schedule) && return false
+    return diag.output_writer.sync_schedule(integrator)
+end
 
-Translate a `DiagnosticsHandler` into a SciML callback ready to be used.
 """
-function DiagnosticsCallback(diagnostics_handler::DiagnosticsHandler)
-    sciml_callback(integrator) =
+    update_diagnostic_handler_bitvectors(integrator, diagnostics_handler::DiagnosticsHandler)
+
+Update the `active_{compute, update, sync}` bitvector in `diagnostics_handler`.
+
+The `diagnostics_handler` contains three bitvectors that determine which actions should be
+taken at the current iterations. They are preallocated mostly to avoid inference allocations
+that result from operations with groups of `ScheduledDiagnostics`, but they can also be used
+to determine if `orchestrate_diagnostics` should be called or not.
+
+This function evaluates the various `schedule_func`s for all the `ScheduledDiagnostics` in
+the `diagnostics_handler` and updates the bitvectors. This function should be called at
+every step.
+"""
+function update_diagnostic_handler_bitvectors(integrator, diagnostics_handler)
+    scheduled_diagnostics = diagnostics_handler.scheduled_diagnostics
+
+    for index in 1:length(scheduled_diagnostics)
+        diag = scheduled_diagnostics[index]
+        diagnostics_handler.active_compute[index] =
+            diag.compute_schedule_func(integrator)
+        diagnostics_handler.active_output[index] =
+            diag.output_schedule_func(integrator)
+        diagnostics_handler.active_sync[index] = _needs_sync(diag, integrator)
+    end
+
+    return nothing
+end
+
+"""
+    check_callback_condition(integrator, diagnostics_handler::DiagnosticsHandler)
+
+Return true when `orchestrate_diagnostics` should be called.
+"""
+function check_callback_condition(integrator, diagnostics_handler)
+    return any(diagnostics_handler.active_compute) ||
+           any(diagnostics_handler.active_output) ||
+           any(diagnostics_handler.active_sync)
+end
+
+"""
+    DiagnosticsCallbacks(diagnostics_handler::DiagnosticsHandler)
+
+Translate a `DiagnosticsHandler` into two SciML callbacks ready to be used.
+
+The first updates internal counters in `diagnostics_handler` that check if the diagnostics
+have to be computed. The second actually computes and outputs the diagnostics.
+
+"""
+function DiagnosticsCallbacks(diagnostics_handler::DiagnosticsHandler)
+
+    # We use trivial condition to update the condition to run orchestrate_diagnostics
+    trivial_condition = (_, _, _) -> true
+
+    sciml_callback_update_diagnostic_handler_bitvectors(integrator) =
+        update_diagnostic_handler_bitvectors(integrator, diagnostics_handler)
+
+    orchestrate_condition =
+        (_, _, integrator) ->
+            check_callback_condition(integrator, diagnostics_handler)
+
+    sciml_callback_orchestrate_diagnostics(integrator) =
         orchestrate_diagnostics(integrator, diagnostics_handler)
 
-    # SciMLBase.DiscreteCallback checks if the given condition is true at the end of each
-    # step. So, we set a condition that is always true, the callback is called at the end of
-    # every step. This callback runs `orchestrate_callbacks`, which manages which
-    # diagnostics functions to call
-    condition = (_, _, _) -> true
+    continuous_callbacks = ()
+    discrete_callbacks = (
+        SciMLBase.DiscreteCallback(
+            trivial_condition,
+            sciml_callback_update_diagnostic_handler_bitvectors,
+        ),
+        SciMLBase.DiscreteCallback(
+            orchestrate_condition,
+            sciml_callback_orchestrate_diagnostics,
+        ),
+    )
 
-    return SciMLBase.DiscreteCallback(condition, sciml_callback)
+    return SciMLBase.CallbackSet(continuous_callbacks, discrete_callbacks)
 end
 
 """
@@ -263,7 +333,7 @@ end
 Return a new `integrator` with diagnostics defined by `scheduled_diagnostics`.
 
 `IntegratorWithDiagnostics` is conceptually similar to defining a `DiagnosticsHandler`,
-constructing its associated `DiagnosticsCallback`, and adding such callback to a given
+constructing its associated `DiagnosticsCallbacks`, and adding such callbacks to a given
 integrator.
 
 The new integrator is identical to the previous one with the only difference that it has a
@@ -284,11 +354,12 @@ function IntegratorWithDiagnostics(integrator, scheduled_diagnostics)
         integrator.t;
         integrator.dt,
     )
-    diagnostics_callback = DiagnosticsCallback(diagnostics_handler)
+    diagnostics_callbacks =
+        DiagnosticsCallbacks(diagnostics_handler).discrete_callbacks
 
     continuous_callbacks = integrator.callback.continuous_callbacks
     discrete_callbacks =
-        (integrator.callback.discrete_callbacks..., diagnostics_callback)
+        (integrator.callback.discrete_callbacks..., diagnostics_callbacks...)
     callback = SciMLBase.CallbackSet(continuous_callbacks, discrete_callbacks)
 
     Accessors.@reset integrator.callback = callback
