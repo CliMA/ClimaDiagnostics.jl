@@ -40,7 +40,8 @@ function SphericalShellSpace(;
         boundary_names = (:bottom, :top),
     )
     vertmesh = ClimaCore.Meshes.IntervalMesh(vertdomain; nelems = zelem)
-    vert_center_space = ClimaCore.Spaces.CenterFiniteDifferenceSpace(vertmesh)
+    vert_center_space =
+        ClimaCore.Spaces.CenterFiniteDifferenceSpace(context, vertmesh)
 
     horzdomain = ClimaCore.Domains.SphereDomain(FT(radius))
     horzmesh = ClimaCore.Meshes.EquiangularCubedSphere(horzdomain, nelements)
