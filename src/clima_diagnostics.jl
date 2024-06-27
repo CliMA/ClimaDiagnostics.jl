@@ -61,7 +61,12 @@ function DiagnosticsHandler(scheduled_diagnostics, Y, p, t; dt = nothing)
     accumulators = Dict()
     counters = Dict()
 
-    for diag in scheduled_diagnostics
+    unique_scheduled_diagnostics = Tuple(unique(scheduled_diagnostics))
+    if length(unique_scheduled_diagnostics) != length(scheduled_diagnostics)
+        @warn "Given list of diagnostics contains duplicates, removing them"
+    end
+
+    for diag in unique_scheduled_diagnostics
         if isnothing(dt)
             @warn "dt was not passed to DiagnosticsHandler. No checks will be performed on the frequency of the diagnostics"
         else
@@ -106,7 +111,7 @@ function DiagnosticsHandler(scheduled_diagnostics, Y, p, t; dt = nothing)
     end
 
     return DiagnosticsHandler(
-        Tuple(scheduled_diagnostics),
+        unique_scheduled_diagnostics,
         storage,
         accumulators,
         counters,

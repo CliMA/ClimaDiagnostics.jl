@@ -1,5 +1,11 @@
 # NEWS
 
+v0.2.3
+-------
+
+- Detect and ignore duplicated diagnostics.
+
+
 v0.2.2
 -------
 
