@@ -147,4 +147,40 @@ include("TestTools.jl")
         dt,
     )
 
+    # Test duplicated diagnostics
+    diagnostic1 = ClimaDiagnostics.ScheduledDiagnostic(
+        variable = simple_var,
+        output_writer = dict_writer,
+    )
+    diagnostic2 = ClimaDiagnostics.ScheduledDiagnostic(
+        variable = simple_var,
+        output_writer = dict_writer,
+    )
+    diagnostic3 = ClimaDiagnostics.ScheduledDiagnostic(
+        variable = simple_var,
+        output_writer = dict_writer,
+        reduction_time_func = +,
+    )
+
+    @test_logs (
+        :warn,
+        "Given list of diagnostics contains duplicates, removing them",
+    ) handler_dup = ClimaDiagnostics.DiagnosticsHandler(
+        [diagnostic1, diagnostic2, diagnostic3],
+        Y,
+        p,
+        t0;
+        dt,
+    )
+
+    handler_dup = ClimaDiagnostics.DiagnosticsHandler(
+        [diagnostic1, diagnostic2, diagnostic3],
+        Y,
+        p,
+        t0;
+        dt,
+    )
+
+    @test length(handler_dup.scheduled_diagnostics) == 2
+
 end
