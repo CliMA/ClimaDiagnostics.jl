@@ -24,12 +24,12 @@ jobs:
       matrix:
         package:
           - 'ClimaAtmos.jl'
+          - 'ClimaLand.jl'
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v1
         with:
           version: '1.10'
-          arch: 'x86'
       - uses: julia-actions/cache@v2
       - uses: julia-actions/julia-buildpkg@v1
       - uses: actions/checkout@v4
