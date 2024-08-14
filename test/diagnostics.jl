@@ -8,6 +8,17 @@ import SciMLBase
 
 include("TestTools.jl")
 
+@testset "Assign macro" begin
+    myvar = nothing
+    myrhs = 2
+    myrhs2 = 10
+    myvar_mut = [1]
+    @test ClimaDiagnostics.@assign(myvar, myrhs, myrhs2) == 2
+
+    ClimaDiagnostics.@assign(myvar_mut, myrhs, myrhs2)
+    @test myvar_mut == [10]
+end
+
 @testset "Diagnostics" begin
     t0 = 0.0
     tf = 1.0

@@ -23,5 +23,6 @@ the Developer guide page.
 - Allow users to define arbitrary new diagnostics;
 - Trigger diagnostics on arbitrary conditions;
 - Save output to HDF5 or NetCDF files, or a dictionary in memory;
-
+- Work with lazy expressions (such as the ones produced by
+  [LazyBroadcast.jl](https://github.com/CliMA/LazyBroadcast.jl)).
 

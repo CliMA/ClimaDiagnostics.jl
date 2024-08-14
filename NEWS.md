@@ -1,5 +1,11 @@
 # NEWS
 
+v0.2.4
+-------
+
+- Add `@assign`.
+- Add support for lazy compute functions that return `Base.Broadcast.Broadcasted` objects. 
+
 v0.2.3
 -------
 

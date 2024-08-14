@@ -38,7 +38,7 @@ linearly. For the vertical dimension, the behavior can be customized by passing
 the `z_sampling_method` variable. When `z_sampling_method =
 ClimaDiagnostics.Writers.LevelMethod()`, points evaluated on the grid levels
 (and the provided number of points ignored), when `z_sampling_method =
-ClimaDiagnostics.Writers.FakePressureLevelMethod()`, points are sampled
+ClimaDiagnostics.Writers.FakePressureLevelsMethod()`, points are sampled
 uniformly in simplified hydrostatic atmospheric model.
 
 The output in the `NetCDFWriter` roughly follows the CF conventions.

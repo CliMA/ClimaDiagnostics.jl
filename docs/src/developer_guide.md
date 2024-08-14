@@ -201,6 +201,27 @@ add_diagnostic_variable!(
 )
 ```
 
+When writing compute functions, consider using [`@assign`](@ref) to simplify
+your code and, when possible, making your expression lazy with
+[LazyBroadcast.jl](https://github.com/CliMA/LazyBroadcast.jl) to further improve
+clarity and performance. To do that, add `LazyBroadcast` to your dependencies
+and import `@lazy`. The previous example would look like:
+
+```julia
+###
+# Density (3d)
+###
+add_diagnostic_variable!(
+    short_name = "rhoa",
+    long_name = "Air Density",
+    standard_name = "air_density",
+    units = "kg m^-3",
+    compute! = (out, state, cache, time) -> begin
+        return @lazy @. state.c.ρ
+    end,
+)
+```
+
 It is a good idea to put safeguards in place to ensure that your users will not
 be allowed to call diagnostics that do not make sense for the simulation they
 are running. If your package has a notion of `Model` that is stored in `p`, you
@@ -224,11 +245,7 @@ function compute_hus!(
     time,
     moisture_model::T,
 ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
-    if isnothing(out)
-        return state.c.ρq_tot ./ state.c.ρ
-    else
-        out .= state.c.ρq_tot ./ state.c.ρ
-    end
+    @assign out state.c.ρq_tot ./ state.c.ρ
 end
 
 add_diagnostic_variable!(

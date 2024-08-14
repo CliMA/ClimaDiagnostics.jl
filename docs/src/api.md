@@ -4,6 +4,7 @@
 
 ```@docs
 ClimaDiagnostics.IntegratorWithDiagnostics
+ClimaDiagnostics.@assign
 ```
 
 ## `Schedules`
