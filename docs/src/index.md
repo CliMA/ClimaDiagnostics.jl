@@ -20,6 +20,7 @@ the Developer guide page.
 - Define diagnostics as function of the integrator state and the cache;
 - Accumulate diagnostics over period of times with associative binary temporal
   reductions (eg, averages);
+- Work with calendar dates (eg, monthly averages);
 - Allow users to define arbitrary new diagnostics;
 - Trigger diagnostics on arbitrary conditions;
 - Save output to HDF5 or NetCDF files, or a dictionary in memory;

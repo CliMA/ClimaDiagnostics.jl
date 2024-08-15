@@ -1,5 +1,10 @@
 # NEWS
 
+v0.2.4
+-------
+
+- Add `EveryCalendarDtSchedule` for schedules with calendar periods.
+
 v0.2.3
 -------
 
