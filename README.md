@@ -6,6 +6,12 @@
 </picture>
 
 ClimaDiagnostics.jl
+
+[![CI](https://github.com/CliMA/ClimaDiagnostics.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/CliMA/ClimaDiagnostics.jl/actions/workflows/CI.yml)
+[![Downstream](https://github.com/CliMA/ClimaDiagnostics.jl/actions/workflows/Downstream.yml/badge.svg)](https://github.com/CliMA/ClimaDiagnostics.jl/actions/workflows/Downstream.yml)
+[![codecov](https://codecov.io/gh/CliMA/ClimaDiagnostics.jl/graph/badge.svg?token=sbYkr5ydzp)](https://codecov.io/gh/CliMA/ClimaDiagnostics.jl)
+[![Docs](https://img.shields.io/badge/docs_are_here-click_me!-blue.svg)](https://clima.github.io/ClimaDiagnostics.jl/dev/)
+
 </h1>
 
 `ClimaDiagnostics.jl` provides a simple framework to add diagnostics to `CliMA`
