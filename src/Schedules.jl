@@ -5,7 +5,13 @@ steps).
 """
 module Schedules
 
-import ..seconds_to_str_short, ..seconds_to_str_long
+import Dates
+
+import ..seconds_to_str_short,
+    ..seconds_to_str_long,
+    ..time_to_date,
+    ..period_to_str_short,
+    ..period_to_str_long
 
 import SciMLBase
 
@@ -160,6 +166,114 @@ This assumes that units are seconds.
 """
 function long_name(schedule::EveryDtSchedule)
     return seconds_to_str_long(schedule.dt)
+end
+
+
+"""
+    EveryCalendarDtSchedule
+
+Returns true if `dt` has passed since the last time this schedule was true. `dt`
+here is a `Dates.Period` (e.g., `Dates.Month(1)`).
+
+!!! compat "ClimaDiagnostics 0.2.4"
+    This schedule was introduced in version `0.2.4`.
+"""
+struct EveryCalendarDtSchedule{P <: Dates.Period, T <: AbstractFloat} <:
+       AbstractSchedule
+    """Last date this function returned true."""
+    date_last::Base.RefValue{Dates.DateTime}
+
+    """The `Dates.Period` needed to elapse for the next time that this function will return
+    true."""
+    dt::P
+
+    """The `Dates.DateTime` used to convert from simulation time to date."""
+    reference_date::Dates.DateTime
+
+    """Simulation time at the beginning of the simulation. Typically used in restarts."""
+    t_start::T
+
+    """
+        EveryCalendarDtSchedule(dt::Dates.Period,
+                                reference_date::Dates.DateTime,
+                                date_last::Union{Nothing, Dates.DateTime} = nothing,
+                                t_start = 0)
+
+    True every time the current date is larger than the previous date this schedule was true + dt.
+
+    The date is computed assuming that `integrator.t` is in seconds and using `reference_date`.
+    Schematically:
+    ```julia
+    date = reference_date + Second(t_start + integrator.t)
+    ```
+
+    When `date_last` is `nothing`, `date_last` is computed from `reference_date` and `t_start`.
+
+    !!! compat "ClimaDiagnostics 0.2.4"
+        This schedule was introduced in version `0.2.4`.
+    """
+    function EveryCalendarDtSchedule(
+        dt::Dates.Period;
+        reference_date::Union{Dates.Date, Dates.DateTime},
+        date_last::Union{Dates.DateTime, Nothing} = nothing,
+        t_start::AbstractFloat = 0.0,
+    )
+        isnothing(date_last) &&
+            (date_last = time_to_date(t_start, reference_date))
+        new{typeof(dt), typeof(t_start)}(
+            Ref(date_last),
+            dt,
+            reference_date,
+            t_start,
+        )
+    end
+end
+
+"""
+    EveryCalendarDtSchedule(integrator)
+
+Returns true if `current_date >= last_date + dt`, where `last_date` is the last time
+this function was true and `dt` is the schedule interval time.
+
+`current_date` is computed using the schedule `reference_date` and `t_start`.
+See constructor for more information.
+"""
+function (schedule::EveryCalendarDtSchedule)(integrator)::Bool
+    next_date = schedule.date_last[] + schedule.dt
+    reference_date = schedule.reference_date
+    current_date = time_to_date(integrator.t, reference_date)
+    if current_date >= next_date
+        schedule.date_last[] = current_date
+        return true
+    else
+        return false
+    end
+end
+
+"""
+    short_name(schedule::EveryCalendarDtSchedule)
+
+Short of name of the given `schedule`. Typically used in names of files/datasets.
+
+By default, the name of this schedule is the value converted into DDd_HHh_MMm_SSs.
+
+Note:
+
+This assumes that units are seconds.
+"""
+function short_name(schedule::EveryCalendarDtSchedule)
+    return period_to_str_short(schedule.dt)
+end
+
+"""
+    long_name(schedule::EveryCalendarDtSchedule)
+
+Long of name of the given `schedule`. Typically used in attributes.
+
+This is directly the string representation of a `Dates.Period`.
+"""
+function long_name(schedule::EveryCalendarDtSchedule)
+    return period_to_str_long(schedule.dt)
 end
 
 end

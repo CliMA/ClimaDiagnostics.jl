@@ -15,7 +15,7 @@ ClimaDiagnostics.Schedules.long_name
 ClimaDiagnostics.Schedules.DivisorSchedule
 ClimaDiagnostics.Schedules.EveryStepSchedule
 ClimaDiagnostics.Schedules.EveryDtSchedule
-
+ClimaDiagnostics.Schedules.EveryCalendarDtSchedule
 ```
 
 ## `DiagnosticVariables`

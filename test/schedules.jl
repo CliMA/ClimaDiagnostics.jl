@@ -1,7 +1,12 @@
 using Test
 import SciMLBase
 
-import ClimaDiagnostics.Schedules: DivisorSchedule, EveryDtSchedule
+import Dates
+
+import ClimaDiagnostics.Schedules:
+    DivisorSchedule, EveryDtSchedule, EveryCalendarDtSchedule
+
+import ClimaDiagnostics: time_to_date
 
 include("TestTools.jl")
 
@@ -77,4 +82,100 @@ include("TestTools.jl")
 
     @test called[] == expected_called
     @test called2[] == expected_called2
+
+    # Test EveryCalendarDtSchedule
+    dt_callback_month = Dates.Month(1)
+    dummyintegrator = (; t = 1.0)
+
+    schedule0 = EveryCalendarDtSchedule(
+        dt_callback_month,
+        reference_date = Dates.DateTime(2024, 10),
+    )
+    @test !schedule0(dummyintegrator)
+
+    schedule1 = EveryCalendarDtSchedule(
+        dt_callback_month,
+        reference_date = Dates.DateTime(2024, 10),
+        date_last = Dates.DateTime(2024, 7),
+    )
+    @test schedule1(dummyintegrator)
+
+    schedule2 = EveryCalendarDtSchedule(
+        dt_callback_month,
+        reference_date = Dates.DateTime(2024, 10),
+        date_last = Dates.DateTime(2024, 12),
+    )
+    @test !schedule2(dummyintegrator)
+
+    # Check precisely one month
+    schedule3 = EveryCalendarDtSchedule(
+        dt_callback_month,
+        reference_date = Dates.DateTime(2024, 10),
+        date_last = Dates.DateTime(2024, 10),
+    )
+    # one month from the reference date in seconds
+    one_month_from_reference = Dates.value(
+        Dates.Second(
+            Dates.DateTime(2024, 10) + Dates.Month(1) -
+            Dates.DateTime(2024, 10),
+        ),
+    )
+
+    dummyintegrator_one_month = (; t = 1.0 * one_month_from_reference)
+    @test schedule3(dummyintegrator_one_month)
+
+    called_month = Ref(0)
+    function callback_func_month(integrator)
+        called_month[] += 1
+    end
+
+    # Test with reference_date read from integrator.p
+    scheduled_func_month = EveryCalendarDtSchedule(
+        dt_callback_month,
+        reference_date = Dates.DateTime(2000),
+    )
+    @test "$scheduled_func_month" == "1M"
+
+    callback_dt_month = SciMLBase.DiscreteCallback(
+        (_, _, integrator) -> scheduled_func_month(integrator),
+        callback_func_month,
+    )
+    t0 = 0.0
+    tf = 2 * 32 * 86400  # At least two months
+    dt = tf / 100
+    args, kwargs = create_problem(space; t0, tf, dt)
+
+    # See https://github.com/JuliaLang/julia/issues/55406
+    dt_callback_month_in_s = 86400 * Dates.days(dt_callback_month)
+    expected_called_month =
+        convert(Int, floor((tf - t0) / dt_callback_month_in_s))
+
+    SciMLBase.solve(
+        args...;
+        kwargs...,
+        callback = SciMLBase.CallbackSet(callback_dt_month),
+    )
+
+    @test called_month[] == expected_called_month
+end
+
+@testset "time_to_date" begin
+    reference_date = Dates.DateTime(2024, 1, 1, 0, 0, 0)
+
+    # Test with whole seconds
+    @test time_to_date(0.0, reference_date) == reference_date
+    @test time_to_date(1.0, reference_date, t_start = 5.0) ==
+          reference_date + Dates.Second(6)
+    @test time_to_date(60.0, reference_date) == reference_date + Dates.Minute(1)
+
+    # Test with fractional seconds
+    @test time_to_date(0.5, reference_date) ==
+          reference_date + Dates.Millisecond(500)
+    @test time_to_date(1.25, reference_date) ==
+          reference_date + Dates.Second(1) + Dates.Millisecond(250)
+
+    # Test with negative times
+    @test time_to_date(-1.0, reference_date) == reference_date - Dates.Second(1)
+    @test time_to_date(-0.5, reference_date) ==
+          reference_date - Dates.Millisecond(500)
 end

@@ -24,6 +24,13 @@ format = Documenter.HTML(
     mathengine = mathengine,
 )
 
+DocMeta.setdocmeta!(
+    ClimaDiagnostics,
+    :DocTestSetup,
+    :(using Dates);
+    recursive = true,
+)
+
 makedocs(
     sitename = "ClimaDiagnostics.jl",
     authors = "Gabriele Bozzola",

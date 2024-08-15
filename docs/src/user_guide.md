@@ -185,6 +185,10 @@ end
 ```
 Names are not too important, but they should be meaningful to you.
 
+`ClimaDiagnostics` comes with some predefined schedules for common operations,
+such out every N timesteps, or every calendar period. Refer to the docstrings in
+[`Schedules`](@ref) for more information on what is already implemented.
+
 ##### Temporal reductions
 
 It is often useful to compute aggregate data (e.g., monthly averages). In
