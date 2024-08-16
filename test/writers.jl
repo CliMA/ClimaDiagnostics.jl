@@ -133,6 +133,79 @@ end
         t,
     )
 
+    # Check boxes
+    xyboxspace = BoxSpace()
+    xyboxfield = Fields.coordinate_field(xyboxspace).z
+
+    xyboxwriter = Writers.NetCDFWriter(
+        xyboxspace,
+        output_dir;
+        num_points = (NUM, NUM, NUM),
+    )
+    xyboxdiagnostic = ClimaDiagnostics.ScheduledDiagnostic(;
+        variable = ClimaDiagnostics.DiagnosticVariable(;
+            compute!,
+            short_name = "ABC",
+        ),
+        output_short_name = "my_short_name_xybox",
+        output_long_name = "My Long Name",
+        output_writer = xyboxwriter,
+    )
+    xyboxu = (; xyboxfield)
+    Writers.interpolate_field!(
+        xyboxwriter,
+        xyboxfield,
+        xyboxdiagnostic,
+        xyboxu,
+        p,
+        t,
+    )
+    Writers.write_field!(xyboxwriter, xyboxfield, xyboxdiagnostic, xyboxu, p, t)
+
+    longlatboxspace = BoxSpace(; lonlat = true)
+    longlatboxfield = Fields.coordinate_field(longlatboxspace).z
+
+    longlatboxwriter = Writers.NetCDFWriter(
+        longlatboxspace,
+        output_dir;
+        num_points = (NUM, NUM, NUM),
+    )
+    longlatboxdiagnostic = ClimaDiagnostics.ScheduledDiagnostic(;
+        variable = ClimaDiagnostics.DiagnosticVariable(;
+            compute!,
+            short_name = "ABC",
+        ),
+        output_short_name = "my_short_name_longlatbox",
+        output_long_name = "My Long Name",
+        output_writer = longlatboxwriter,
+    )
+    longlatboxu = (; longlatboxfield)
+    Writers.interpolate_field!(
+        longlatboxwriter,
+        longlatboxfield,
+        longlatboxdiagnostic,
+        longlatboxu,
+        p,
+        t,
+    )
+    Writers.write_field!(
+        longlatboxwriter,
+        longlatboxfield,
+        longlatboxdiagnostic,
+        longlatboxu,
+        p,
+        t,
+    )
+    # Write a second time, to check consistency
+    Writers.write_field!(
+        longlatboxwriter,
+        longlatboxfield,
+        longlatboxdiagnostic,
+        longlatboxu,
+        p,
+        t,
+    )
+
     ###############
     # Performance #
     ###############
