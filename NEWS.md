@@ -1,5 +1,17 @@
 # NEWS
 
+v0.2.5
+-------
+
+## Features
+
+### Add support for box spaces with LatLong points in `NetCDFWriter`.
+
+The `NetCDFWriter` can now work with regional boxes with `LatLong` points. Due
+to incompatibility in `ClimaCore`, only `LatLong` points are supported (and not
+`LongLat` points). This means that the box has to be created with latitude on
+the x axis and longitude on the y axis.
+
 v0.2.4
 -------
 

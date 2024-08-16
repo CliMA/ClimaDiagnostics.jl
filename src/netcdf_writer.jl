@@ -295,11 +295,23 @@ function write_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
     ClimaComms.iamroot(ClimaComms.context(field)) || return nothing
 
     var = diagnostic.variable
+    space = axes(field)
+
     maybe_move_to_cpu =
         ClimaComms.device(field) isa ClimaComms.CUDADevice ? Array : identity
     interpolated_field =
         maybe_move_to_cpu(writer.preallocated_output_arrays[diagnostic])
-    space = axes(field)
+
+    if islatlonbox(
+        Meshes.domain(Spaces.topology(Spaces.horizontal_space(space))),
+    )
+        # ClimaCore works with LatLong points, but we want to have longitude
+        # first in the output, so we have to flip things
+        perm = collect(1:length(size(interpolated_field)))
+        perm[1:2] .= (2, 1)
+        interpolated_field = permutedims(interpolated_field, perm)
+    end
+
     FT = Spaces.undertype(space)
 
     output_path =

@@ -229,12 +229,18 @@ function target_coordinates(
     num_points,
     domain::Domains.RectangleDomain,
 )
-    num_points_x, num_points_y = num_points
-    FT = Spaces.undertype(space)
-    xmin = FT(domain.interval1.coord_min.x)
-    xmax = FT(domain.interval1.coord_max.x)
-    ymin = FT(domain.interval2.coord_min.y)
-    ymax = FT(domain.interval2.coord_max.y)
+    if islatlonbox(domain)
+        # ClimaCore assumes LatLon, but we really want LongLat, so we need to flip
+        # This function return Lat - Long points
+        num_points_y, num_points_x = num_points
+    else
+        num_points_x, num_points_y = num_points
+    end
+
+    xmin = Geometry.tofloat(domain.interval1.coord_min)
+    xmax = Geometry.tofloat(domain.interval1.coord_max)
+    ymin = Geometry.tofloat(domain.interval2.coord_min)
+    ymax = Geometry.tofloat(domain.interval2.coord_max)
     xpts = collect(range(xmin, xmax, num_points_x))
     ypts = collect(range(ymin, ymax, num_points_y))
     return (xpts, ypts)
@@ -248,8 +254,8 @@ function target_coordinates(
 )
     num_points_x, _... = num_points
     FT = Spaces.undertype(space)
-    xmin = FT(domain.coord_min.x)
-    xmax = FT(domain.coord_max.x)
+    xmin = Geometry.tofloat(domain.coord_min)
+    xmax = Geometry.tofloat(domain.coord_max)
     xpts = collect(range(xmin, xmax, num_points_x))
     return (xpts)
 end
@@ -268,25 +274,43 @@ function target_coordinates(
     return (longpts, latpts)
 end
 
+islatlonbox(domain) = false
+
 # Box
+function islatlonbox(domain::Domains.RectangleDomain)
+    return domain.interval1.coord_max isa Geometry.LatPoint &&
+           domain.interval2.coord_max isa Geometry.LongPoint
+end
+
 function add_space_coordinates_maybe!(
     nc::NCDatasets.NCDataset,
     space::Spaces.SpectralElementSpace2D,
     num_points,
-    ::Domains.RectangleDomain;
-    names = ("x", "y"),
+    domain::Domains.RectangleDomain;
+    names = islatlonbox(domain) ? ("lon", "lat") : ("x", "y"),
 )
-    xname, yname = names
-    num_points_x, num_points_y = num_points
-    x_dimension_exists = dimension_exists(nc, xname, (num_points_x,))
-    y_dimension_exists = dimension_exists(nc, yname, (num_points_y,))
+    name1, name2 = names
+    num_points1, num_points2 = num_points
 
-    if !x_dimension_exists && !y_dimension_exists
-        xpts, ypts = target_coordinates(space, num_points)
-        add_dimension!(nc, xname, xpts; units = "m", axis = "X")
-        add_dimension!(nc, yname, ypts; units = "m", axis = "Y")
+    maybe_reverse = identity
+    if islatlonbox(domain)
+        units = ("degrees_east", "degrees_north")
+        # ClimaCore assumes LatLon, but we really want LongLat, so we need to flip
+        maybe_reverse = reverse
+    else
+        units = ("m", "m")
     end
-    return [xname, yname]
+
+    dim1_exists = dimension_exists(nc, name1, (num_points1,))
+    dim2_exists = dimension_exists(nc, name2, (num_points2,))
+
+    if !dim1_exists && !dim2_exists
+        pts1, pts2 = maybe_reverse(target_coordinates(space, num_points))
+        add_dimension!(nc, name1, pts1; units = units[1], axis = "X")
+        add_dimension!(nc, name2, pts2; units = units[2], axis = "Y")
+    end
+
+    return [name1, name2]
 end
 
 # Plane
@@ -488,20 +512,36 @@ function hcoords_from_horizontal_space(
     return [Geometry.LatLongPoint(hc2, hc1) for hc1 in hpts[1], hc2 in hpts[2]]
 end
 
+
+# Workaround for https://github.com/CliMA/ClimaCore.jl/issues/1936
+#
+# Note that here we are assuming that lat is first
+Geometry._coordinate(pt::Geometry.LatLongPoint, ::Val{1}) =
+    Geometry.LatPoint(pt.lat)
+Geometry._coordinate(pt::Geometry.LatLongPoint, ::Val{2}) =
+    Geometry.LongPoint(pt.long)
+
 function hcoords_from_horizontal_space(
     space::Spaces.SpectralElementSpace2D,
     domain::Domains.RectangleDomain,
     hpts,
 )
-    return [Geometry.XYPoint(hc1, hc2) for hc1 in hpts[1], hc2 in hpts[2]]
+    XYPointType = typeof(
+        Geometry.product_coordinates(
+            domain.interval1.coord_max,
+            domain.interval2.coord_max,
+        ),
+    )
+
+    return [XYPointType(hc1, hc2) for hc1 in hpts[1], hc2 in hpts[2]]
 end
 
 function hcoords_from_horizontal_space(
     space::Spaces.SpectralElementSpace1D,
-    domain::Domains.IntervalDomain,
+    domain::Domains.IntervalDomain{PointType},
     hpts,
-)
-    return [Geometry.XPoint(hc1) for hc1 in hpts]
+) where {PointType}
+    return [PointType(hc1) for hc1 in hpts]
 end
 
 """
