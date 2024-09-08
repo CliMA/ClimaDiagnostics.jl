@@ -34,12 +34,12 @@ end
     field = Fields.coordinate_field(space).z
 
     # Number of interpolation points
-    NUM = 100
+    NUM = 50
 
     writer = Writers.NetCDFWriter(
         space,
         output_dir;
-        num_points = (NUM, NUM, NUM),
+        num_points = (NUM, 2NUM, 3NUM),
         sync_schedule = ClimaDiagnostics.Schedules.DivisorSchedule(2),
         z_sampling_method = ClimaDiagnostics.Writers.FakePressureLevelsMethod(),
     )
@@ -47,7 +47,7 @@ end
     writer_no_vert_interpolation = Writers.NetCDFWriter(
         space,
         output_dir;
-        num_points = (NUM, NUM, NUM),
+        num_points = (NUM, 2NUM, 3NUM),
         z_sampling_method = ClimaDiagnostics.Writers.LevelsMethod(),
     )
 
@@ -91,7 +91,7 @@ end
         @test nc["ABC"].attrib["units"] == ""
         @test nc["ABC"].attrib["start_date"] ==
               string(Dates.DateTime(1453, 5, 29))
-        @test size(nc["ABC"]) == (1, NUM, NUM, NUM)
+        @test size(nc["ABC"]) == (1, NUM, 2NUM, 3NUM)
         @test nc["time"][1] == 10.0
         @test nc["date"][1] ==
               string(Dates.DateTime(1453, 5, 29) + Dates.Second(10.0))
@@ -140,7 +140,7 @@ end
     xyboxwriter = Writers.NetCDFWriter(
         xyboxspace,
         output_dir;
-        num_points = (NUM, NUM, NUM),
+        num_points = (NUM, 2NUM, 3NUM),
     )
     xyboxdiagnostic = ClimaDiagnostics.ScheduledDiagnostic(;
         variable = ClimaDiagnostics.DiagnosticVariable(;
@@ -168,7 +168,7 @@ end
     longlatboxwriter = Writers.NetCDFWriter(
         longlatboxspace,
         output_dir;
-        num_points = (NUM, NUM, NUM),
+        num_points = (NUM, 2NUM, 3NUM),
     )
     longlatboxdiagnostic = ClimaDiagnostics.ScheduledDiagnostic(;
         variable = ClimaDiagnostics.DiagnosticVariable(;
@@ -253,8 +253,8 @@ end
     NCDatasets.defVar(nc, "time", Float64, ("time",))
     NCDatasets.defVar(nc, "date", String, ("time",))
     NCDatasets.defDim(nc, "x", NUM)
-    NCDatasets.defDim(nc, "y", NUM)
-    NCDatasets.defDim(nc, "z", NUM)
+    NCDatasets.defDim(nc, "y", 2NUM)
+    NCDatasets.defDim(nc, "z", 3NUM)
     v = NCDatasets.defVar(
         nc,
         "my_short_name",
