@@ -4,7 +4,7 @@ dictionary).
 This is particularly useful for testing and debugging. This is not type stable
 (the underlying dictionary does not know in advance what types might be used).
 """
-struct DictWriter{T} <: AbstractWriter
+struct DictWriter{T <: AbstractDict} <: AbstractWriter
     """Underlying dictionary. Keys are the short names of the diagnostics, values are
     dictionaries that map the time to the value."""
     dict::T

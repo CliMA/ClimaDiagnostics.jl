@@ -12,6 +12,10 @@ to incompatibility in `ClimaCore`, only `LatLong` points are supported (and not
 `LongLat` points). This means that the box has to be created with latitude on
 the x axis and longitude on the y axis.
 
+## Bug fixes
+
+- Ensure that `DictWriter` can only be constructed with dictionary-like objects.
+
 v0.2.4
 -------
 
