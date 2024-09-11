@@ -71,7 +71,7 @@ function setup_integrator(output_dir; context, more_compute_diagnostics = 0)
         output_writer = nc_writer,
         output_schedule_func = ClimaDiagnostics.Schedules.EveryDtSchedule(
             3.0,
-            t_start = t0,
+            t_last = t0,
         ),
     )
     inst_diagnostic_h5 = ClimaDiagnostics.ScheduledDiagnostic(

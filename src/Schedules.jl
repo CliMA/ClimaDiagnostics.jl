@@ -114,12 +114,29 @@ struct EveryDtSchedule{T} <: AbstractSchedule
     dt::T
 
     """
-        EveryDtSchedule(dt; t_start = zero(dt))
+        EveryDtSchedule(dt; t_last = zero(dt))
 
-    True every time the current time is larger than the previous time this schedule was true + dt.
+    True every time the current time is larger than the last time this schedule was true + dt.
+
+    The default value for `t_last` assumes that 0 is a relevant time in your problem (e.g.,
+    the time at the beginning of the simulation). Adjust it if this is not the case.
     """
-    function EveryDtSchedule(dt::T; t_start::T = zero(dt)) where {T}
-        new{typeof(dt)}(Ref(t_start), dt)
+    function EveryDtSchedule(
+        dt::T;
+        t_last::T = zero(dt),
+        ######## DEPRECATED #########
+        t_start = nothing,
+        ######## DEPRECATED #########
+    ) where {T}
+        ######## DEPRECATED #########
+        if !isnothing(t_start)
+            Base.depwarn(
+                "`t_start` is deprecated and will be ignored",
+                :EveryDtSchedule,
+            )
+        end
+        ######## DEPRECATED #########
+        new{typeof(dt)}(Ref(t_last), dt)
     end
 end
 
@@ -178,8 +195,7 @@ here is a `Dates.Period` (e.g., `Dates.Month(1)`).
 !!! compat "ClimaDiagnostics 0.2.4"
     This schedule was introduced in version `0.2.4`.
 """
-struct EveryCalendarDtSchedule{P <: Dates.Period, T <: AbstractFloat} <:
-       AbstractSchedule
+struct EveryCalendarDtSchedule{P <: Dates.Period} <: AbstractSchedule
     """Last date this function returned true."""
     date_last::Base.RefValue{Dates.DateTime}
 
@@ -188,44 +204,54 @@ struct EveryCalendarDtSchedule{P <: Dates.Period, T <: AbstractFloat} <:
     dt::P
 
     """The `Dates.DateTime` used to convert from simulation time to date."""
-    reference_date::Dates.DateTime
-
-    """Simulation time at the beginning of the simulation. Typically used in restarts."""
-    t_start::T
+    start_date::Dates.DateTime
 
     """
         EveryCalendarDtSchedule(dt::Dates.Period,
-                                reference_date::Dates.DateTime,
-                                date_last::Union{Nothing, Dates.DateTime} = nothing,
-                                t_start = 0)
+                                start_date::Dates.DateTime,
+                                date_last::Union{Nothing, Dates.DateTime} = nothing)
 
-    True every time the current date is larger than the previous date this schedule was true + dt.
+    True every time the current date is larger than the last date this schedule was true + dt.
 
-    The date is computed assuming that `integrator.t` is in seconds and using `reference_date`.
+    The date is computed assuming that `integrator.t` is in seconds and using `start_date`.
     Schematically:
     ```julia
-    date = reference_date + Second(t_start + integrator.t)
+    date = start_date + Second(integrator.t)
     ```
 
-    When `date_last` is `nothing`, `date_last` is computed from `reference_date` and `t_start`.
+    When `date_last` is `nothing`, `date_last` is assumed to be `start_date`.
 
     !!! compat "ClimaDiagnostics 0.2.4"
         This schedule was introduced in version `0.2.4`.
     """
     function EveryCalendarDtSchedule(
         dt::Dates.Period;
-        reference_date::Union{Dates.Date, Dates.DateTime},
+        # TODO: When removing the deprecated arguments, remove the Nothing in this Union
+        start_date::Union{Dates.Date, Dates.DateTime, Nothing} = nothing,
         date_last::Union{Dates.DateTime, Nothing} = nothing,
-        t_start::AbstractFloat = 0.0,
+        ######## DEPRECATED #########
+        reference_date = nothing,
+        t_start = nothing,
+        ######## DEPRECATED #########
     )
-        isnothing(date_last) &&
-            (date_last = time_to_date(t_start, reference_date))
-        new{typeof(dt), typeof(t_start)}(
-            Ref(date_last),
-            dt,
-            reference_date,
-            t_start,
-        )
+        ######## DEPRECATED #########
+        if !isnothing(t_start)
+            Base.depwarn(
+                "`t_start` is deprecated and will be ignored",
+                :EveryCalendarDtSchedule,
+            )
+        end
+        if !isnothing(reference_date)
+            start_date = reference_date
+            Base.depwarn(
+                "The keyword argument `reference_date` is deprecated. Use `start_date` instead.",
+                :EveryCalendarDtSchedule,
+            )
+        end
+        ######## DEPRECATED #########
+
+        isnothing(date_last) && (date_last = start_date)
+        new{typeof(dt)}(Ref(date_last), dt, start_date)
     end
 end
 
@@ -235,13 +261,13 @@ end
 Returns true if `current_date >= last_date + dt`, where `last_date` is the last time
 this function was true and `dt` is the schedule interval time.
 
-`current_date` is computed using the schedule `reference_date` and `t_start`.
+`current_date` is computed using the schedule `start_date` and the integrator time.
 See constructor for more information.
 """
 function (schedule::EveryCalendarDtSchedule)(integrator)::Bool
     next_date = schedule.date_last[] + schedule.dt
-    reference_date = schedule.reference_date
-    current_date = time_to_date(integrator.t, reference_date)
+    start_date = schedule.start_date
+    current_date = time_to_date(integrator.t, start_date)
     if current_date >= next_date
         schedule.date_last[] = current_date
         return true

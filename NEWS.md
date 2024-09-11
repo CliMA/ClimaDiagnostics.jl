@@ -1,5 +1,14 @@
 # NEWS
 
+main
+-------
+
+### Deprecations
+
+`reference_date` was renamed to `start_date` and `t_start` was dropped from the
+constructors for the schedules. These changes are due to the fact that these
+arguments should not be needed.
+
 v0.2.5
 -------
 

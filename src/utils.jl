@@ -85,9 +85,9 @@ function seconds_to_str_long(time_seconds::Real)
 end
 
 """
-    time_to_date(time::AbstractFloat, reference_date::Dates.DateTime, t_start = 0)
+    time_to_date(time::AbstractFloat, start_date::Dates.DateTime)
 
-Convert a `time` in seconds from `reference_date` to a `Dates.DateTime`.
+Convert a `time` in seconds from `start_date` to a `Dates.DateTime`.
 
 Examples:
 ========
@@ -97,32 +97,29 @@ julia> import Dates: DateTime
 
 julia> import ClimaDiagnostics: time_to_date
 
-julia> reference_date = DateTime(2024, 1, 1, 0, 0, 0);
+julia> start_date = DateTime(2024, 1, 1, 0, 0, 0);
 
-julia> time_to_date(0.0, reference_date)
+julia> time_to_date(0.0, start_date)
 2024-01-01T00:00:00
 
-julia> time_to_date(1.0, reference_date, t_start = 5.0)
-2024-01-01T00:00:06
-
-julia> time_to_date(0.5, reference_date)
+julia> time_to_date(0.5, start_date)
 2024-01-01T00:00:00.500
 
-julia> time_to_date(-1.0, reference_date)
+julia> time_to_date(-1.0, start_date)
 2023-12-31T23:59:59
 
-julia> time_to_date(1.25, reference_date)
+julia> time_to_date(1.25, start_date)
 2024-01-01T00:00:01.250
 ```
 """
-function time_to_date(
-    time::AbstractFloat,
-    reference_date::Dates.DateTime;
-    t_start = zero(time),
-)
-    # We go through nanoseconds to allow fractions of a second (otherwise, Second(0.8) would fail)
-    time_ms = Dates.Nanosecond(1_000_000_000 * (t_start + time))
-    return reference_date + time_ms
+function time_to_date(time::AbstractFloat, start_date::Dates.DateTime)
+    # We go through milliseconds to allow fractions of a second (otherwise, Second(0.8)
+    # would fail). Milliseconds is the level of resolution that one gets when taking the
+    # difference between two DateTimes. In addition to this, we add a round to account for
+    # floating point errors. If the floating point error is small enough, round will correct
+    # it.
+    time_ms = Dates.Millisecond(round(1_000 * time))
+    return start_date + time_ms
 end
 
 """
