@@ -264,19 +264,19 @@ For example, you could provide
 ```julia
 using ClimaDiagnostics.Callbacks: EveryStepSchedule, EveryDtSchedule
 
-function monthly_average(short_name; output_writer, t_start)
-    period = 30 * 24 * 60 * 60 * one(t_start)
+function monthly_average(FT, short_name; output_writer)
+    period = 30 * 24 * 60 * 60 * one(FT)
     return ScheduledDiagnostic(
             variable = get_diagnostic_variable(short_name),
             compute_schedule_func = EveryStepSchedule(),
-            output_schedule_func = EveryDtSchedule(period; t_start),
+            output_schedule_func = EveryDtSchedule(period),
             reduction_time_func = (+),
             output_writer = output_writer,
             pre_output_hook! = average_pre_output_hook!,
         )
 end
 ```
-Allowing users to just call `monthly_average("hus", writer, t_start)`.
+Allowing users to just call `monthly_average(Float32, "hus", writer)`.
 
 > Note: `ClimaDiagnostics` will probably provided these schedules natively at
 > some point in the future.
@@ -366,14 +366,14 @@ function parse_yaml(parsed_args, target_space)
             period_seconds = FT(time_to_seconds(yaml_diag["period"]))
 
             if isnothing(reduction_time_func)
-                compute_every = CAD.EveryDtSchedule(period_seconds; t_start)
+                compute_every = CAD.EveryDtSchedule(period_seconds)
             else
                 compute_every = CAD.EveryStepSchedule()
             end
 
             ScheduledDiagnostic(
                 variable = get_diagnostic_variable(short_name),
-                output_schedule_func = CAD.EveryDtSchedule(period_seconds; t_start),
+                output_schedule_func = CAD.EveryDtSchedule(period_seconds),
                 compute_schedule_func = compute_every,
                 reduction_time_func = reduction_time_func,
                 pre_output_hook! = pre_output_hook!,

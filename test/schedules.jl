@@ -57,8 +57,8 @@ include("TestTools.jl")
     @test "$scheduled_func" == "0.2s"
 
     dt_callback2 = 0.3
-    t_start2 = 0.1
-    scheduled_func2 = EveryDtSchedule(dt_callback2; t_start = t_start2)
+    t_last2 = 0.1
+    scheduled_func2 = EveryDtSchedule(dt_callback2; t_last = t_last2)
 
     callback_dt = SciMLBase.DiscreteCallback(
         (_, _, integrator) -> scheduled_func(integrator),
@@ -72,7 +72,7 @@ include("TestTools.jl")
     args, kwargs = create_problem(space; t0, tf, dt)
 
     expected_called = convert(Int, (tf - t0) / dt_callback)
-    expected_called2 = convert(Int, floor((tf - t0 - t_start2) / dt_callback2))
+    expected_called2 = convert(Int, floor((tf - t0 - t_last2) / dt_callback2))
 
     SciMLBase.solve(
         args...;
@@ -89,20 +89,20 @@ include("TestTools.jl")
 
     schedule0 = EveryCalendarDtSchedule(
         dt_callback_month,
-        reference_date = Dates.DateTime(2024, 10),
+        start_date = Dates.DateTime(2024, 10),
     )
     @test !schedule0(dummyintegrator)
 
     schedule1 = EveryCalendarDtSchedule(
         dt_callback_month,
-        reference_date = Dates.DateTime(2024, 10),
+        start_date = Dates.DateTime(2024, 10),
         date_last = Dates.DateTime(2024, 7),
     )
     @test schedule1(dummyintegrator)
 
     schedule2 = EveryCalendarDtSchedule(
         dt_callback_month,
-        reference_date = Dates.DateTime(2024, 10),
+        start_date = Dates.DateTime(2024, 10),
         date_last = Dates.DateTime(2024, 12),
     )
     @test !schedule2(dummyintegrator)
@@ -110,7 +110,7 @@ include("TestTools.jl")
     # Check precisely one month
     schedule3 = EveryCalendarDtSchedule(
         dt_callback_month,
-        reference_date = Dates.DateTime(2024, 10),
+        start_date = Dates.DateTime(2024, 10),
         date_last = Dates.DateTime(2024, 10),
     )
     # one month from the reference date in seconds
@@ -129,10 +129,10 @@ include("TestTools.jl")
         called_month[] += 1
     end
 
-    # Test with reference_date read from integrator.p
+    # Test with start_date read from integrator.p
     scheduled_func_month = EveryCalendarDtSchedule(
         dt_callback_month,
-        reference_date = Dates.DateTime(2000),
+        start_date = Dates.DateTime(2000),
     )
     @test "$scheduled_func_month" == "1M"
 
@@ -160,22 +160,18 @@ include("TestTools.jl")
 end
 
 @testset "time_to_date" begin
-    reference_date = Dates.DateTime(2024, 1, 1, 0, 0, 0)
+    start_date = Dates.DateTime(2024, 1, 1, 0, 0, 0)
 
     # Test with whole seconds
-    @test time_to_date(0.0, reference_date) == reference_date
-    @test time_to_date(1.0, reference_date, t_start = 5.0) ==
-          reference_date + Dates.Second(6)
-    @test time_to_date(60.0, reference_date) == reference_date + Dates.Minute(1)
+    @test time_to_date(0.0, start_date) == start_date
+    @test time_to_date(60.0, start_date) == start_date + Dates.Minute(1)
 
     # Test with fractional seconds
-    @test time_to_date(0.5, reference_date) ==
-          reference_date + Dates.Millisecond(500)
-    @test time_to_date(1.25, reference_date) ==
-          reference_date + Dates.Second(1) + Dates.Millisecond(250)
+    @test time_to_date(0.5, start_date) == start_date + Dates.Millisecond(500)
+    @test time_to_date(1.25, start_date) ==
+          start_date + Dates.Second(1) + Dates.Millisecond(250)
 
     # Test with negative times
-    @test time_to_date(-1.0, reference_date) == reference_date - Dates.Second(1)
-    @test time_to_date(-0.5, reference_date) ==
-          reference_date - Dates.Millisecond(500)
+    @test time_to_date(-1.0, start_date) == start_date - Dates.Second(1)
+    @test time_to_date(-0.5, start_date) == start_date - Dates.Millisecond(500)
 end
