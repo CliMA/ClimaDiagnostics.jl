@@ -3,6 +3,9 @@
 ## `ClimaDiagnostics`
 
 ```@docs
+ClimaDiagnostics.DiagnosticsHandler
+ClimaDiagnostics.orchestrate_diagnostics
+ClimaDiagnostics.DiagnosticsCallback
 ClimaDiagnostics.IntegratorWithDiagnostics
 ```
 
@@ -23,7 +26,7 @@ ClimaDiagnostics.Schedules.EveryCalendarDtSchedule
 ```@docs
 ClimaDiagnostics.DiagnosticVariables.DiagnosticVariable
 ClimaDiagnostics.DiagnosticVariables.short_name
-ClimaDiagnostics.DiagnosticVariables.long_name
+ClimaDiagnostics.DiagnosticVariables.long_name(dv::ClimaDiagnostics.DiagnosticVariables.DiagnosticVariable)
 ClimaDiagnostics.DiagnosticVariables.descriptive_short_name
 ClimaDiagnostics.DiagnosticVariables.descriptive_long_name
 ```

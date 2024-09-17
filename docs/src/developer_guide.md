@@ -7,8 +7,12 @@ the terminology. You need to know what a [`DiagnosticVariable`](@ref ClimaDiagno
 
 There are two components needed to add support for `ClimaDiagnostics.jl` in your package.
 
-1. A way to convert users' intentions to a list of [`ScheduledDiagnostic`](@ref ClimaDiagnostics.ScheduledDiagnostics.ScheduledDiagnostic)
-2. A call to [`IntegratorWithDiagnostics`](@ref ClimaDiagnostics.IntegratorWithDiagnostics)
+1. A way to convert users' intentions to a list of [`ScheduledDiagnostic`](@ref
+   ClimaDiagnostics.ScheduledDiagnostics.ScheduledDiagnostic)
+2. A call to [`IntegratorWithDiagnostics`](@ref
+   ClimaDiagnostics.IntegratorWithDiagnostics), if you have an integrator (if
+   you do not have an integrator read the [What if I do not have an
+   integrator?](@ref) section)
 
 ## Step 2
 
@@ -30,6 +34,47 @@ You can learn about what is happening under the hook in the [Internals](@ref int
 page.
 
 This is pretty much all that you need to know about step 2.
+
+### What if I do not have an integrator?
+
+`ClimaDiagnostics` does not assume that you are working with an integrator
+object, so you can use it in your project even when you hold your simulation
+fields in other data structures. 
+
+`DiagnosticVariable`s in `ClimaDiagnostics` come with a `compute!` function with
+a specific signature `compute!(out, state, cache, time)`. This is required
+because `ClimaDiagnostics` calls them by calling `compute!(out, integrator.u,
+integrator.p, integrator.t)`. If you do not have an integrator, all you have to
+do is create a wrapper that exposes this interface.
+
+For example, you could have `fields`, `parameters`, and `time`, and you could
+wrap them in a `my_integrator = (; u = fields, p = parameters, t = time)` and
+use the objects in the `compute!` function as you like. 
+
+The integrator-equivalent object is also used in [`Schedules`](@ref
+schedules_header). For time-dependent schedules, `integrator.t` is used. For
+step-dependent schedules (e.g.,
+[`ClimaDiagnostics.Schedules.EveryStepSchedule`](@ref)), the `step` field is
+used. If you are using these schedules, do also add `step` to your
+`my_integrator`.
+
+If you do not have an integrator, it is likely that you do not have a callback
+system either. In this case, you would have to manually call the
+[`ClimaDiagnostics.orchestrate_diagnostics`](@ref) at the end of each of your
+steps. `orchestrate_diagnostics` is the heart of `ClimaDiagnostics`: it runs all
+the calculations are saves the output. Usually, it is added as a callback called
+at the end of every step. If this is not possible, you should manually call it.
+
+In this case, your interface would probably require you to manually construct
+the [`ClimaDiagnostics.DiagnosticsHandler`](@ref)
+
+!!! summary
+    
+    - Wrap your objects in `my_integrator = (; u = fields, p = parameters, t =
+      time, step = step)`
+    - Manually construct a [`ClimaDiagnostics.DiagnosticsHandler`](@ref) from
+      your [`ClimaDiagnostics.ScheduledDiagnostic`](@ref)
+    - Manually call a [`ClimaDiagnostics.orchestrate_diagnostics`](@ref) at the end of each step
 
 ## Step 1
 
@@ -293,7 +338,7 @@ like the following:
 ```julia
 import ClimaDiagnostics: average_pre_output_hook!, HDF5Writer, NetCDFWriter, ScheduledDiagnostic
 
-function parse_yaml(parsed_args, target_space)
+function parse_yaml(parsed_args, source_space)
     # We either get the diagnostics section in the YAML file, or we return an empty list
     # (which will result in an empty list being created by the map below)
     yaml_diagnostics = get(parsed_args, "diagnostics", [])
@@ -319,7 +364,7 @@ function parse_yaml(parsed_args, target_space)
 
     hdf5_writer = HDF5Writer(output_dir)
     netcdf_writer = CAD.NetCDFWriter(
-        target_space,
+        source_space,
         output_dir,
     )
     writers = (hdf5_writer, netcdf_writer)
@@ -398,10 +443,4 @@ diagnostics:
 ```
 It is typically a good idea to add the default diagnostics to the set of
 YAML-specified ones.
-
-## API
-
-```@docs
-ClimaDiagnostics.IntegratorWithDiagnostics
-```
 
