@@ -8,7 +8,7 @@ main
 ### More matadata in NetCDF files
 
 Release `0.2.6` improves compatibility with CF conventions by adding
-- standard and long name for the `time` dimension
+- standard and long name for the `time`, `longitude`, and `latitude` dimensions
 
 ### Deprecations
 

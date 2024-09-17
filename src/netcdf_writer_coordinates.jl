@@ -294,11 +294,27 @@ function add_space_coordinates_maybe!(
 
     maybe_reverse = identity
     if islatlonbox(domain)
-        units = ("degrees_east", "degrees_north")
+        more_attribs = (
+            Dict(
+                :units => "degrees_east",
+                :axis => "X",
+                :standard_name => "longitude",
+                :long_name => "Longitude",
+            ),
+            Dict(
+                :units => "degrees_north",
+                :axis => "Y",
+                :standard_name => "latitude",
+                :long_name => "Latitude",
+            ),
+        )
         # ClimaCore assumes LatLon, but we really want LongLat, so we need to flip
         maybe_reverse = reverse
     else
-        units = ("m", "m")
+        more_attribs = (
+            Dict(:units => "m", :axis => "X"),
+            Dict(:units => "m", :axis => "Y"),
+        )
     end
 
     dim1_exists = dimension_exists(nc, name1, (num_points1,))
@@ -306,8 +322,8 @@ function add_space_coordinates_maybe!(
 
     if !dim1_exists && !dim2_exists
         pts1, pts2 = maybe_reverse(target_coordinates(space, num_points))
-        add_dimension!(nc, name1, pts1; units = units[1], axis = "X")
-        add_dimension!(nc, name2, pts2; units = units[2], axis = "Y")
+        add_dimension!(nc, name1, pts1; more_attribs[1]...)
+        add_dimension!(nc, name2, pts2; more_attribs[2]...)
     end
 
     return [name1, name2]
@@ -354,8 +370,18 @@ function add_space_coordinates_maybe!(
             longpts;
             units = "degrees_east",
             axis = "X",
+            standard_name = "longitude",
+            long_name = "Longitude",
         )
-        add_dimension!(nc, latname, latpts; units = "degrees_north", axis = "Y")
+        add_dimension!(
+            nc,
+            latname,
+            latpts;
+            units = "degrees_north",
+            axis = "Y",
+            standard_name = "latitude",
+            long_name = "Latitude",
+        )
     end
 
     return [longname, latname]
