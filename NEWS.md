@@ -3,6 +3,13 @@
 main
 -------
 
+## Features
+
+### More matadata in NetCDF files
+
+Release `0.2.6` improves compatibility with CF conventions by adding
+- standard and long name for the `time` dimension
+
 ### Deprecations
 
 `reference_date` was renamed to `start_date` and `t_start` was dropped from the

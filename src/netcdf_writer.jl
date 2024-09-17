@@ -327,7 +327,14 @@ function write_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
     nc = writer.open_files[output_path]
 
     # Define time coordinate
-    add_time_maybe!(nc, FT; units = "s", axis = "T")
+    add_time_maybe!(
+        nc,
+        FT;
+        units = "s",
+        axis = "T",
+        standard_name = "time",
+        long_name = "Time",
+    )
 
     dim_names = add_space_coordinates_maybe!(
         nc,

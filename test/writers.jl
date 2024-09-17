@@ -95,6 +95,8 @@ end
         @test nc["time"][1] == 10.0
         @test nc["date"][1] ==
               string(Dates.DateTime(1453, 5, 29) + Dates.Second(10.0))
+        @test nc["time"].attrib["standard_name"] == "time"
+        @test nc["time"].attrib["long_name"] == "Time"
     end
 
     # Disable vertical interpolation
