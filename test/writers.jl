@@ -97,6 +97,13 @@ end
               string(Dates.DateTime(1453, 5, 29) + Dates.Second(10.0))
         @test nc["time"].attrib["standard_name"] == "time"
         @test nc["time"].attrib["long_name"] == "Time"
+        @test nc["time"].attrib["axis"] == "T"
+        @test nc["lon"].attrib["standard_name"] == "longitude"
+        @test nc["lon"].attrib["long_name"] == "Longitude"
+        @test nc["lon"].attrib["axis"] == "X"
+        @test nc["lat"].attrib["standard_name"] == "latitude"
+        @test nc["lat"].attrib["long_name"] == "Latitude"
+        @test nc["lat"].attrib["axis"] == "Y"
     end
 
     # Disable vertical interpolation
