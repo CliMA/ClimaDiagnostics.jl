@@ -50,7 +50,7 @@ v0.2.2
 v0.2.1
 -------
 
-- Fix support for purely horziontal spaces in `NetCDFWriter`.
+- Fix support for purely horizontal spaces in `NetCDFWriter`.
 
 v0.2.0
 -------
