@@ -5,7 +5,7 @@ The `AbstractZInterpolationMethod` defines how points along the vertical axis sh
 sampled.
 
 In other words, if a column is defined between 0 and 100 and the target number of points is
-50. How should those 50 points be chosen?
+50, how should those 50 points be chosen?
 
 Available methods are:
 - `LevelMethod`: just use the grid levels
@@ -138,8 +138,7 @@ In some cases, the names are adjustable passing the keyword `names`.
 function add_space_coordinates_maybe! end
 
 """
-    target_coordinates!(space::Spaces.AbstractSpace,
-                        num_points)
+    target_coordinates(space, num_points)
 
 Return the range of interpolation coordinates. The range is automatically determined and the
 number of points is set with `num_points`, which has to be an iterable of size N, where N is

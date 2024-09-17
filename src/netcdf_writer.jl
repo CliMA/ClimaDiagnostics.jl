@@ -187,6 +187,11 @@ function NetCDFWriter(
     )
 end
 
+"""
+    interpolate_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
+
+Perform interpolation of `field` and save output in preallocated areas of `writer`.
+"""
 function interpolate_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
 
     var = diagnostic.variable

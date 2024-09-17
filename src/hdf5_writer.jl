@@ -6,7 +6,11 @@ import ClimaCore.InputOutput
 
 Save a `ScheduledDiagnostic` to a HDF5 file inside the `output_dir`.
 
-TODO: This is a very barebone HDF5Writer!
+!!! note
+
+    This writer is not very efficient, but it is currently the only writer that
+    can save `ClimaCore.Fields`. Please, get in touch if you need this
+    capability.
 """
 struct HDF5Writer <: AbstractWriter
     output_dir::String
@@ -22,7 +26,7 @@ function Base.close(writer::HDF5Writer)
 end
 
 """
-    HDF5Writer(output_dir)
+    write_field!(writer::HDF5Writer, field, diagnostic, u, p, t)
 
 Save a `ScheduledDiagnostic` to a HDF5 file inside the `output_dir`.
 
