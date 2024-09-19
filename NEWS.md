@@ -10,6 +10,11 @@ main
 Release `0.2.6` improves compatibility with CF conventions by adding
 - standard and long name for the `time`, `longitude`, and `latitude` dimensions
 
+## Bug fixes
+
+- The default constructor for `ScheduleDiagnostic`s no longer uses reference of
+  `Schedule`s but create a new copy.
+
 ### Deprecations
 
 `reference_date` was renamed to `start_date` and `t_start` was dropped from the
