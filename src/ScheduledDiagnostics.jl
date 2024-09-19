@@ -158,7 +158,8 @@ function ScheduledDiagnostic(;
     reduction_time_func = nothing,
     compute_schedule_func = EveryStepSchedule(),
     output_schedule_func = isnothing(reduction_time_func) ?
-                           compute_schedule_func : EveryStepSchedule(),
+                           deepcopy(compute_schedule_func) :
+                           EveryStepSchedule(),
     pre_output_hook! = (accum, count) -> nothing,
     output_short_name = descriptive_short_name(
         variable,

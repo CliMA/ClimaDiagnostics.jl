@@ -189,8 +189,15 @@ end
 Names are not too important, but they should be meaningful to you.
 
 `ClimaDiagnostics` comes with some predefined schedules for common operations,
-such out every N timesteps, or every calendar period. Refer to the [`Schedules`](@ref schedules_header)
-section below for more information on what is already implemented.
+such out every N timesteps, or every calendar period. Refer to the
+[`Schedules`](@ref schedules_header) section below for more information on what
+is already implemented.
+
+!!! note
+
+    `Schedule`s store some information about the last time they were called, so
+    different `Schedule`s have to be used and created for different purposes.
+    You can use the `deepcopy` function to quickly create a new `Schedule`.
 
 ##### Temporal reductions
 
