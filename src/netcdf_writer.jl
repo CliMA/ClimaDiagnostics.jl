@@ -156,8 +156,10 @@ function NetCDFWriter(
             ClimaComms.device(coords_z) isa ClimaComms.CUDADevice &&
             ClimaComms.iamroot(comms_ctx) ? Array : identity
 
-        interpolated_physical_z =
+        interpolated_physical_z_non_cf =
             maybe_move_to_cpu(interpolate(remapper, coords_z))
+        # We need to reverse order per CF conventions (T-Z-Y-X)
+        interpolated_physical_z = reverse_dimensions(interpolated_physical_z_non_cf, space)
     end
 
     preallocated_arrays =
@@ -275,6 +277,23 @@ function interpolate_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
     return nothing
 end
 
+
+function reverse_dimensions(array, space)
+    # First, we order to be long-lat-z
+    if islatlonbox(
+        Meshes.domain(Spaces.topology(Spaces.horizontal_space(space))),
+    )
+        # ClimaCore works with LatLong points, but we want to have longitude
+        # first in the output, so we have to flip things
+        perm = collect(1:length(size(array)))
+        perm[1:2] .= (2, 1)
+        array = permutedims(array, perm)
+    end
+    # Then, we reverse the dimensions (because CF conventions want Z-Y-X)
+    perm = reverse(collect(1:length(size(array))))
+    return permutedims(array, perm)
+end
+
 """
     write_field!(writer::NetCDFWriter, field::Fields.Field, diagnostic, u, p, t)
 
@@ -304,18 +323,10 @@ function write_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
 
     maybe_move_to_cpu =
         ClimaComms.device(field) isa ClimaComms.CUDADevice ? Array : identity
-    interpolated_field =
+    interpolated_field_non_cf =
         maybe_move_to_cpu(writer.preallocated_output_arrays[diagnostic])
 
-    if islatlonbox(
-        Meshes.domain(Spaces.topology(Spaces.horizontal_space(space))),
-    )
-        # ClimaCore works with LatLong points, but we want to have longitude
-        # first in the output, so we have to flip things
-        perm = collect(1:length(size(interpolated_field)))
-        perm[1:2] .= (2, 1)
-        interpolated_field = permutedims(interpolated_field, perm)
-    end
+    interpolated_field = reverse_dimensions(interpolated_field_non_cf, space)
 
     FT = Spaces.undertype(space)
 
@@ -331,6 +342,14 @@ function write_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
 
     nc = writer.open_files[output_path]
 
+    dim_names = add_space_coordinates_maybe!(
+        nc,
+        space,
+        writer.num_points;
+        writer.z_sampling_method,
+        writer.interpolated_physical_z,
+    )
+
     # Define time coordinate
     add_time_maybe!(
         nc,
@@ -339,14 +358,6 @@ function write_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
         axis = "T",
         standard_name = "time",
         long_name = "Time",
-    )
-
-    dim_names = add_space_coordinates_maybe!(
-        nc,
-        space,
-        writer.num_points;
-        writer.z_sampling_method,
-        writer.interpolated_physical_z,
     )
 
     if haskey(nc, "$(var.short_name)")

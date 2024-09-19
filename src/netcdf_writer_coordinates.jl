@@ -321,8 +321,9 @@ function add_space_coordinates_maybe!(
 
     if !dim1_exists && !dim2_exists
         pts1, pts2 = maybe_reverse(target_coordinates(space, num_points))
-        add_dimension!(nc, name1, pts1; more_attribs[1]...)
+        # Y before X, as per CF-conventions
         add_dimension!(nc, name2, pts2; more_attribs[2]...)
+        add_dimension!(nc, name1, pts1; more_attribs[1]...)
     end
 
     return [name1, name2]
@@ -363,6 +364,8 @@ function add_space_coordinates_maybe!(
 
     if !long_dimension_exists && !lat_dimension_exists
         longpts, latpts = target_coordinates(space, num_points)
+        # Y before X, as per CF conventions
+        add_dimension!(nc, latname, latpts; units = "degrees_north", axis = "Y")
         add_dimension!(
             nc,
             longname,
@@ -404,8 +407,7 @@ function add_space_coordinates_maybe!(
     # We can also assume that the vertical space has dimension 1
     horizontal_space = Spaces.horizontal_space(space)
 
-    hdims_names =
-        add_space_coordinates_maybe!(nc, horizontal_space, num_points_horiz)
+    # Z before horizontal spaces
 
     vertical_space = Spaces.FiniteDifferenceSpace(
         Spaces.vertical_topology(space),
@@ -430,6 +432,9 @@ function add_space_coordinates_maybe!(
             depending_on_dimensions = hdims_names,
         )
     end
+
+    hdims_names =
+        add_space_coordinates_maybe!(nc, horizontal_space, num_points_horiz)
 
     return (hdims_names..., vdims_names...)
 end
