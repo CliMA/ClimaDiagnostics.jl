@@ -3,6 +3,10 @@
 main
 -------
 
+
+v0.2.6
+-------
+
 ## Features
 
 ### More matadata in NetCDF files
