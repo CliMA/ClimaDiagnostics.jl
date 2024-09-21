@@ -1,7 +1,7 @@
 name = "ClimaDiagnostics"
 uuid = "1ecacbb8-0713-4841-9a07-eb5aa8a2d53f"
 authors = ["Gabriele Bozzola <gbozzola@caltech.edu>"]
-version = "0.2.5"
+version = "0.2.6"
 
 [deps]
 Accessors = "7d9f7c33-5ae7-4f3b-8dc6-eff91059b697"
