@@ -13,12 +13,7 @@ include("reduction_identities.jl")
 A struct that contains the scheduled diagnostics, ancillary data and areas of memory needed
 to store and accumulate results.
 """
-struct DiagnosticsHandler{
-    SD <: Tuple,
-    STORAGE <: Dict,
-    ACC <: Dict,
-    COUNT <: Dict,
-}
+struct DiagnosticsHandler{SD, STORAGE <: Dict, ACC <: Dict, COUNT <: Dict}
     """An iterable with the `ScheduledDiagnostic`s that are scheduled."""
     scheduled_diagnostics::SD
 
@@ -61,7 +56,7 @@ function DiagnosticsHandler(scheduled_diagnostics, Y, p, t; dt = nothing)
     accumulators = Dict()
     counters = Dict()
 
-    unique_scheduled_diagnostics = Tuple(unique(scheduled_diagnostics))
+    unique_scheduled_diagnostics = unique(scheduled_diagnostics)
     if length(unique_scheduled_diagnostics) != length(scheduled_diagnostics)
         @warn "Given list of diagnostics contains duplicates, removing them"
     end
