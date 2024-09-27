@@ -2,6 +2,10 @@
 
 main
 -------
+
+v0.2.7
+-------
+
 ## Bug fixes
 
 - `scheduled_diagnostics` are now internally saved as vectors instead of tuples.
