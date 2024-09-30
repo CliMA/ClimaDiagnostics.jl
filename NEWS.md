@@ -3,6 +3,16 @@
 main
 -------
 
+v0.2.8
+-------
+
+## Bug fixes
+
+- `IntegratorWithDiagnostics` advertised a feature that was not implemented:
+  `IntegratorWithDiagnostics` claimed that passing `state_name` and `cache_name`
+  would allow users to customize the name of the state and cache inside the
+  integrator. Now, this is implemented.
+
 v0.2.7
 -------
 
