@@ -283,7 +283,9 @@ end
 
 """
     IntegratorWithDiagnostics(integrator,
-                              scheduled_diagnostics)
+                              scheduled_diagnostics;
+                              state_name = :u,
+                              cache_name = :p)
 
 Return a new `integrator` with diagnostics defined by `scheduled_diagnostics`.
 
@@ -301,11 +303,16 @@ after everything else is initialized and computed.
 `integrator.p`. This behavior can be customized by passing the `state_name` and `cache_name`
 keyword arguments.
 """
-function IntegratorWithDiagnostics(integrator, scheduled_diagnostics)
+function IntegratorWithDiagnostics(
+    integrator,
+    scheduled_diagnostics;
+    state_name = :u,
+    cache_name = :p,
+)
     diagnostics_handler = DiagnosticsHandler(
         scheduled_diagnostics,
-        integrator.u,
-        integrator.p,
+        getproperty(integrator, state_name),
+        getproperty(integrator, cache_name),
         integrator.t;
         integrator.dt,
     )
