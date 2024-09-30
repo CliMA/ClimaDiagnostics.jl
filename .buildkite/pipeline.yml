@@ -46,3 +46,4 @@ steps:
       CLIMACOMMS_CONTEXT: "MPI"
     agents:
       slurm_ntasks: 2
+    timeout_in_minutes: 20
