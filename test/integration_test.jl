@@ -42,7 +42,7 @@ function setup_integrator(output_dir; context, more_compute_diagnostics = 0)
 
     function compute_my_var!(out, u, p, t)
         if isnothing(out)
-            return copy(u.my_var)
+            return u.my_var
         else
             out .= u.my_var
             return nothing

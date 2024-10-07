@@ -3,6 +3,15 @@
 main
 -------
 
+## Bug fixes
+
+Prior to this version, `ClimaDiagnostics` would directly store use the output
+returned by `compute!` functions the first time they are called. This leads to
+problems when the output is a reference to an existing object since multiple
+diagnostics would modify the same object. Now, `ClimaDiagnostics` makes a copy
+of the return object so that it is no longer necessary to do so in the
+`compute!` function.
+
 v0.2.8
 -------
 

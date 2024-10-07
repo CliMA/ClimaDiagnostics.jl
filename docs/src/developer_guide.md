@@ -238,7 +238,7 @@ add_diagnostic_variable!(
     units = "kg m^-3",
     compute! = (out, state, cache, time) -> begin
         if isnothing(out)
-            return copy(state.c.ρ)
+            return state.c.ρ
         else
             out .= state.c.ρ
         end
