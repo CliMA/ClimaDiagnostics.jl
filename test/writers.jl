@@ -61,7 +61,7 @@ end
 
     function compute!(out, u, p, t)
         if isnothing(out)
-            return copy(u.field)
+            return u.field
         else
             out .= u.field
         end

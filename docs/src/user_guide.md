@@ -39,7 +39,7 @@ import ClimaDiagnostics: DiagnosticVariable
 
 function compute_ta!(out, state, cache, time)
     if isnothing(out)
-        return copy(state.ta)
+        return state.ta
     else
         out .= state.ta
     end

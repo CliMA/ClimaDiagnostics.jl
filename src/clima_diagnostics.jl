@@ -107,8 +107,9 @@ function DiagnosticsHandler(scheduled_diagnostics, Y, p, t; dt = nothing)
         isa_time_reduction = !isnothing(diag.reduction_time_func)
 
         # The first time we call compute! we use its return value. All the subsequent times
-        # (in the callbacks), we will write the result in place
-        push!(storage, variable.compute!(nothing, Y, p, t))
+        # (in the callbacks), we will write the result in place. We call copy to acquire ownership
+        # of the data in case compute! returned a reference.
+        push!(storage, copy(variable.compute!(nothing, Y, p, t)))
         push!(counters, 1)
 
         # If it is not a reduction, call the output writer as well
