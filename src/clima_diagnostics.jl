@@ -72,12 +72,24 @@ function DiagnosticsHandler(scheduled_diagnostics, Y, p, t; dt = nothing)
     # For diagnostics that perform reductions, the storage is used for the values computed
     # at each call. Reductions also save the accumulated value in accumulators.
     storage = []
-    # Not all diagnostics need an accumulator, so we put them in a dictionary key-ed over the diagnostic index
+    # Not all diagnostics need an accumulator, so we put them in a dictionary
+    # key-ed over the diagnostic index
     accumulators = Dict{Int, Any}()
     counters = Int[]
     scheduled_diagnostics_keys = Int[]
 
-    unique_scheduled_diagnostics = unique(scheduled_diagnostics)
+    # NOTE: unique requires isequal and hash to both be implemented. We don't
+    # really want to do that. So, we roll our own unique. This is O(N^2) but it
+    # is run only once, so it should be fine.
+    seen = []
+    unique_scheduled_diagnostics = []
+    for x in scheduled_diagnostics
+        if all(x != sd for sd in seen)
+            push!(seen, x)
+            push!(unique_scheduled_diagnostics, x)
+        end
+    end
+
     if length(unique_scheduled_diagnostics) != length(scheduled_diagnostics)
         @warn "Given list of diagnostics contains duplicates, removing them"
     end

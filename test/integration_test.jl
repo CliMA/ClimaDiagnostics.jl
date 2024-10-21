@@ -78,12 +78,24 @@ function setup_integrator(output_dir; context, more_compute_diagnostics = 0)
         variable = simple_var,
         output_writer = h5_writer,
     )
+    inst_every3s_diagnostic_another = ClimaDiagnostics.ScheduledDiagnostic(
+        variable = simple_var,
+        output_writer = nc_writer,
+        output_schedule_func = ClimaDiagnostics.Schedules.EveryDtSchedule(
+            3.0,
+            t_last = t0,
+        ),
+    )
     scheduled_diagnostics = [
         average_diagnostic,
         inst_diagnostic,
         inst_diagnostic_h5,
         inst_every3s_diagnostic,
+        inst_every3s_diagnostic_another,
     ]
+
+    @test inst_every3s_diagnostic_another == inst_every3s_diagnostic
+    @test !(inst_every3s_diagnostic_another === inst_every3s_diagnostic)
 
     # Add more weight, useful for stressing allocations
     compute_diagnostic = ClimaDiagnostics.ScheduledDiagnostic(

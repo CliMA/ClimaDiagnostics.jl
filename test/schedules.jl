@@ -56,6 +56,11 @@ include("TestTools.jl")
     scheduled_func = EveryDtSchedule(dt_callback)
     @test "$scheduled_func" == "0.2s"
 
+    scheduled_func_test1 = EveryDtSchedule(dt_callback; t_last = 0.1)
+    scheduled_func_test2 = EveryDtSchedule(dt_callback; t_last = 0.1)
+    @test scheduled_func_test1 == scheduled_func_test2
+    @test !(scheduled_func_test1 === scheduled_func_test2)
+
     dt_callback2 = 0.3
     t_last2 = 0.1
     scheduled_func2 = EveryDtSchedule(dt_callback2; t_last = t_last2)

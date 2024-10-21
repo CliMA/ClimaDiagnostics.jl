@@ -218,4 +218,13 @@ function output_long_name(sd::ScheduledDiagnostic)
     return sd.output_long_name
 end
 
+function Base.:(==)(sd1::T, sd2::T) where {T <: ScheduledDiagnostic}
+    # We provide == because we don't want to compare with === because we have
+    # RefValues
+    return all(
+        getproperty(sd1, p) == getproperty(sd2, p) for p in propertynames(sd1)
+    )
+end
+
+
 end
