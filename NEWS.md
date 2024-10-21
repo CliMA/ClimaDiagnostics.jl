@@ -1,9 +1,11 @@
 # NEWS
 
-main
+v0.2.9
 -------
 
 ## Bug fixes
+
+### Acquiring ownership with `compute!` PR [#88](https://github.com/CliMA/ClimaDiagnostics.jl/pull/88).
 
 Prior to this version, `ClimaDiagnostics` would directly store use the output
 returned by `compute!` functions the first time they are called. This leads to
@@ -11,6 +13,11 @@ problems when the output is a reference to an existing object since multiple
 diagnostics would modify the same object. Now, `ClimaDiagnostics` makes a copy
 of the return object so that it is no longer necessary to do so in the
 `compute!` function.
+
+### Correctly de-duplicate `ScheduledDiagnostics` [#93](https://github.com/CliMA/ClimaDiagnostics.jl/pull/93).
+
+This version fixes a bug where `ScheduledDiagnostics` were not correctly
+de-duplicated because `==` was not implemented correctly.
 
 v0.2.8
 -------

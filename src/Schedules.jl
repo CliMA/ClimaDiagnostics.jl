@@ -43,6 +43,23 @@ function Base.show(io::IO, schedule::AbstractSchedule)
     print(io, short_name(schedule))
 end
 
+function Base.:(==)(schedule1::T, schedule2::T) where {T <: AbstractSchedule}
+    # The Schedules are the identical when the properties are the same, but for
+    # Refs, we have to unpack the value because we don't want to compare
+    # pointers.
+    for p in propertynames(schedule1)
+        if getproperty(schedule2, p) isa Base.RefValue
+            getproperty(schedule1, p)[] == getproperty(schedule2, p)[] ||
+                return false
+        else
+            getproperty(schedule1, p) == getproperty(schedule2, p) ||
+                return false
+        end
+    end
+    return true
+end
+
+
 """
     DivisorSchedule
 
