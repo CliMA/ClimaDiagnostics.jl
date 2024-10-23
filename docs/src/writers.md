@@ -18,7 +18,7 @@ interpolation is needed.
 ## `NetCDFWriter`
 
 The `NetCDFWriter` resamples the input `Field` to a rectangular grid and saves
-the output to a NetCDF file. 
+the output to a NetCDF file.
 
 The `NetCDFWriter` relies on the `Remappers` module in `ClimaCore` to
 interpolate onto the rectangular grid. Horizontally, this interpolation is a
@@ -31,6 +31,9 @@ and the output directory where the files should be saved. By default, the
 `NetCDFWriter` appends to existing files and create new ones if they do not
 exist. The `NetCDFWriter` does not overwrite existing data and will error out if
 existing data is inconsistent with the new one.
+
+Optionally (recommended), you can pass an optional argument `start_date`, which
+will be saved as an attribute of your NetCDF file, easily accessible.
 
 `NetCDFWriter`s take as one of the inputs the desired number of points along
 each of the dimensions. For the horizontal dimensions, points are sampled
