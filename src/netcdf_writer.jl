@@ -16,7 +16,7 @@ include("netcdf_writer_coordinates.jl")
 A struct to remap `ClimaCore` `Fields` to rectangular grids and save the output to NetCDF
 files.
 """
-struct NetCDFWriter{T, TS, DI, SYNC, ZSM <: AbstractZSamplingMethod} <:
+struct NetCDFWriter{T, TS, DI, SYNC, ZSM <: AbstractZSamplingMethod, DATE} <:
        AbstractWriter
     """The base folder where to save the files."""
     output_dir::String
@@ -64,6 +64,9 @@ struct NetCDFWriter{T, TS, DI, SYNC, ZSM <: AbstractZSamplingMethod} <:
 
     """Set of datasets that need to be synced. Useful when `sync_schedule` is not `nothing`."""
     unsynced_datasets::Set{NCDatasets.NCDataset}
+
+    """Date of the beginning of the simulation (it is used to convert seconds to dates)."""
+    start_date::DATE
 end
 
 """
@@ -103,6 +106,7 @@ Keyword arguments
                    a boolean callable that takes as a single argument the `integrator`.
                    `sync_schedule` can also be set as `nothing`, in which case we let
                    handling buffered writes to disk.
+- `start_date`: Date of the beginning of the simulation.
 """
 function NetCDFWriter(
     space,
@@ -112,6 +116,7 @@ function NetCDFWriter(
     sync_schedule = ClimaComms.device(space) isa ClimaComms.CUDADevice ?
                     EveryStepSchedule() : nothing,
     z_sampling_method = LevelsMethod(),
+    start_date = nothing,
 )
     horizontal_space = Spaces.horizontal_space(space)
     is_horizontal_space = horizontal_space == space
@@ -173,6 +178,7 @@ function NetCDFWriter(
         typeof(preallocated_arrays),
         typeof(sync_schedule),
         typeof(z_sampling_method),
+        typeof(start_date),
     }(
         output_dir,
         Dict{String, Remapper}(),
@@ -184,6 +190,7 @@ function NetCDFWriter(
         preallocated_arrays,
         sync_schedule,
         unsynced_datasets,
+        start_date,
     )
 end
 
@@ -349,6 +356,13 @@ function write_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
         writer.interpolated_physical_z,
     )
 
+    start_date = nothing
+    if isnothing(writer.start_date)
+        start_date = get(p, :start_date, nothing)
+    else
+        start_date = writer.start_date
+    end
+
     if haskey(nc, "$(var.short_name)")
         # We already have something in the file
         v = nc["$(var.short_name)"]
@@ -367,9 +381,8 @@ function write_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
         v.attrib["long_name"] = output_long_name(diagnostic)::String
         v.attrib["units"] = var.units::String
         v.attrib["comments"] = var.comments::String
-        if hasproperty(p, :start_date)
-            # FIXME: We are hardcoding p.start_date !
-            v.attrib["start_date"] = string(p.start_date)::String
+        if !isnothing(start_date) && !haskey(v.attrib, "start_date")
+            v.attrib["start_date"] = string(start_date)::String
         end
         temporal_size = 0
     end
@@ -382,8 +395,8 @@ function write_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
 
     # FIXME: We are hardcoding p.start_date !
     # FIXME: We are rounding t
-    if hasproperty(p, :start_date)
-        nc["date"][time_index] = string(p.start_date + Dates.Second(round(t)))
+    if !isnothing(start_date)
+        nc["date"][time_index] = string(start_date + Dates.Millisecond(1000t))
     end
 
     # TODO: It would be nice to find a cleaner way to do this

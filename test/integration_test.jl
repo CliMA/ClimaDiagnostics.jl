@@ -7,6 +7,8 @@ import NCDatasets
 
 import ClimaDiagnostics
 
+import Dates
+
 import ClimaComms
 @static if pkgversion(ClimaComms) >= v"0.6"
     ClimaComms.@import_required_backends
@@ -38,6 +40,7 @@ function setup_integrator(output_dir; context, more_compute_diagnostics = 0)
         space,
         output_dir;
         num_points = (10, 5, 3),
+        start_date = Dates.DateTime(2015, 2, 2),
     )
 
     function compute_my_var!(out, u, p, t)
@@ -126,6 +129,8 @@ end
                 @test nc["YO"].attrib["short_name"] == "YO"
                 @test nc["YO"].attrib["long_name"] == "YO YO, Instantaneous"
                 @test size(nc["YO"]) == (11, 10, 5, 10)
+                @test nc["YO"].attrib["start_date"] ==
+                string(Dates.DateTime(2015, 2, 2))
             end
 
             NCDatasets.NCDataset(
