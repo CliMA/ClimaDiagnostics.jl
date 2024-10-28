@@ -358,7 +358,9 @@ function write_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
 
     start_date = nothing
     if isnothing(writer.start_date)
-        start_date = get(p, :start_date, nothing)
+        if hasproperty(p, :start_date)
+            start_date = getproperty(p, :start_date)
+        end
     else
         start_date = writer.start_date
     end

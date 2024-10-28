@@ -1,5 +1,11 @@
 # NEWS
 
+v0.2.10
+-------
+## Bug fixes
+
+Fixed broken `start_date` feature.
+
 v0.2.9
 -------
 
@@ -7,7 +13,7 @@ v0.2.9
 
 ### Add a `start_date` attribute to NetCDFWriter PR [#94](https://github.com/CliMA/ClimaDiagnostics.jl/pull/94).
 
-Prior to this version, users had to go to the simution to find the start date.
+Prior to this version, users had to go to the simulation to find the start date.
 It can now be saved as an attribute, making it easily accessible.
 To do so, users need to pass the kwarg `start_date` when calling `NetCDFWriter`.
 
