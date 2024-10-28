@@ -130,7 +130,7 @@ end
                 @test nc["YO"].attrib["long_name"] == "YO YO, Instantaneous"
                 @test size(nc["YO"]) == (11, 10, 5, 10)
                 @test nc["YO"].attrib["start_date"] ==
-                string(Dates.DateTime(2015, 2, 2))
+                      string(Dates.DateTime(2015, 2, 2))
             end
 
             NCDatasets.NCDataset(
