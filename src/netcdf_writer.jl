@@ -4,6 +4,8 @@ import ClimaCore: Domains, Geometry, Grids, Fields, Meshes, Spaces
 import ClimaCore.Remapping: Remapper, interpolate, interpolate!
 import ..Schedules: EveryStepSchedule
 
+import ClimaUtilities.TimeManager: ITime, date
+
 import NCDatasets
 
 # Defines target_coordinates, add_space_coordinates_maybe!, add_time_maybe! for a bunch of
@@ -67,6 +69,8 @@ struct NetCDFWriter{T, TS, DI, SYNC, ZSM <: AbstractZSamplingMethod, DATE} <:
 
     """Date of the beginning of the simulation (it is used to convert seconds to dates)."""
     start_date::DATE
+
+    # TODO: Add option to write dates as time
 end
 
 """
@@ -393,12 +397,14 @@ function write_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
     # position ever if we are writing the file for the first time)
     time_index = temporal_size + 1
 
-    nc["time"][time_index] = t
+    # TODO: Use ITime here
+    nc["time"][time_index] = float(t)
 
     # FIXME: We are hardcoding p.start_date !
     # FIXME: We are rounding t
     if !isnothing(start_date)
-        nc["date"][time_index] = string(start_date + Dates.Millisecond(1000t))
+        # Use ITime here
+        nc["date"][time_index] = string(start_date + Dates.Millisecond(1000 * float(t)))
     end
 
     # TODO: It would be nice to find a cleaner way to do this
