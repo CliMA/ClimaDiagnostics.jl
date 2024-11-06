@@ -1,5 +1,7 @@
 import Dates
 
+import ClimaUtilities.TimeManager: ITime, date
+
 """
     seconds_to_str_short(time_seconds::Real)
 
@@ -120,6 +122,10 @@ function time_to_date(time::AbstractFloat, start_date::Dates.DateTime)
     # it.
     time_ms = Dates.Millisecond(round(1_000 * time))
     return start_date + time_ms
+end
+
+function time_to_date(time::ITime, start_date::Dates.DateTime)
+    return date(time)
 end
 
 """
