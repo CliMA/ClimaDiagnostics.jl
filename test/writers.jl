@@ -6,6 +6,7 @@ using Profile
 using BenchmarkTools
 import ProfileCanvas
 import NCDatasets
+import ClimaCore
 import ClimaCore.Fields
 
 import ClimaDiagnostics
@@ -17,7 +18,7 @@ include("TestTools.jl")
 
 # The temporary directory where we write the file cannot be in /tmp, it has
 # to be on disk
-output_dir = mktempdir(".")
+output_dir = mktempdir(pwd())
 
 @testset "DictWriter" begin
     writer = Writers.DictWriter()
@@ -224,6 +225,41 @@ end
         p,
         t,
     )
+
+    # Check columns
+    if pkgversion(ClimaCore) >= v"0.14.23"
+        # Center space
+        for (i, colspace) in enumerate((
+            ColumnCenterFiniteDifferenceSpace(),
+            ColumnFaceFiniteDifferenceSpace(),
+        ))
+            colfield = Fields.coordinate_field(colspace).z
+
+            colwriter =
+                Writers.NetCDFWriter(colspace, output_dir; num_points = (NUM,))
+            coldiagnostic = ClimaDiagnostics.ScheduledDiagnostic(;
+                variable = ClimaDiagnostics.DiagnosticVariable(;
+                    compute!,
+                    short_name = "ABC",
+                ),
+                output_short_name = "my_short_name_c$(i)",
+                output_long_name = "My Long Name",
+                output_writer = colwriter,
+            )
+            colu = (; colfield)
+            Writers.interpolate_field!(
+                colwriter,
+                colfield,
+                coldiagnostic,
+                colu,
+                p,
+                t,
+            )
+            Writers.write_field!(colwriter, colfield, coldiagnostic, colu, p, t)
+            # Write a second time, to check consistency
+            Writers.write_field!(colwriter, colfield, coldiagnostic, colu, p, t)
+        end
+    end
 
     ###############
     # Performance #
