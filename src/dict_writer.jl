@@ -1,3 +1,5 @@
+import OrderedCollections: OrderedDict
+
 """The `DictWriter` is a writer that does not write to disk, but to memory (in a
 dictionary).
 
@@ -48,11 +50,15 @@ function write_field!(writer::DictWriter, field, diagnostic, u, p, t)
     key_name =
         diagnostic isa ScheduledDiagnostic ? output_short_name(diagnostic) :
         diagnostic
-    diagnostic_dict = get!(writer.dict, key_name, Dict())
+    diagnostic_dict = get!(writer.dict, key_name, OrderedDict())
     diagnostic_dict[t] = copy(field)
     return nothing
 end
 
 function Base.getindex(writer::DictWriter, key)
     return Base.getindex(writer.dict, key)
+end
+
+function Base.keys(writer::DictWriter)
+    return keys(writer.dict)
 end

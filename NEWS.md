@@ -1,5 +1,11 @@
 # NEWS
 
+v0.2.11
+-------
+## Bug fixes
+
+- Times in `DictWriter` are now correctly sorted.
+
 v0.2.10
 -------
 ## Bug fixes
