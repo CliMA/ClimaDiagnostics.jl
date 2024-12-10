@@ -11,6 +11,12 @@ This release adds support for working with `ITime`s. In particular,
 provided to make an `EveryCalendarDtSchedule` using `ITime`s. Lastly, there are
 small changes to the writers to support `ITime`s.
 
+v0.2.12
+-------
+## Bug fixes
+
+- `NetCDFWriter` now correctly writes purely vertical spaces.
+
 v0.2.11
 -------
 ## Bug fixes
