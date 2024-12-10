@@ -1,5 +1,11 @@
 # NEWS
 
+v0.2.12
+-------
+## Bug fixes
+
+- `NetCDFWriter` now correctly writes purely vertical spaces.
+
 v0.2.11
 -------
 ## Bug fixes
