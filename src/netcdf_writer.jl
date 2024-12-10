@@ -113,7 +113,7 @@ Keyword arguments
 - `start_date`: Date of the beginning of the simulation.
 """
 function NetCDFWriter(
-    space,
+    space::Spaces.AbstractSpace,
     output_dir;
     num_points = (180, 90, 50),
     compression_level = 9,
@@ -122,6 +122,10 @@ function NetCDFWriter(
     z_sampling_method = LevelsMethod(),
     start_date = nothing,
 )
+    has_horizontal_space =
+        space isa Spaces.ExtrudedFiniteDifferenceSpace ||
+        space isa Spaces.AbstractSpectralElementSpace
+
     horizontal_space = Spaces.horizontal_space(space)
     is_horizontal_space = horizontal_space == space
 
@@ -201,6 +205,63 @@ function NetCDFWriter(
     )
 end
 
+function NetCDFWriter(
+    space::Spaces.Spaces.FiniteDifferenceSpace,
+    output_dir;
+    num_points = (180, 90, 50),
+    compression_level = 9,
+    sync_schedule = ClimaComms.device(space) isa ClimaComms.CUDADevice ?
+                    EveryStepSchedule() : nothing,
+    z_sampling_method = LevelsMethod(),
+    start_date = nothing,
+)
+    if z_sampling_method isa LevelsMethod
+        num_vpts = Meshes.nelements(Grids.vertical_topology(space).mesh)
+        @warn "Disabling vertical interpolation, the provided number of points is ignored (using $num_vpts)"
+        num_points = (num_vpts,)
+    end
+    vpts = target_coordinates(space, num_points, z_sampling_method)
+    target_zcoords = Geometry.ZPoint.(vpts)
+    remapper = Remapper(space; target_zcoords)
+
+    comms_ctx = ClimaComms.context(space)
+
+    coords_z = Fields.coordinate_field(space).z
+    maybe_move_to_cpu =
+        ClimaComms.device(coords_z) isa ClimaComms.CUDADevice &&
+        ClimaComms.iamroot(comms_ctx) ? Array : identity
+
+    interpolated_physical_z = maybe_move_to_cpu(interpolate(remapper, coords_z))
+
+    preallocated_arrays =
+        ClimaComms.iamroot(comms_ctx) ?
+        Dict{ScheduledDiagnostic, ClimaComms.array_type(space)}() :
+        Dict{ScheduledDiagnostic, Nothing}()
+
+    unsynced_datasets = Set{NCDatasets.NCDataset}()
+
+    return NetCDFWriter{
+        typeof(num_points),
+        typeof(interpolated_physical_z),
+        typeof(preallocated_arrays),
+        typeof(sync_schedule),
+        typeof(z_sampling_method),
+        typeof(start_date),
+    }(
+        output_dir,
+        Dict{String, Remapper}(),
+        num_points,
+        compression_level,
+        interpolated_physical_z,
+        Dict{String, NCDatasets.NCDataset}(),
+        z_sampling_method,
+        preallocated_arrays,
+        sync_schedule,
+        unsynced_datasets,
+        start_date,
+    )
+end
+
 """
     interpolate_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
 
@@ -212,61 +273,62 @@ function interpolate_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
 
     space = axes(field)
 
-    horizontal_space = Spaces.horizontal_space(space)
+    has_horizontal_space = !(space isa Spaces.FiniteDifferenceSpace)
 
-    # We have to deal with to cases: when we have an horizontal slice (e.g., the
-    # surface), and when we have a full space. We distinguish these cases by checking if
-    # the given space has the horizontal_space attribute. If not, it is going to be a
-    # SpectralElementSpace2D and we don't have to deal with the z coordinates.
-    is_horizontal_space = horizontal_space == space
+    if has_horizontal_space
+        horizontal_space = Spaces.horizontal_space(space)
+
+        # We have to deal with to cases: when we have an horizontal slice (e.g., the
+        # surface), and when we have a full space. We distinguish these cases by checking if
+        # the given space has the horizontal_space attribute. If not, it is going to be a
+        # SpectralElementSpace2D and we don't have to deal with the z coordinates.
+        is_horizontal_space = horizontal_space == space
+    end
 
     # Prepare the remapper if we don't have one for the given variable. We need one remapper
     # per variable (not one per diagnostic since all the time reductions return the same
     # type of space).
 
-    # TODO: Expand this once we support spatial reductions
+    # TODO: Expand this once we support spatial reductions.
+    # TODO: More generally, this can be clean up to have less conditionals
+    # depending on the type of space and use dispatch instead
     if !haskey(writer.remappers, var.short_name)
 
         # hpts, vpts are ranges of numbers
-        # hcoords, zcoords are ranges of Geometry.Points
+        # target_hcoords, target_zcoords are ranges of Geometry.Points
 
-        zcoords = []
+        target_zcoords = nothing
+        target_hcoords = nothing
 
-        if is_horizontal_space
-            hpts = target_coordinates(space, writer.num_points)
-            vpts = []
+        if has_horizontal_space
+            if is_horizontal_space
+                hpts = target_coordinates(space, writer.num_points)
+                vpts = []
+            else
+                hpts, vpts = target_coordinates(
+                    space,
+                    writer.num_points,
+                    writer.z_sampling_method,
+                )
+            end
+
+            target_hcoords = hcoords_from_horizontal_space(
+                horizontal_space,
+                Meshes.domain(Spaces.topology(horizontal_space)),
+                hpts,
+            )
         else
-            hpts, vpts = target_coordinates(
+            vpts = target_coordinates(
                 space,
                 writer.num_points,
                 writer.z_sampling_method,
             )
         end
 
-        hcoords = hcoords_from_horizontal_space(
-            horizontal_space,
-            Meshes.domain(Spaces.topology(horizontal_space)),
-            hpts,
-        )
+        target_zcoords = Geometry.ZPoint.(vpts)
 
-        # When we disable vertical_interpolation, we override the vertical points with
-        # the reference values for the vertical space.
-        if writer.z_sampling_method isa LevelsMethod && !is_horizontal_space
-            # We need Array(parent()) because we want an array of values, not a DataLayout
-            # of Points
-            vpts = Array(
-                parent(
-                    space.grid.vertical_grid.center_local_geometry.coordinates,
-                ),
-            )[
-                :,
-                1,
-            ]
-        end
-
-        zcoords = [Geometry.ZPoint(p) for p in vpts]
-
-        writer.remappers[var.short_name] = Remapper(space, hcoords, zcoords)
+        writer.remappers[var.short_name] =
+            Remapper(space, target_hcoords, target_zcoords)
     end
 
     remapper = writer.remappers[var.short_name]
@@ -321,9 +383,7 @@ function write_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
     interpolated_field =
         maybe_move_to_cpu(writer.preallocated_output_arrays[diagnostic])
 
-    if islatlonbox(
-        Meshes.domain(Spaces.topology(Spaces.horizontal_space(space))),
-    )
+    if islatlonbox(space)
         # ClimaCore works with LatLong points, but we want to have longitude
         # first in the output, so we have to flip things
         perm = collect(1:length(size(interpolated_field)))
@@ -413,14 +473,8 @@ function write_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
             string(start_date + Dates.Millisecond(round(1000 * float(t))))
     end
 
-    # TODO: It would be nice to find a cleaner way to do this
-    if length(dim_names) == 3
-        v[time_index, :, :, :] = interpolated_field
-    elseif length(dim_names) == 2
-        v[time_index, :, :] = interpolated_field
-    elseif length(dim_names) == 1
-        v[time_index, :] = interpolated_field
-    end
+    colons = ntuple(_ -> Colon(), length(dim_names))
+    v[time_index, colons...] = interpolated_field
 
     # Add file to list of files that might need manual sync
     push!(writer.unsynced_datasets, nc)
