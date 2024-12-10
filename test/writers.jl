@@ -27,6 +27,8 @@ output_dir = mktempdir(".")
     @test writer.dict["mytest"][2.0] == 20.0
     Writers.write_field!(writer, 50.0, "mytest2", nothing, nothing, 8.0)
     @test writer.dict["mytest2"][8.0] == 50.0
+
+    @test issorted(writer.dict["mytest"])
 end
 
 @testset "NetCDFWriter" begin
