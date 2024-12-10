@@ -14,6 +14,28 @@ function ColumnCenterFiniteDifferenceSpace(
     context = ClimaComms.SingletonCommsContext();
     FT = Float64,
 )
+    return _column(
+        zelem,
+        ClimaCore.Spaces.CenterFiniteDifferenceSpace,
+        context,
+        FT,
+    )
+end
+
+function ColumnFaceFiniteDifferenceSpace(
+    zelem = 10,
+    context = ClimaComms.SingletonCommsContext();
+    FT = Float64,
+)
+    return _column(
+        zelem,
+        ClimaCore.Spaces.FaceFiniteDifferenceSpace,
+        context,
+        FT,
+    )
+end
+
+function _column(zelem, constructor, context, FT)
     zlim = (FT(0.0), FT(1.0))
     domain = ClimaCore.Domains.IntervalDomain(
         ClimaCore.Geometry.ZPoint(zlim[1]),
@@ -22,8 +44,9 @@ function ColumnCenterFiniteDifferenceSpace(
     )
     mesh = ClimaCore.Meshes.IntervalMesh(domain, nelems = zelem)
     topology = ClimaCore.Topologies.IntervalTopology(context, mesh)
-    return ClimaCore.Spaces.CenterFiniteDifferenceSpace(topology)
+    return constructor(topology)
 end
+
 
 function SphericalShellSpace(;
     radius = 6371.0,
