@@ -15,6 +15,8 @@ import ..seconds_to_str_short,
 
 import SciMLBase
 
+import ClimaUtilities.TimeManager: ITime, date, period
+
 """
     AbstractSchedule
 
@@ -317,6 +319,43 @@ This is directly the string representation of a `Dates.Period`.
 """
 function long_name(schedule::EveryCalendarDtSchedule)
     return period_to_str_long(schedule.dt)
+end
+
+# TODO: Add a new struct for _EveryITimeSchedule(period::ITime, date_last=start_date)
+
+struct _EveryITimeSchedule{P1 <: ITime, P2 <: ITime} <: AbstractSchedule
+    """Last date this function returned true."""
+    date_last::Base.RefValue{P1}
+
+    """The `ITime` needed to elapse for the next time that this function will return
+    true."""
+    dt::P2
+
+    # Do not need start_date because we are assuming that simulation time is already an ITime, so we can
+    # extract the start date from that
+    function _EveryITimeSchedule(date_last, dt)
+        new{typeof(date_last), typeof(dt)}(Ref(date_last), dt)
+    end
+end
+
+function (schedule::_EveryITimeSchedule)(integrator)::Bool
+    # Assume schedule.dt is a ITime
+    next_date = schedule.date_last[] + schedule.dt
+    current_date = integrator.t
+    if current_date >= next_date
+        schedule.date_last[] = current_date
+        return true
+    else
+        return false
+    end
+end
+
+function short_name(schedule::_EveryITimeSchedule)
+    return period_to_str_short(schedule.dt |> period)
+end
+
+function long_name(schedule::_EveryITimeSchedule)
+    return period_to_str_long(schedule.dt |> period)
 end
 
 end
