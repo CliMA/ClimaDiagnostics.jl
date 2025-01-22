@@ -18,8 +18,14 @@ include("netcdf_writer_coordinates.jl")
 A struct to remap `ClimaCore` `Fields` to rectangular grids and save the output to NetCDF
 files.
 """
-struct NetCDFWriter{T, TS, DI, SYNC, ZSM <: AbstractZSamplingMethod, DATE} <:
-       AbstractWriter
+struct NetCDFWriter{
+    T,
+    TS,
+    DI,
+    SYNC,
+    ZSM <: Union{AbstractZSamplingMethod, Nothing},
+    DATE,
+} <: AbstractWriter
     """The base folder where to save the files."""
     output_dir::String
 
@@ -262,6 +268,42 @@ function NetCDFWriter(
     )
 end
 
+function NetCDFWriter(
+    space::Spaces.Spaces.PointSpace,
+    output_dir;
+    compression_level = 9,
+    sync_schedule = ClimaComms.device(space) isa ClimaComms.CUDADevice ?
+                    EveryStepSchedule() : nothing,
+    start_date = nothing,
+    kwargs...,
+)
+    comms_ctx = ClimaComms.context(space)
+    preallocated_arrays =
+        ClimaComms.iamroot(comms_ctx) ?
+        Dict{ScheduledDiagnostic, ClimaComms.array_type(space)}() :
+        Dict{ScheduledDiagnostic, Nothing}()
+    unsynced_datasets = Set{NCDatasets.NCDataset}()
+    return NetCDFWriter{
+        Nothing,
+        Nothing,
+        typeof(preallocated_arrays),
+        typeof(sync_schedule),
+        Nothing,
+        typeof(start_date),
+    }(
+        output_dir,
+        Dict{String, Remapper}(),
+        nothing,
+        compression_level,
+        nothing,
+        Dict{String, NCDatasets.NCDataset}(),
+        nothing,
+        preallocated_arrays,
+        sync_schedule,
+        unsynced_datasets,
+        start_date,
+    )
+end
 """
     interpolate_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
 
@@ -278,7 +320,7 @@ function interpolate_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
     if has_horizontal_space
         horizontal_space = Spaces.horizontal_space(space)
 
-        # We have to deal with to cases: when we have an horizontal slice (e.g., the
+        # We have to deal with two cases: when we have an horizontal slice (e.g., the
         # surface), and when we have a full space. We distinguish these cases by checking if
         # the given space has the horizontal_space attribute. If not, it is going to be a
         # SpectralElementSpace2D and we don't have to deal with the z coordinates.
@@ -391,6 +433,11 @@ function write_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
         interpolated_field = permutedims(interpolated_field, perm)
     end
 
+    if space isa Spaces.PointSpace
+        # If the space is a point space, we have to remove the singleton dimension
+        interpolated_field = interpolated_field[]
+    end
+
     FT = Spaces.undertype(space)
 
     output_path =
@@ -459,7 +506,8 @@ function write_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
         # We already have something in the file
         v = nc["$(var.short_name)"]
         temporal_size, spatial_size... = size(v)
-        spatial_size == size(interpolated_field) ||
+        interpolated_size = size(interpolated_field)
+        spatial_size == interpolated_size ||
             error("incompatible dimensions for $(var.short_name)")
     else
         v = NCDatasets.defVar(

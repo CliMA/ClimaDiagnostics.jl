@@ -8,6 +8,9 @@ import ProfileCanvas
 import NCDatasets
 import ClimaCore
 import ClimaCore.Fields
+import ClimaCore.Spaces
+import ClimaCore.Geometry
+import ClimaComms
 
 import ClimaDiagnostics
 import ClimaDiagnostics.Writers
@@ -259,6 +262,106 @@ end
             # Write a second time, to check consistency
             Writers.write_field!(colwriter, colfield, coldiagnostic, colu, p, t)
         end
+    end
+
+    ###############
+    # Point Space #
+    ###############
+    point_val = 3.14
+    point_space =
+        Spaces.PointSpace(ClimaComms.context(), Geometry.ZPoint(point_val))
+    point_field = Fields.coordinate_field(point_space)
+    point_writer = Writers.NetCDFWriter(point_space, output_dir)
+
+    point_u = (; field = point_field)
+
+    point_diagnostic = ClimaDiagnostics.ScheduledDiagnostic(;
+        variable = ClimaDiagnostics.DiagnosticVariable(;
+            compute!,
+            short_name = "ABC",
+        ),
+        output_short_name = "my_short_name_point",
+        output_long_name = "My Long Name Point",
+        output_writer = point_writer,
+    )
+    point_writer.preallocated_output_arrays[point_diagnostic] = [point_val]
+    # No interpolation needed for point space
+    Writers.write_field!(
+        point_writer,
+        point_field,
+        point_diagnostic,
+        point_u,
+        p,
+        t,
+    )
+    # Write a second time
+    Writers.write_field!(
+        point_writer,
+        point_field,
+        point_diagnostic,
+        point_u,
+        p,
+        t,
+    )
+    close(point_writer)
+
+    NCDatasets.NCDataset(joinpath(output_dir, "my_short_name_point.nc")) do nc
+        @test nc["ABC"][:] == [point_val, point_val]
+    end
+
+    ###################
+    # Horizontal Space#
+    ###################
+
+    horizontal_space = ClimaCore.Spaces.level(space, 1)
+    horizontal_field = Fields.coordinate_field(horizontal_space).z
+    horizontal_writer = Writers.NetCDFWriter(
+        horizontal_space,
+        output_dir;
+        num_points = (NUM, 2NUM),
+    )
+    horizontal_u = (; field = horizontal_field)
+
+    horizontal_diagnostic = ClimaDiagnostics.ScheduledDiagnostic(;
+        variable = ClimaDiagnostics.DiagnosticVariable(;
+            compute!,
+            short_name = "ABC",
+        ),
+        output_short_name = "my_short_name_horizontal",
+        output_long_name = "My Long Name Point Horizontal",
+        output_writer = horizontal_writer,
+    )
+
+    Writers.interpolate_field!(
+        horizontal_writer,
+        horizontal_field,
+        horizontal_diagnostic,
+        horizontal_u,
+        p,
+        t,
+    )
+    Writers.write_field!(
+        horizontal_writer,
+        horizontal_field,
+        horizontal_diagnostic,
+        horizontal_u,
+        p,
+        t,
+    )
+    # Write a second time
+    Writers.write_field!(
+        horizontal_writer,
+        horizontal_field,
+        horizontal_diagnostic,
+        horizontal_u,
+        p,
+        t,
+    )
+    close(horizontal_writer)
+    NCDatasets.NCDataset(
+        joinpath(output_dir, "my_short_name_horizontal.nc"),
+    ) do nc
+        @test size(nc["ABC"]) == (2, NUM, 2NUM)
     end
 
     ###############
