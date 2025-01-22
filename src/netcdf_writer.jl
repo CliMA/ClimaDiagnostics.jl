@@ -70,11 +70,30 @@ struct NetCDFWriter{T, TS, DI, SYNC, ZSM <: AbstractZSamplingMethod, DATE} <:
 end
 
 """
+    NetCDFWriterPoint
+
+A writer for single points.
+
+When the input data is a single point (e.g., the surface of a column), no resampling or
+interpolation is needed. Instead, we can directly write to file.
+"""
+struct NetCDFWriterPoint{DATE} <: AbstractWriter
+    """The base folder where to save the files."""
+    output_dir::String
+
+    """Date of the beginning of the simulation (it is used to convert seconds to dates)."""
+    start_date::DATE
+
+    """NetCDF files that are currently open. Only the root process uses this field."""
+    open_files::Dict{String, NCDatasets.NCDataset}
+end
+
+"""
     close(writer::NetCDFWriter)
 
 Close all the open files in `writer`.
 """
-function Base.close(writer::NetCDFWriter)
+function Base.close(writer::Union{NetCDFWriter, NetCDFWriterPoint})
     foreach(NCDatasets.close, values(writer.open_files))
     return nothing
 end
@@ -252,6 +271,19 @@ function NetCDFWriter(
         sync_schedule,
         unsynced_datasets,
         start_date,
+    )
+end
+
+function NetCDFWriter(
+    space::Spaces.PointSpace,
+    output_dir;
+    start_date = nothing,
+    kwargs..., # To preserve compatibility with the other constructors
+)
+    return NetCDFWriterPoint(
+        output_dir,
+        start_date,
+        Dict{String, NCDatasets.NCDataset}(),
     )
 end
 
@@ -455,8 +487,6 @@ function write_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
 
     nc["time"][time_index] = t
 
-    # FIXME: We are hardcoding p.start_date !
-    # FIXME: We are rounding t
     if !isnothing(start_date)
         nc["date"][time_index] = string(start_date + Dates.Millisecond(1000t))
     end
@@ -469,6 +499,87 @@ function write_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
 
     return nothing
 end
+
+# For a single point, there is no need to interpolate
+function interpolate_field!(writer::NetCDFWriterPoint, field, _, _, _, _)
+    axes(field) isa Spaces.PointSpace ||
+        error("Cannot use this writer for this field")
+    return nothing
+end
+
+function write_field!(writer::NetCDFWriterPoint, field, diagnostic, u, p, t)
+    # TODO: Much of this function is shared with the other write_field! method, so there is
+    # an opportunity to consolidate the two and reduce duplicated code.
+
+    # Only the root process has to write
+    ClimaComms.iamroot(ClimaComms.context(field)) || return nothing
+
+    var = diagnostic.variable
+    space = axes(field)
+    space isa Spaces.PointSpace ||
+        error("Cannot use this writer with this field")
+
+    FT = Spaces.undertype(space)
+
+    output_path =
+        joinpath(writer.output_dir, "$(output_short_name(diagnostic)).nc")
+
+    if !haskey(writer.open_files, output_path)
+        # Append or write a new file
+        open_mode = isfile(output_path) ? "a" : "c"
+        writer.open_files[output_path] =
+            NCDatasets.Dataset(output_path, open_mode)
+    end
+    nc = writer.open_files[output_path]
+
+    # Define time coordinate
+    add_time_maybe!(
+        nc,
+        FT;
+        units = "s",
+        axis = "T",
+        standard_name = "time",
+        long_name = "Time",
+    )
+
+    start_date = nothing
+    if isnothing(writer.start_date)
+        if hasproperty(p, :start_date)
+            start_date = getproperty(p, :start_date)
+        end
+    else
+        start_date = writer.start_date
+    end
+
+    if haskey(nc, "$(var.short_name)")
+        # We already have something in the file
+        v = nc["$(var.short_name)"]
+        temporal_size = length(v)
+    else
+        v = NCDatasets.defVar(nc, "$(var.short_name)", FT, ("time",))
+        v.attrib["short_name"] = var.short_name::String
+        v.attrib["long_name"] = output_long_name(diagnostic)::String
+        v.attrib["units"] = var.units::String
+        v.attrib["comments"] = var.comments::String
+        if !isnothing(start_date) && !haskey(v.attrib, "start_date")
+            v.attrib["start_date"] = string(start_date)::String
+        end
+        temporal_size = 0
+    end
+
+    # We need to write to the next position after what we read from the data (or the first
+    # position ever if we are writing the file for the first time)
+    time_index = temporal_size + 1
+
+    if !isnothing(start_date)
+        nc["date"][time_index] = string(start_date + Dates.Millisecond(1000t))
+    end
+
+    v[time_index] = Array(parent(field))[]
+
+    return nothing
+end
+
 
 """
     sync(writer::NetCDFWriter)
