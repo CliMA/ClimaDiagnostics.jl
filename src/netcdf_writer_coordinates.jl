@@ -208,6 +208,19 @@ function add_space_coordinates_maybe!(
     return [name]
 end
 
+# PointSpace
+function add_space_coordinates_maybe!(
+    nc::NCDatasets.NCDataset,
+    space::Spaces.PointSpace,
+    num_points_z;
+    z_sampling_method,
+    names = (),
+    interpolated_physical_z = nothing, # Not needed here, but needed for consistency of
+    # interface and dispatch
+)
+    return []
+end
+
 add_space_coordinates_maybe!(
     nc::NCDatasets.NCDataset,
     space::Spaces.AbstractSpectralElementSpace,
@@ -276,6 +289,7 @@ function target_coordinates(
     return (longpts, latpts)
 end
 
+islatlonbox(space::Spaces.PointSpace) = false
 islatlonbox(space::Spaces.FiniteDifferenceSpace) = false
 islatlonbox(space::Domains.AbstractDomain) = false
 function islatlonbox(space::Spaces.AbstractSpace)
