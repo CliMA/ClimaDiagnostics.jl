@@ -1,8 +1,11 @@
 import Accessors
 import SciMLBase
+import ClimaComms
+import ClimaCore: Spaces
 
 import .Schedules: DivisorSchedule, EveryDtSchedule
-import .Writers: interpolate_field!, write_field!, sync, AbstractWriter
+import .Writers:
+    interpolate_field!, write_field!, sync, AbstractWriter, NetCDFWriter
 
 # We define all the known identities in reduction_identities.jl
 include("reduction_identities.jl")
@@ -126,7 +129,24 @@ function DiagnosticsHandler(scheduled_diagnostics, Y, p, t; dt = nothing)
 
         # If it is not a reduction, call the output writer as well
         if !isa_time_reduction
-            interpolate_field!(diag.output_writer, storage[i], diag, Y, p, t)
+            # no need to interpolate for point spaces
+            if axes(storage[i]) isa Spaces.PointSpace
+                # netCDFWriter expects diagnostic to be in preallocated_output_arrays
+                if diag.output_writer isa NetCDFWriter &&
+                   ClimaComms.iamroot(ClimaComms.context(storage[i]))
+                    diag.output_writer.preallocated_output_arrays[diag] =
+                        copy(parent(storage[i]))
+                end
+            else
+                interpolate_field!(
+                    diag.output_writer,
+                    storage[i],
+                    diag,
+                    Y,
+                    p,
+                    t,
+                )
+            end
             write_field!(diag.output_writer, storage[i], diag, Y, p, t)
         else
             # Add to the accumulator
@@ -224,15 +244,25 @@ function orchestrate_diagnostics(
             diagnostic_handler.storage[diag_index],
             diagnostic_handler.counters[diag_index],
         )
-
-        interpolate_field!(
-            diag.output_writer,
-            diagnostic_handler.storage[diag_index],
-            diag,
-            integrator.u,
-            integrator.p,
-            integrator.t,
-        )
+        # dont interpolate for point spaces
+        if axes(diagnostic_handler.storage[diag_index]) isa Spaces.PointSpace
+            # netCDFWriter expects diagnostic to be in preallocated_output_arrays
+            if diag.output_writer isa NetCDFWriter && ClimaComms.iamroot(
+                ClimaComms.context(diagnostic_handler.storage[diag_index]),
+            )
+                diag.output_writer.preallocated_output_arrays[diag] =
+                    copy(parent(diagnostic_handler.storage[diag_index]))
+            end
+        else
+            interpolate_field!(
+                diag.output_writer,
+                diagnostic_handler.storage[diag_index],
+                diag,
+                integrator.u,
+                integrator.p,
+                integrator.t,
+            )
+        end
     end
 
     # Save to disk
