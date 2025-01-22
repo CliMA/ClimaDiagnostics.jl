@@ -1,5 +1,5 @@
 import ClimaComms
-import ClimaCore.InputOutput
+import ClimaCore: InputOutput, Spaces
 
 import ClimaUtilities.TimeManager: ITime
 
@@ -38,6 +38,11 @@ The name of the file is determined by the `output_short_name` of the output
 `Field`s can be read back using the `InputOutput` module in `ClimaCore`.
 """
 function write_field!(writer::HDF5Writer, field, diagnostic, u, p, t)
+    axes(field) isa Spaces.PointSpace &&
+        pkgversion(InputOutput) < v"0.14.27" &&
+        error(
+            "HDF5Writer only supports Fields with PointSpace for ClimaCore >= 0.14.27",
+        )
     var = diagnostic.variable
     time = t
 
