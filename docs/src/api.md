@@ -19,6 +19,7 @@ ClimaDiagnostics.Schedules.DivisorSchedule
 ClimaDiagnostics.Schedules.EveryStepSchedule
 ClimaDiagnostics.Schedules.EveryDtSchedule
 ClimaDiagnostics.Schedules.EveryCalendarDtSchedule
+ClimaDiagnostics.Schedules.EveryCalendarDtSchedule(dt, t::ClimaUtilities.TimeManager.ITime)
 ```
 
 ## `DiagnosticVariables`
