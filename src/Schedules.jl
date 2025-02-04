@@ -15,6 +15,8 @@ import ..seconds_to_str_short,
 
 import SciMLBase
 
+import ClimaUtilities.TimeManager: ITime, date, counter, period, epoch
+
 """
     AbstractSchedule
 
@@ -242,10 +244,10 @@ struct EveryCalendarDtSchedule{P <: Dates.Period} <: AbstractSchedule
         This schedule was introduced in version `0.2.4`.
     """
     function EveryCalendarDtSchedule(
-        dt::Dates.Period;
+        dt::Union{Dates.Period, ITime};
         # TODO: When removing the deprecated arguments, remove the Nothing in this Union
-        start_date::Union{Dates.Date, Dates.DateTime, Nothing} = nothing,
-        date_last::Union{Dates.DateTime, Nothing} = nothing,
+        start_date::Union{Dates.Date, Dates.DateTime, ITime, Nothing} = nothing,
+        date_last::Union{Dates.DateTime, ITime, Nothing} = nothing,
         ######## DEPRECATED #########
         reference_date = nothing,
         t_start = nothing,
@@ -266,10 +268,29 @@ struct EveryCalendarDtSchedule{P <: Dates.Period} <: AbstractSchedule
             )
         end
         ######## DEPRECATED #########
-
+        dt isa ITime && (dt = counter(dt) * period(dt))
+        start_date isa ITime && (start_date = date(start_date))
+        date_last isa ITime && (date_last = date(date_last))
         isnothing(date_last) && (date_last = start_date)
         new{typeof(dt)}(Ref(date_last), dt, start_date)
     end
+end
+
+"""
+    EveryCalendarDtSchedule(dt, t::ITime)
+
+Construct an `EveryCalendarDtSchedule` from `dt` and `t`, where `dt` is a period or an `ITime`
+and `t` is an `ITime`. The start date of the schedule is `epoch(t)`, and the last date on
+which the schedule returns true is `date(t)`.
+"""
+function EveryCalendarDtSchedule(dt, t::ITime)
+    start_date = epoch(t)
+    date_last = date(t)
+    return EveryCalendarDtSchedule(
+        dt;
+        start_date = start_date,
+        date_last = date_last,
+    )
 end
 
 """

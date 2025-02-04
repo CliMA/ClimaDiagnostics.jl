@@ -8,6 +8,8 @@ import ClimaDiagnostics.Schedules:
 
 import ClimaDiagnostics: time_to_date
 
+import ClimaUtilities.TimeManager: ITime
+
 include("TestTools.jl")
 
 @testset "Schedules" begin
@@ -129,6 +131,43 @@ include("TestTools.jl")
     dummyintegrator_one_month = (; t = 1.0 * one_month_from_reference)
     @test schedule3(dummyintegrator_one_month)
 
+    # Test EveryCalendarDtSchedule with ITime
+    # Schedules should be the same internally
+    schedule1 = EveryCalendarDtSchedule(
+        dt_callback_month,
+        start_date = Dates.DateTime(2024, 10),
+        date_last = Dates.DateTime(2024, 7),
+    )
+    schedule2 = EveryCalendarDtSchedule(
+        dt_callback_month,
+        start_date = Dates.DateTime(2024, 10),
+        date_last = Dates.DateTime(2024, 12),
+    )
+
+    itime_schedule1 = EveryCalendarDtSchedule(
+        dt_callback_month,
+        start_date = ITime(0, epoch = Dates.DateTime(2024, 10)),
+        date_last = ITime(0, epoch = Dates.DateTime(2024, 7)),
+    )
+    @test schedule1 == itime_schedule1
+
+    itime_schedule = EveryCalendarDtSchedule(
+        # DateTime(2024, 7) - DateTime(2024, 10) |> Seconds is DateTime(2024, 10)
+        dt_callback_month,
+        ITime(-7948800, epoch = Dates.DateTime(2024, 10)),
+    )
+    @test schedule1 == itime_schedule
+
+    # Schedules should work when integrator.t is an ITime
+    dummyitimeintegrator = (; t = ITime(1.0, epoch = Dates.DateTime(2024, 10)))
+    schedule1 = EveryCalendarDtSchedule(
+        dt_callback_month,
+        start_date = Dates.DateTime(2024, 10),
+        date_last = Dates.DateTime(2024, 7),
+    )
+    @test schedule1(dummyitimeintegrator)
+    @test !schedule2(dummyitimeintegrator)
+
     called_month = Ref(0)
     function callback_func_month(integrator)
         called_month[] += 1
@@ -179,4 +218,14 @@ end
     # Test with negative times
     @test time_to_date(-1.0, start_date) == start_date - Dates.Second(1)
     @test time_to_date(-0.5, start_date) == start_date - Dates.Millisecond(500)
+
+    # Test with ITime
+    @test time_to_date(
+        ITime(1, epoch = start_date),
+        start_date + Dates.Second(42),
+    ) == start_date + Dates.Second(1)
+    @test time_to_date(
+        ITime(-1, epoch = start_date),
+        start_date + Dates.Second(42),
+    ) == start_date - Dates.Second(1)
 end

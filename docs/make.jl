@@ -1,5 +1,6 @@
 using Documenter
 using ClimaDiagnostics
+import ClimaUtilities
 
 pages = [
     "Overview" => "index.md",
