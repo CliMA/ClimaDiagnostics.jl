@@ -1,6 +1,8 @@
 import ClimaComms
 import ClimaCore.InputOutput
 
+import ClimaUtilities.TimeManager: ITime
+
 """
     HDF5Writer(output_dir)
 
@@ -56,6 +58,7 @@ function write_field!(writer::HDF5Writer, field, diagnostic, u, p, t)
     )
 
     for (k, v) in attributes
+        (v isa ITime) && (v = float(v))
         InputOutput.HDF5.write_attribute(hdfwriter.file, k, v)
     end
 
