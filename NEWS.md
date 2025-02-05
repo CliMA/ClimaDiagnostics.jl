@@ -1,4 +1,15 @@
 # NEWS
+v0.2.12
+-------
+
+## Features
+
+### Support with ITime
+
+This release adds support for working with `ITime`s. In particular,
+`EveryCalendarDtSchedule` is compatible with `ITime` and a new constructor is
+provided to make an `EveryCalendarDtSchedule` using `ITime`s. Lastly, there are
+small changes to the writers to support `ITime`s.
 
 v0.2.11
 -------
