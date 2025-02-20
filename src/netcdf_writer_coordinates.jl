@@ -164,7 +164,7 @@ function target_coordinates(
     # We assume H to be 7000, which is a good scale height for the Earth atmosphere
     H_EARTH = 7000
 
-    num_points_z = num_points[]
+    num_points_z = last(num_points)
     FT = Spaces.undertype(space)
     topology = Spaces.topology(space)
     vert_domain = topology.mesh.domain
@@ -195,14 +195,30 @@ function add_space_coordinates_maybe!(
     num_points_z;
     z_sampling_method,
     names = ("z",),
+    interpolated_physical_z = nothing, # Not needed here, but needed for consistency of
+    # interface and dispatch
 )
     name, _... = names
-    z_dimension_exists = dimension_exists(nc, name, (num_points_z,))
+    z_dimension_exists = dimension_exists(nc, name, num_points_z)
+
     if !z_dimension_exists
         zpts = target_coordinates(space, num_points_z, z_sampling_method)
         add_dimension!(nc, name, zpts, units = "m", axis = "Z")
     end
     return [name]
+end
+
+# PointSpace
+function add_space_coordinates_maybe!(
+    nc::NCDatasets.NCDataset,
+    space::Spaces.PointSpace,
+    num_points_z;
+    z_sampling_method,
+    names = (),
+    interpolated_physical_z = nothing, # Not needed here, but needed for consistency of
+    # interface and dispatch
+)
+    return []
 end
 
 add_space_coordinates_maybe!(
@@ -273,13 +289,21 @@ function target_coordinates(
     return (longpts, latpts)
 end
 
-islatlonbox(domain) = false
+islatlonbox(space::Spaces.PointSpace) = false
+islatlonbox(space::Spaces.FiniteDifferenceSpace) = false
+islatlonbox(space::Domains.AbstractDomain) = false
+function islatlonbox(space::Spaces.AbstractSpace)
+    return islatlonbox(
+        Meshes.domain(Spaces.topology(Spaces.horizontal_space(space))),
+    )
+end
 
 # Box
 function islatlonbox(domain::Domains.RectangleDomain)
     return domain.interval1.coord_max isa Geometry.LatPoint &&
            domain.interval2.coord_max isa Geometry.LongPoint
 end
+
 
 function add_space_coordinates_maybe!(
     nc::NCDatasets.NCDataset,
@@ -416,14 +440,14 @@ function add_space_coordinates_maybe!(
         vdims_names = add_space_coordinates_maybe!(
             nc,
             vertical_space,
-            num_points_vertic;
+            (num_points_vertic,);
             z_sampling_method,
         )
     else
         vdims_names = add_space_coordinates_maybe!(
             nc,
             vertical_space,
-            num_points_vertic,
+            (num_points_vertic,),
             interpolated_physical_z;
             z_sampling_method,
             names = ("z_reference",),
@@ -461,16 +485,15 @@ function add_space_coordinates_maybe!(
     z_sampling_method,
     depending_on_dimensions,
 )
-    num_points_z = num_points
     name, _... = names
 
     # Add z_reference
     z_reference_dimension_dimension_exists =
-        dimension_exists(nc, name, (num_points_z,))
+        dimension_exists(nc, name, num_points)
 
     if !z_reference_dimension_dimension_exists
         reference_altitudes =
-            target_coordinates(space, num_points_z, z_sampling_method)
+            target_coordinates(space, num_points, z_sampling_method)
         add_dimension!(nc, name, reference_altitudes; units = "m", axis = "Z")
     end
 
