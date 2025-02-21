@@ -25,23 +25,36 @@ Set up a full test problem
 Increasing `more_compute_diagnostics` adds more copies of a compute diagnostic with no output.
 Useful to stress allocations.
 """
-function setup_integrator(output_dir; context, more_compute_diagnostics = 0)
+function setup_integrator(
+    output_dir;
+    space = SphericalShellSpace(; context),
+    context,
+    more_compute_diagnostics = 0,
+    dict_writer = nothing,
+)
     t0 = 0.0
     tf = 10.0
     dt = 1.0
-    space = SphericalShellSpace(; context)
     args, kwargs = create_problem(space; t0, tf, dt)
 
     @info "Writing output to $output_dir"
 
     dummy_writer = ClimaDiagnostics.Writers.DummyWriter()
     h5_writer = ClimaDiagnostics.Writers.HDF5Writer(output_dir)
-    nc_writer = ClimaDiagnostics.Writers.NetCDFWriter(
-        space,
-        output_dir;
-        num_points = (10, 5, 3),
-        start_date = Dates.DateTime(2015, 2, 2),
-    )
+    if space isa ClimaCore.Spaces.PointSpace
+        nc_writer = ClimaDiagnostics.Writers.NetCDFWriter(
+            space,
+            output_dir;
+            start_date = Dates.DateTime(2015, 2, 2),
+        )
+    else
+        nc_writer = ClimaDiagnostics.Writers.NetCDFWriter(
+            space,
+            output_dir;
+            num_points = (10, 5, 3),
+            start_date = Dates.DateTime(2015, 2, 2),
+        )
+    end
 
     function compute_my_var!(out, u, p, t)
         if isnothing(out)
@@ -81,6 +94,7 @@ function setup_integrator(output_dir; context, more_compute_diagnostics = 0)
         variable = simple_var,
         output_writer = h5_writer,
     )
+
     inst_every3s_diagnostic_another = ClimaDiagnostics.ScheduledDiagnostic(
         variable = simple_var,
         output_writer = nc_writer,
@@ -96,6 +110,13 @@ function setup_integrator(output_dir; context, more_compute_diagnostics = 0)
         inst_every3s_diagnostic,
         inst_every3s_diagnostic_another,
     ]
+    if !isnothing(dict_writer)
+        inst_diagnostic_dict = ClimaDiagnostics.ScheduledDiagnostic(
+            variable = simple_var,
+            output_writer = dict_writer,
+        )
+        scheduled_diagnostics = [scheduled_diagnostics..., inst_diagnostic_dict]
+    end
 
     @test inst_every3s_diagnostic_another == inst_every3s_diagnostic
     @test !(inst_every3s_diagnostic_another === inst_every3s_diagnostic)
@@ -116,36 +137,94 @@ function setup_integrator(output_dir; context, more_compute_diagnostics = 0)
     )
 end
 
-@testset "A full problem" begin
-    mktempdir() do output_dir
-        output_dir = ClimaComms.bcast(context, output_dir)
+sphere_space = SphericalShellSpace(; context)
+purely_horizontal_space = ClimaCore.Spaces.level(sphere_space, 1)
+# list of tuples of (space, space_name, dimensions of written diagnostics without time)
+spaces_test_list = [
+    (sphere_space, "SphericalShellSpace", (10, 5, 10)),
+    (purely_horizontal_space, "purely horizontal space", (10, 5)),
+    (
+        ClimaCore.Spaces.PointSpace(context, ClimaCore.Geometry.ZPoint(1.0)),
+        "PointSpace",
+        (),
+    ),
+]
+if context isa ClimaComms.SingletonCommsContext
+    spaces_test_list = [
+        spaces_test_list...,
+        (
+            ColumnCenterFiniteDifferenceSpace(10, context),
+            "purely vertical space",
+            (10,),
+        ),
+    ]
+end
+for (space, space_name, written_space_dims) in spaces_test_list
+    @testset "A full problem using a $space_name" begin
+        mktempdir() do output_dir
+            output_dir = ClimaComms.bcast(context, output_dir)
+            dict_writer = ClimaDiagnostics.Writers.DictWriter()
+            if (space isa ClimaCore.Spaces.PointSpace) &&
+               pkgversion(ClimaCore) < v"0.14.27"
+                @test_throws "HDF5Writer only supports Fields with PointSpace for ClimaCore >= 0.14.27" setup_integrator(
+                    output_dir;
+                    context,
+                    space,
+                    dict_writer,
+                )
+            else
+                integrator =
+                    setup_integrator(output_dir; context, space, dict_writer)
 
-        integrator = setup_integrator(output_dir; context)
+                SciMLBase.solve!(integrator)
 
-        SciMLBase.solve!(integrator)
+                if ClimaComms.iamroot(context)
+                    NCDatasets.NCDataset(
+                        joinpath(output_dir, "YO_1it_inst.nc"),
+                    ) do nc
+                        @test nc["YO"].attrib["short_name"] == "YO"
+                        @test nc["YO"].attrib["long_name"] ==
+                              "YO YO, Instantaneous"
+                        @test size(nc["YO"]) == (11, written_space_dims...)
+                        @test nc["YO"].attrib["start_date"] ==
+                              string(Dates.DateTime(2015, 2, 2))
+                    end
 
-        if ClimaComms.iamroot(context)
-            NCDatasets.NCDataset(joinpath(output_dir, "YO_1it_inst.nc")) do nc
-                @test nc["YO"].attrib["short_name"] == "YO"
-                @test nc["YO"].attrib["long_name"] == "YO YO, Instantaneous"
-                @test size(nc["YO"]) == (11, 10, 5, 10)
-                @test nc["YO"].attrib["start_date"] ==
-                      string(Dates.DateTime(2015, 2, 2))
-            end
+                    NCDatasets.NCDataset(
+                        joinpath(output_dir, "YO_2it_average.nc"),
+                    ) do nc
+                        @test nc["YO"].attrib["short_name"] == "YO"
+                        @test nc["YO"].attrib["long_name"] ==
+                              "YO YO, average within every 2 iterations"
+                        @test size(nc["YO"]) == (5, written_space_dims...)
+                    end
 
-            NCDatasets.NCDataset(
-                joinpath(output_dir, "YO_2it_average.nc"),
-            ) do nc
-                @test nc["YO"].attrib["short_name"] == "YO"
-                @test nc["YO"].attrib["long_name"] ==
-                      "YO YO, average within every 2 iterations"
-                @test size(nc["YO"]) == (5, 10, 5, 10)
-            end
-
-            NCDatasets.NCDataset(joinpath(output_dir, "YO_3s_inst.nc")) do nc
-                @test nc["YO"].attrib["short_name"] == "YO"
-                @test nc["YO"].attrib["long_name"] == "YO YO, Instantaneous"
-                @test size(nc["YO"]) == (4, 10, 5, 10)
+                    NCDatasets.NCDataset(
+                        joinpath(output_dir, "YO_3s_inst.nc"),
+                    ) do nc
+                        @test nc["YO"].attrib["short_name"] == "YO"
+                        @test nc["YO"].attrib["long_name"] ==
+                              "YO YO, Instantaneous"
+                        @test size(nc["YO"]) == (4, written_space_dims...)
+                    end
+                end
+                @test count(
+                    occursin.(
+                        Ref(r"YO_1it_inst_\d*\.\d\.h5"),
+                        readdir(output_dir),
+                    ),
+                ) == 11
+                reader = ClimaCore.InputOutput.HDF5Reader(
+                    joinpath(output_dir, "YO_1it_inst_10.0.h5"),
+                    context,
+                )
+                @test parent(
+                    ClimaCore.InputOutput.read_field(reader, "YO_1it_inst"),
+                ) == parent(integrator.u.my_var)
+                close(reader)
+                @test length(keys(dict_writer.dict["YO_1it_inst"])) == 11
+                @test dict_writer.dict["YO_1it_inst"][integrator.t] ==
+                      integrator.u.my_var
             end
         end
     end
