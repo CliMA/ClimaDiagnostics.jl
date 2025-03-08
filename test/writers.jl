@@ -11,6 +11,8 @@ import ClimaCore.Fields
 import ClimaDiagnostics
 import ClimaDiagnostics.Writers
 
+import ClimaUtilities.TimeManager: ITime
+
 include("TestTools.jl")
 
 # The temporary directory where we write the file cannot be in /tmp, it has
@@ -284,4 +286,75 @@ end
     println("NCDatasets")
     show(stdout, MIME"text/plain"(), timing_ncdataset)
     println()
+end
+
+@testset "NetCDFWriter write field time test" begin
+    space = SphericalShellSpace(FT = Float32)
+    field = Fields.coordinate_field(space).z
+
+    # Number of interpolation points
+    NUM = 50
+
+    writer = Writers.NetCDFWriter(
+        space,
+        output_dir;
+        num_points = (NUM, 2NUM, 3NUM),
+        sync_schedule = ClimaDiagnostics.Schedules.DivisorSchedule(2),
+        z_sampling_method = ClimaDiagnostics.Writers.FakePressureLevelsMethod(),
+    )
+
+    u = (; field)
+    # FIXME: We are hardcoding the start date
+    p = (; start_date = Dates.DateTime(2010, 1))
+    # `ITime` should save the times as `Float64`
+    # Float32(1000 * 20995200.0) |> Dates.Millisecond is not equal to
+    # 20_995_200_000 milliseconds, but it is true for Float64
+    t = ITime(
+        20_995_200,
+        period = Dates.Second(1),
+        epoch = Dates.DateTime(2010, 1),
+    )
+
+    function compute!(out, u, p, t)
+        if isnothing(out)
+            return u.field
+        else
+            out .= u.field
+        end
+    end
+
+    diagnostic = ClimaDiagnostics.ScheduledDiagnostic(;
+        variable = ClimaDiagnostics.DiagnosticVariable(;
+            compute!,
+            short_name = "ABC",
+        ),
+        output_short_name = "timetest",
+        output_long_name = "My Long Name",
+        output_writer = writer,
+    )
+    Writers.interpolate_field!(writer, field, diagnostic, u, p, t)
+    Writers.write_field!(writer, field, diagnostic, u, p, t)
+
+    # This is div(2^53, 1000), since 2^53 + 1 is the first integer that cannot be
+    # represented exactly as a Float64 due to rounding error
+    # Divide by 1000 because time conversion function will go through
+    # milliseconds (e.g. see the conversion from seconds to dates in
+    # write_field!)
+    t = ITime(
+        div(2^53, 1000),
+        period = Dates.Second(1),
+        epoch = Dates.DateTime(2010, 1),
+    )
+    Writers.interpolate_field!(writer, field, diagnostic, u, p, t)
+    Writers.write_field!(writer, field, diagnostic, u, p, t)
+
+    NCDatasets.NCDataset(joinpath(output_dir, "timetest.nc")) do nc
+        times = nc["time"][:]
+        @test eltype(times) == Float64
+        @test Dates.Second(Dates.Millisecond(round(1000 * times[1]))) ==
+              Dates.Second(20_995_200)
+
+        @test Dates.Second(Dates.Millisecond(round(1000 * times[2]))) ==
+              Dates.Second(div(2^53, 1000))
+    end
 end

@@ -342,10 +342,12 @@ function write_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
 
     nc = writer.open_files[output_path]
 
+    # Save as associated float if t is ITime
+    TT = typeof(float(t))
     # Define time coordinate
     add_time_maybe!(
         nc,
-        FT;
+        TT;
         units = "s",
         axis = "T",
         standard_name = "time",
