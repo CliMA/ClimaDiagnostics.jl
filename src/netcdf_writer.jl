@@ -371,6 +371,19 @@ function write_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
         start_date = writer.start_date
     end
 
+    add_time_bounds_maybe!(
+        nc,
+        TT;
+        comments = "time bounds for each time value",
+        units = "s",
+    )
+
+    isnothing(start_date) || add_date_bounds_maybe!(
+        nc;
+        comments = "date bounds for each date value",
+        units = "seconds since $start_date",
+    )
+
     if haskey(nc, "$(var.short_name)")
         # We already have something in the file
         v = nc["$(var.short_name)"]
@@ -401,13 +414,20 @@ function write_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
 
     # TODO: Use ITime here
     nc["time"][time_index] = float(t)
+    nc["time_bnds"][:, time_index] =
+        time_index == 1 ? [zero(float(t)); float(t)] :
+        [nc["time"][time_index - 1]; float(t)]
 
     # FIXME: We are hardcoding p.start_date !
     # FIXME: We are rounding t
     if !isnothing(start_date)
         # TODO: Use ITime here
-        nc["date"][time_index] =
-            string(start_date + Dates.Millisecond(round(1000 * float(t))))
+        curr_date = start_date + Dates.Millisecond(round(1000 * float(t)))
+        date_type = typeof(curr_date) # not necessarily a Dates.DateTime
+        nc["date"][time_index] = string(curr_date)
+        nc["date_bnds"][:, time_index] =
+            time_index == 1 ? [start_date; curr_date] :
+            [date_type(nc["date"][time_index - 1]); curr_date]
     end
 
     # TODO: It would be nice to find a cleaner way to do this
