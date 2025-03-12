@@ -1,4 +1,18 @@
 # NEWS
+v0.2.13
+-------
+
+## Features
+
+### Add time and date bounds for netCDF files
+In a netCDF file produced by ClimaDiagnostics, there are now the dimensions
+`time_bnds` and `date_bnds`. Each time or date value is a representative of the
+corresponding time or date bound. For example, if the time is `10.0` and
+corresponding time bound is `[0.0, 10.0]`, then the time of `10.0` represents
+the interval `[0.0, 10.0]`. If one knows that the data represents a time
+average, then the time of `10.0` is the time average over the interval
+`[0.0, 10.0]`.
+
 v0.2.12
 -------
 
