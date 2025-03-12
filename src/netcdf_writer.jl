@@ -141,7 +141,10 @@ function NetCDFWriter(
 
             num_vpts = Meshes.nelements(Grids.vertical_topology(space).mesh)
 
-            @warn "Disabling vertical interpolation, the provided number of points is ignored (using $num_vpts)"
+            # For any configuration, it is reasonable to assume that the last
+            # value of `num_pts` is the number of vertical points
+            last(num_points) != num_vpts &&
+                @warn "Disabling vertical interpolation, the provided number of points is ignored (using $num_vpts)"
             num_points =
                 Tuple([num_points[1:num_horiz_dimensions]..., num_vpts])
         end
