@@ -13,7 +13,14 @@ include("reduction_identities.jl")
 A struct that contains the scheduled diagnostics, ancillary data and areas of memory needed
 to store and accumulate results.
 """
-struct DiagnosticsHandler{SD, V <: Vector{Int}, STORAGE, ACC <: Dict, COUNT}
+struct DiagnosticsHandler{
+    SD,
+    V <: Vector{Int},
+    STORAGE,
+    ACC <: Dict,
+    COUNT,
+    BROAD,
+}
     """An iterable with the `ScheduledDiagnostic`s that are scheduled."""
     scheduled_diagnostics::SD
 
@@ -31,6 +38,11 @@ struct DiagnosticsHandler{SD, V <: Vector{Int}, STORAGE, ACC <: Dict, COUNT}
     """Container holding a counter that tracks how many times the given
     diagnostics was computed from the last time it was output to disk."""
     counters::COUNT
+
+    """Dictionary that maps a given `ScheduledDiagnostic` to a Base.Broadcast.Broadcasted
+    object. This is used to allow lazy evaluation of expressions, which can lead to reduced
+    code verbosity and improved performance."""
+    broadcasted_expressions::BROAD
 end
 
 """
@@ -55,9 +67,10 @@ end
 
 An object to instantiate and manage storage spaces for `ScheduledDiagnostics`.
 
-The `DiagnosticsHandler` calls `compute!(nothing, Y, p, t)` for each diagnostic. The result
-is used to allocate the areas of memory for storage and accumulation. For diagnostics
-without reduction, `write_field!(output_writer, result, diagnostic, Y, p, t)` is called too.
+The `DiagnosticsHandler` calls `compute!(nothing, Y, p, t)` for each diagnostic, or
+`compute(Y, p, t)`, whichever is available. The result is used to allocate the areas of
+memory for storage and accumulation. For diagnostics without reduction,
+`write_field!(output_writer, result, diagnostic, Y, p, t)` is called too.
 
 Note: initializing a `DiagnosticsHandler` can be expensive.
 
@@ -78,9 +91,13 @@ function DiagnosticsHandler(scheduled_diagnostics, Y, p, t; dt = nothing)
     counters = Int[]
     scheduled_diagnostics_keys = Int[]
 
-    # NOTE: unique requires isequal and hash to both be implemented. We don't
-    # really want to do that. So, we roll our own unique. This is O(N^2) but it
-    # is run only once, so it should be fine.
+    # broadcasted_expressions contains the un-evaluated expressions, which are then
+    # materialized and moved to storage
+    broadcasted_expressions = Dict()
+
+    # NOTE: unique requires isequal and hash to both be implemented. We don't really want to
+    # do that (implement the hash). So, we roll our own `unique`. This is O(N^2) but it is run
+    # only once, so it should be fine.
     seen = []
     unique_scheduled_diagnostics = []
     for x in scheduled_diagnostics
@@ -118,10 +135,39 @@ function DiagnosticsHandler(scheduled_diagnostics, Y, p, t; dt = nothing)
         variable = diag.variable
         isa_time_reduction = !isnothing(diag.reduction_time_func)
 
-        # The first time we call compute! we use its return value. All the subsequent times
-        # (in the callbacks), we will write the result in place. We call copy to acquire ownership
-        # of the data in case compute! returned a reference.
-        push!(storage, copy(variable.compute!(nothing, Y, p, t)))
+        # We have three cases:
+
+        # 1. The diagnostic has `compute!`. In this case, the first time we call compute! we
+        # use its return value. All the subsequent times (in the callbacks), we will write
+        # the result in place.
+        #
+        # 2a. The diagnostic has a `compute` function that returns a `Field`. In this case,
+        # we can directly copy over the result.
+        #
+        # 2b. The diagnostic has a `compute` function that returns a
+        # `Base.Broadcast.Broadcasted` (when using LazyBroadcast.jl). In this case, we have
+        # to manually materialize the result.
+
+        has_inplace_compute = !isnothing(variable.compute!)
+
+        if has_inplace_compute
+            # Case 1
+            out_field = variable.compute!(nothing, Y, p, t)
+        else
+            out_or_broadcasted_expr = variable.compute(Y, p, t)
+            if out_or_broadcasted_expr isa Base.Broadcast.Broadcasted
+                # Case 2b
+                broadcasted_expressions[diag] = out_or_broadcasted_expr
+                out_field = Base.Broadcast.materialize(out_or_broadcasted_expr)
+            else
+                # Case 2a
+                out_field = out_or_broadcasted_expr
+            end
+        end
+
+        # We call `copy` to acquire ownership of the data in case compute! returned a
+        # reference.
+        push!(storage, copy(out_field))
         push!(counters, 1)
 
         # If it is not a reduction, call the output writer as well
@@ -148,6 +194,7 @@ function DiagnosticsHandler(scheduled_diagnostics, Y, p, t; dt = nothing)
         storage,
         accumulators,
         counters,
+        broadcasted_expressions,
     )
 end
 
@@ -186,13 +233,61 @@ function orchestrate_diagnostics(
         active_compute[diag_index] || continue
         diag = scheduled_diagnostics[diag_index]
 
-        diag.variable.compute!(
-            diagnostic_handler.storage[diag_index],
-            integrator.u,
-            integrator.p,
-            integrator.t,
-        )
         diagnostic_handler.counters[diag_index] += 1
+
+        # We have three cases:
+        #
+        # 1. The variable has an in-place `compute!` function. In this case, we simply
+        # evaluate it and overwrite the associated storage.
+        #
+        # 2a. The variable has a `compute` function that returns a Field. In this case, we
+        # copy it over to the storage.
+        #
+        # 2b. The variable has a `compute` function that returns
+        # `Base.Broadcast.Broadcasted`. In this case, we update the value in our dictionary
+        # and materialize the expression in the next loop.
+
+        has_inplace_compute = !isnothing(diag.variable.compute!)
+        if has_inplace_compute
+            # Case 1
+            diag.variable.compute!(
+                diagnostic_handler.storage[diag_index],
+                integrator.u,
+                integrator.p,
+                integrator.t,
+            )
+        else
+            out_or_broadcasted_expr =
+                diag.variable.compute(integrator.u, integrator.p, integrator.t)
+
+            if out_or_broadcasted_expr isa Base.Broadcast.Broadcasted
+                # Case 2b
+                diagnostic_handler.broadcasted_expressions[diag] =
+                    out_or_broadcasted_expr
+            else
+                # Case 2a
+                diagnostic_handler.storage[diag_index] .=
+                    out_or_broadcasted_expr
+            end
+        end
+    end
+
+    # Evaluate the lazy compute (aka, materialize everything)
+    for diag_index in 1:length(scheduled_diagnostics)
+        active_compute[diag_index] || continue
+        diag = scheduled_diagnostics[diag_index]
+        haskey(diagnostic_handler.broadcasted_expressions, diag) || continue
+
+        Base.Broadcast.materialize!(
+            diagnostic_handler.storage[diag_index],
+            diagnostic_handler.broadcasted_expressions[diag],
+        )
+    end
+
+    # Process possible time reductions (now we have evaluated storage[diag])
+    for diag_index in 1:length(scheduled_diagnostics)
+        active_compute[diag_index] || continue
+        diag = scheduled_diagnostics[diag_index]
 
         isa_time_reduction = !isnothing(diag.reduction_time_func)
         if isa_time_reduction
