@@ -22,4 +22,12 @@ import ClimaDiagnostics.DiagnosticVariables
 
     @test DiagnosticVariables.short_name(var) == ""
 
+    # Passing both compute and compute!
+    @test_throws ErrorException DiagnosticVariables.DiagnosticVariable(;
+        compute! = (out, u, p, t) -> 1,
+        compute = (u, p, t) -> 1,
+    )
+
+    # Passing no compute or compute!
+    @test_throws ErrorException DiagnosticVariables.DiagnosticVariable(;)
 end
