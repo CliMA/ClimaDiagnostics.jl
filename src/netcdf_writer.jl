@@ -355,6 +355,7 @@ function write_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
         axis = "T",
         standard_name = "time",
         long_name = "Time",
+        bounds = "time_bnds",
     )
 
     dim_names = add_space_coordinates_maybe!(
@@ -373,11 +374,24 @@ function write_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
     else
         start_date = writer.start_date
     end
+
+    add_time_bounds_maybe!(
+        nc,
+        TT;
+        comments = "time bounds for each time value",
+        units = "s",
+    )
+
     if !isnothing(start_date)
         add_date_maybe!(
             nc;
             units = "seconds since $start_date",
             bounds = "date_bnds",
+        )
+        add_date_bounds_maybe!(
+            nc;
+            comments = "date bounds for each date value",
+            units = "seconds since $start_date",
         )
     end
 
@@ -411,6 +425,9 @@ function write_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
 
     # TODO: Use ITime here
     nc["time"][time_index] = float(t)
+    nc["time_bnds"][:, time_index] =
+        time_index == 1 ? [zero(float(t)); float(t)] :
+        [nc["time"][time_index - 1]; float(t)]
 
     # FIXME: We are hardcoding p.start_date !
     # FIXME: We are rounding t
@@ -419,6 +436,9 @@ function write_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
         curr_date = start_date + Dates.Millisecond(round(1000 * float(t)))
         date_type = typeof(curr_date) # not necessarily a Dates.DateTime
         nc["date"][time_index] = curr_date
+        nc["date_bnds"][:, time_index] =
+            time_index == 1 ? [start_date; curr_date] :
+            [date_type(nc["date"][time_index - 1]); curr_date]
     end
 
     # TODO: It would be nice to find a cleaner way to do this

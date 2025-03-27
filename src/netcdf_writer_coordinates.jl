@@ -132,6 +132,49 @@ function add_date_maybe!(nc::NCDatasets.NCDataset; kwargs...)
         dim.attrib[String(k)] = v
     end
 end
+
+"""
+    add_time_bounds_maybe!(nc::NCDatasets.NCDataset,
+                           float_type::Type{FT};
+                           kwargs...)
+
+Add the `time_bnds` dimension (with infinite size) to the given NetCDF file if
+not already there. Optionally, add all the keyword arguments as attributes.
+
+This function is meant to be called after `add_time_maybe!`.
+"""
+function add_time_bounds_maybe!(
+    nc::NCDatasets.NCDataset,
+    float_type::Type{FT};
+    kwargs...,
+) where {FT}
+    haskey(nc, "time_bnds") && return nothing
+    !haskey(nc, "time") && error(
+        "Time dimension does not exist. Call add_time_maybe! before calling this function",
+    )
+    !("nv" in NCDatasets.dimnames(nc)) && NCDatasets.defDim(nc, "nv", 2) # number of vertices
+    dim = NCDatasets.defVar(nc, "time_bnds", FT, ("nv", "time"))
+    for (k, v) in kwargs
+        dim.attrib[String(k)] = v
+    end
+    return nothing
+end
+
+"""
+    add_date_bounds_maybe!(nc::NCDatasets.NCDataset; kwargs...)
+
+Add the `date_bnds` dimension (with infinite size) to the given NetCDF file if
+not already there. Optionally, add all the keyword arguments as attributes.
+
+This function is meant to be called after `add_time_maybe!`.
+"""
+function add_date_bounds_maybe!(nc::NCDatasets.NCDataset; kwargs...)
+    haskey(nc, "date_bnds") && return nothing
+    !haskey(nc, "date") && error(
+        "Time dimension does not exist. Call add_time_maybe! before calling this function",
+    )
+    !("nv" in NCDatasets.dimnames(nc)) && NCDatasets.defDim(nc, "nv", 2) # number of vertices
+    dim = NCDatasets.defVar(nc, "date_bnds", Float64, ("nv", "time"))
     for (k, v) in kwargs
         dim.attrib[String(k)] = v
     end
