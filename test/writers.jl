@@ -107,6 +107,13 @@ end
         @test nc["lat"].attrib["standard_name"] == "latitude"
         @test nc["lat"].attrib["long_name"] == "Latitude"
         @test nc["lat"].attrib["axis"] == "Y"
+
+        # Test bounds
+        @test nc["time_bnds"][:, 1] == [0.0; 10.0]
+        @test nc["date_bnds"][:, 1] == [
+            Dates.DateTime(1453, 5, 29)
+            Dates.DateTime(1453, 5, 29) + Dates.Second(10.0)
+        ]
     end
 
     # Disable vertical interpolation
