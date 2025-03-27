@@ -98,8 +98,6 @@ end
 
 Add the `time` dimension (with infinite size) to the given NetCDF file if not already there.
 Optionally, add all the keyword arguments as attributes.
-
-Also add a `date` dataset (as a string).
 """
 function add_time_maybe!(
     nc::NCDatasets.NCDataset,
@@ -112,7 +110,28 @@ function add_time_maybe!(
 
     NCDatasets.defDim(nc, "time", Inf)
     dim = NCDatasets.defVar(nc, "time", FT, ("time",))
-    NCDatasets.defVar(nc, "date", String, ("time",))
+    for (k, v) in kwargs
+        dim.attrib[String(k)] = v
+    end
+    return nothing
+end
+
+"""
+    add_date_maybe!(nc::NCDatasets.NCDataset,
+                    kwargs...)
+
+Add the `date` dimension (with infinite size) to the given NetCDF file if not already there.
+Optionally, add all the keyword arguments as attributes.
+"""
+function add_date_maybe!(nc::NCDatasets.NCDataset; kwargs...)
+    haskey(nc, "date") && return nothing
+    !haskey(nc, "time") &&
+        error("`add_date_maybe!` is meant to be called after `add_time_maybe!`")
+    dim = NCDatasets.defVar(nc, "date", Float64, ("time",))
+    for (k, v) in kwargs
+        dim.attrib[String(k)] = v
+    end
+end
     for (k, v) in kwargs
         dim.attrib[String(k)] = v
     end

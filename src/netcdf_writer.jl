@@ -373,6 +373,13 @@ function write_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
     else
         start_date = writer.start_date
     end
+    if !isnothing(start_date)
+        add_date_maybe!(
+            nc;
+            units = "seconds since $start_date",
+            bounds = "date_bnds",
+        )
+    end
 
     if haskey(nc, "$(var.short_name)")
         # We already have something in the file
@@ -409,8 +416,9 @@ function write_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
     # FIXME: We are rounding t
     if !isnothing(start_date)
         # TODO: Use ITime here
-        nc["date"][time_index] =
-            string(start_date + Dates.Millisecond(round(1000 * float(t))))
+        curr_date = start_date + Dates.Millisecond(round(1000 * float(t)))
+        date_type = typeof(curr_date) # not necessarily a Dates.DateTime
+        nc["date"][time_index] = curr_date
     end
 
     # TODO: It would be nice to find a cleaner way to do this
