@@ -24,6 +24,7 @@ ClimaUtilities = "0.1.22"
 Dates = "1"
 Documenter = "1"
 ExplicitImports = "1.6"
+LazyBroadcast = "1"
 JuliaFormatter = "1"
 NCDatasets = "0.14"
 OrderedCollections = "1.4"
@@ -41,10 +42,11 @@ ClimaTimeSteppers = "595c0a79-7f3d-439a-bc5a-b232dc3bde79"
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 ExplicitImports = "7d51a73a-1435-4ff3-83d9-f097790105c7"
 JuliaFormatter = "98e50ef6-434e-11e9-1051-2b60c6c9e899"
+LazyBroadcast = "9dccce8e-a116-406d-9fcc-a88ed4f510c8"
 Profile = "9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"
 ProfileCanvas = "efd6af41-a80b-495e-886c-e51b0c7d77a3"
 SafeTestsets = "1bc83da4-3b8d-516f-aca4-4fe02f6d838f"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Aqua", "BenchmarkTools", "ClimaTimeSteppers", "Documenter", "ExplicitImports", "JuliaFormatter", "Profile", "ProfileCanvas", "SafeTestsets", "Test"]
+test = ["Aqua", "BenchmarkTools", "ClimaTimeSteppers", "Documenter", "ExplicitImports", "JuliaFormatter", "LazyBroadcast", "Profile", "ProfileCanvas", "SafeTestsets", "Test"]

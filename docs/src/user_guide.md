@@ -37,12 +37,8 @@ Let us see how we would define a `DiagnosticVariable`
 ```julia
 import ClimaDiagnostics: DiagnosticVariable
 
-function compute_ta!(out, state, cache, time)
-    if isnothing(out)
-        return state.ta
-    else
-        out .= state.ta
-    end
+function compute_ta(state, cache, time)
+    return state.ta
 end
 
 var = DiagnosticVariable(;
@@ -51,25 +47,66 @@ var = DiagnosticVariable(;
     standard_name = "air_temperature",
     comments = "Measured assuming that the air is in quantum equilibrium with the metaverse",
     units = "K",
-    compute! = compute_ta!
+    compute = compute_ta
 )
 ```
 
-`compute_ta!` is the key function here. It determines how the variable should be
+`compute_ta` is the key function here. It determines how the variable should be
 computed from the `state`, `cache`, and `time` of the simulation. Typically,
 these are packaged within an `integrator` object (e.g., `state = integrator.u`
 or `integrator.Y`).
 
-`compute_ta!` takes another argument, `out`. `out` is an area of memory managed
-by `ClimaDiagnostics` that is used to reduce the number of allocations needed
-when working with diagnostics. The first time the diagnostic is called, an area
-of memory is allocated and filled with the value (this is when `out` is
-`nothing`). All the subsequent times, the same space is overwritten, leading to
-much better performance. You should follow this pattern in all your diagnostics.
+!!! compat "ClimaDiagnostics 0.2.13"
 
-> Note, in the future, we hope to improve this rather clumsy way to write
-> diagnostics. Hopefully, at some point you will just have to write something like
-> `state.ta` and not worry about the `out` at all.
+    Support for `compute` was introduced in version `0.2.13`. Prior to this
+    version, the in-place `compute!` had to be provided. In this case, `compute`
+    has to take an extra argument, `out`. `out` is an area of memory managed by
+    `ClimaDiagnostics` that is used to reduce the number of allocations needed
+    when working with diagnostics. The first time the diagnostic is called, an
+    area of memory is allocated and filled with the value (this is when `out` is
+    `nothing`). All the subsequent times, the same space is overwritten, leading
+    to much better performance. You should follow this pattern in all your
+    diagnostics. This is left to developer to implement, so `compute_ta` would
+    look like
+
+    ```julia
+    function compute_ta!(out, state, cache, time)
+        if isnothing(out)
+            return state.ta
+        else
+            out .= state.ta
+        end
+    end
+    ```
+
+    In general, we do not recommend implementing `compute!`, unless required for
+    backward compatibility.
+
+When the expression is anything more complicated than just returning a `Field`,
+it is best to return an unevaluated expression represented by a
+`Base.Broadcast.Broadcasted` object (such as the ones produced with
+[LazyBroadcast.jl](https://github.com/CliMA/LazyBroadcast.jl)). Consider the
+following example where we want to shift the temperature to Celsius:
+```julia
+function compute_ta(state, cache, time)
+    return state.ta .- 273.15
+end
+```
+
+This `compute` function is inefficient because it allocates an entire `Field`
+before returning it. Instead, we can return just a recipe on how the diagnostic
+should be computed: Using `LazyBroadcast.jl`, the snippet above can be rewritten
+as
+```julia
+import LazyBroadcast: lazy
+
+function compute_ta(state, cache, time)
+    return lazy.(state.ta .- 273.15)
+end
+```
+The return value of `compute_ta` is a `Base.Broadcast.Broadcasted` object and
+`ClimaDiagnostics` knows how to handle it efficiently, avoiding the intermediate
+allocations.
 
 A `DiagnosticVariable` defines what a variable is and how to compute it, but
 does not specify when to compute/output it. For that, we need

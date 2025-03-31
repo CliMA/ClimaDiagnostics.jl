@@ -24,14 +24,21 @@ metadata and their use.
 In `ClimaAtmos`, we roughly follow the naming conventions listed in this file:
 https://airtable.com/appYNLuWqAgzLbhSq/shrKcLEdssxb8Yvcp/tblL7dJkC3vl5zQLb
 
+!!! compat "ClimaDiagnostics 0.2.13"
+
+    Support for `compute` was introduced in version `0.2.13`. Prior to this version, the
+    in-place `compute!` had to be provided.
+
 Keyword arguments
 =================
 
-- `compute!`: Function that compute the diagnostic variable from the state. It has to take
-              two arguments: the `integrator`, and a pre-allocated area of memory where to
-              write the result of the computation. It the no pre-allocated area is
-              available, a new one will be allocated. To avoid extra allocations, this
-              function should perform the calculation in-place (i.e., using `.=`).
+- `compute!`: Function that computes the diagnostic variable from the `state`, `cache`, and
+              `time`. In addition to these three arguments, `compute!` has to take four
+              arguments, the destination where to write the result of the computation.
+
+- `compute`: Function that computes the diagnostic variable from the `state`, `cache`, and
+             `time` and returns either a `Field` or an un-evaluated expression (e.g., with
+             `LazyBroadcast.lazy`).
 
 - `short_name`: Name used to identify the variable in the output files and in the file
                 names. Short but descriptive. `ClimaAtmos` follows the CMIP conventions and
@@ -47,13 +54,45 @@ Keyword arguments
 - `comments`: More verbose explanation of what the variable is, or comments related to how
               it is defined or computed.
 """
-Base.@kwdef struct DiagnosticVariable{T <: Function}
-    compute!::T
-    short_name::String = ""
-    long_name::String = ""
-    standard_name::String = ""
-    units::String = ""
-    comments::String = ""
+struct DiagnosticVariable{
+    F1 <: Union{Function, Nothing},
+    F2 <: Union{Function, Nothing},
+}
+    compute!::F1
+    compute::F2
+    short_name::String
+    long_name::String
+    standard_name::String
+    units::String
+    comments::String
+end
+
+function DiagnosticVariable(;
+    compute = nothing,
+    compute! = nothing,
+    short_name = "",
+    long_name = "",
+    standard_name = "",
+    units = "",
+    comments = "",
+)
+    only_one_compute_provided = xor(isnothing(compute), isnothing(compute!))
+
+    if !only_one_compute_provided
+        error(
+            "One and only one between `compute` and `compute!` has to be provided",
+        )
+    end
+
+    return DiagnosticVariable(
+        compute!,
+        compute,
+        short_name,
+        long_name,
+        standard_name,
+        units,
+        comments,
+    )
 end
 
 """

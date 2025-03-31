@@ -1,4 +1,5 @@
 # NEWS
+
 v0.2.13
 -------
 
@@ -12,6 +13,37 @@ corresponding time bound is `[0.0, 10.0]`, then the time of `10.0` represents
 the interval `[0.0, 10.0]`. If one knows that the data represents a time
 average, then the time of `10.0` is the time average over the interval
 `[0.0, 10.0]`.
+
+### Support for `lazy`
+
+Starting version `0.2.13`, `ClimaDiagnostics` supports diagnostic variables
+specified with un-evaluated expressions (as provided by
+[LazyBroadcast.jl](https://github.com/CliMA/LazyBroadcast.jl)).
+
+Instead of
+```julia
+function compute_ta!(out, state, cache, time)
+    if isnothing(out)
+        return state.ta .- 273.15
+    else
+        out .= state.ta .- 273.15
+    end
+end
+```
+You can now write
+```julia
+import LazyBroadcast: lazy
+
+function compute_ta(state, cache, time)
+    return lazy.(state.ta .- 273.15)
+end
+```
+Or, for `Field`s
+```julia
+function compute_ta(state, cache, time)
+    return state.ta
+end
+```
 
 v0.2.12
 -------
@@ -129,6 +161,7 @@ v0.2.4
 -------
 
 - Add `EveryCalendarDtSchedule` for schedules with calendar periods.
+
 
 v0.2.3
 -------
