@@ -105,7 +105,7 @@ Let us see the simplest example to accomplish this
 import ClimaDiagnostics: DiagnosticVariable, ScheduledDiagnostic
 import ClimaDiagnostics.Writers: DictWriter
 
-myvar = DiagnosticVariable(; compute! = (out, u, p, t) -> u.var1)
+myvar = DiagnosticVariable(; compute = (u, p, t) -> u.var1)
 
 myschedule = (integrator) -> maximum(integrator.u.var2) > 10.0
 
@@ -148,7 +148,7 @@ const ALL_DIAGNOSTICS = Dict{String, DiagnosticVariable}()
                                standard_name,
                                units,
                                description,
-                               compute!)
+                               compute)
 
 
 Add a new variable to the `ALL_DIAGNOSTICS` dictionary (this function mutates the state of
@@ -173,12 +173,10 @@ Keyword arguments
 - `comments`: More verbose explanation of what the variable is, or comments related to how
               it is defined or computed.
 
-- `compute!`: Function that compute the diagnostic variable from the state. It has to take
-              two arguments: the `integrator`, and a pre-allocated area of memory where to
-              write the result of the computation. It the no pre-allocated area is
-              available, a new one will be allocated. To avoid extra allocations, this
-              function should perform the calculation in-place (i.e., using `.=`).
-
+- `compute`: Function that computes the diagnostic variable from the state, cache, and time. The function
+             should return a `Field` or a `Base.Broadcast.Broadcasted` expression. It should not allocate
+             new `Field`: if you find yourself using a dot, that is a good indication you should be using
+             `lazy`.
 """
 function add_diagnostic_variable!(;
     short_name,
@@ -186,14 +184,14 @@ function add_diagnostic_variable!(;
     standard_name = "",
     units,
     comments = "",
-    compute!,
+    compute,
 )
     haskey(ALL_DIAGNOSTICS, short_name) && @warn(
         "overwriting diagnostic `$short_name` entry containing fields\n" *
         "$(map(
             field -> "$(getfield(ALL_DIAGNOSTICS[short_name], field))",
             # We cannot really compare functions...
-            filter(field -> field != :compute!, fieldnames(DiagnosticVariable)),
+            filter(field -> !(field in (:compute!, :compute)), fieldnames(DiagnosticVariable)),
         ))"
     )
 
@@ -203,7 +201,7 @@ function add_diagnostic_variable!(;
         standard_name,
         units,
         comments,
-        compute!,
+        compute,
     )
 
 """
@@ -236,15 +234,30 @@ add_diagnostic_variable!(
     long_name = "Air Density",
     standard_name = "air_density",
     units = "kg m^-3",
-    compute! = (out, state, cache, time) -> begin
-        if isnothing(out)
-            return state.c.ρ
-        else
-            out .= state.c.ρ
-        end
-    end,
+    compute = (state, cache, time) -> state.c.ρ,
 )
 ```
+
+When writing compute functions, make them lazy with
+[LazyBroadcast.jl](https://github.com/CliMA/LazyBroadcast.jl) to improve
+performance and avoid intermediate allocations. To do that, add `LazyBroadcast`
+to your dependencies and import `lazy`. A slight variation of the previous
+example would look like
+
+```julia
+###
+# Density (3d)
+###
+add_diagnostic_variable!(
+    short_name = "rhoa",
+    long_name = "Air Density",
+    standard_name = "air_density",
+    units = "kg m^-3",
+    compute = (state, cache, time) -> lazy.(1000 .* state.c.ρ),
+)
+```
+Where we added the `1000` to simulate a more complex expression. If you didn't have
+`lazy`, the diagnostic would allocate an intermediate `Field`, severly hurting performance.
 
 It is a good idea to put safeguards in place to ensure that your users will not
 be allowed to call diagnostics that do not make sense for the simulation they
@@ -254,26 +267,21 @@ can dispatch over that and return an error. A simple example might be
 ###
 # Specific Humidity
 ###
-compute_hus!(out, state, cache, time) =
-    compute_hus!(out, state, cache, time, cache.atmos.moisture_model)
+compute_hus(state, cache, time) =
+    compute_hus(state, cache, time, cache.atmos.moisture_model)
 
-compute_hus!(out, state, cache, time) =
-    compute_hus!(out, state, cache, time, cache.model.moisture_model)
-compute_hus!(_, _, _, _, model::T) where {T} =
+compute_hus(state, cache, time) =
+    compute_hus!(state, cache, time, cache.model.moisture_model)
+compute_hus(_, _, _, model::T) where {T} =
     error("Cannot compute hus with $model")
 
-function compute_hus!(
-    out,
+function compute_hus(
     state,
     cache,
     time,
     moisture_model::T,
 ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
-    if isnothing(out)
-        return state.c.ρq_tot ./ state.c.ρ
-    else
-        out .= state.c.ρq_tot ./ state.c.ρ
-    end
+    return lazy.(state.c.ρq_tot ./ state.c.ρ)
 end
 
 add_diagnostic_variable!(
@@ -282,7 +290,7 @@ add_diagnostic_variable!(
     standard_name = "specific_humidity",
     units = "kg kg^-1",
     comments = "Mass of all water phases per mass of air",
-    compute! = compute_hus!,
+    compute = compute_hus,
 )
 ```
 This relies on dispatching over `moisture_model`. If `model` is not in
