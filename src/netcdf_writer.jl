@@ -121,7 +121,7 @@ Keyword arguments
 function NetCDFWriter(
     space::Spaces.AbstractSpace,
     output_dir;
-    num_points = (180, 90, 50),
+    num_points = default_num_points(space),
     compression_level = 9,
     sync_schedule = ClimaComms.device(space) isa ClimaComms.CUDADevice ?
                     EveryStepSchedule() : nothing,
@@ -149,7 +149,7 @@ function NetCDFWriter(
                 Spaces.horizontal_space(space) isa
                 Spaces.SpectralElementSpace1D ? 1 : 2
 
-            num_vpts = Meshes.nelements(Grids.vertical_topology(space).mesh)
+            num_vpts = Spaces.nlevels(space)
 
             # For any configuration, it is reasonable to assume that the last
             # value of `num_pts` is the number of vertical points
@@ -214,7 +214,7 @@ end
 function NetCDFWriter(
     space::Spaces.Spaces.FiniteDifferenceSpace,
     output_dir;
-    num_points = (180, 90, 50),
+    num_points = default_num_points(space),
     compression_level = 9,
     sync_schedule = ClimaComms.device(space) isa ClimaComms.CUDADevice ?
                     EveryStepSchedule() : nothing,
@@ -222,8 +222,9 @@ function NetCDFWriter(
     start_date = nothing,
 )
     if z_sampling_method isa LevelsMethod
-        num_vpts = Meshes.nelements(Grids.vertical_topology(space).mesh)
-        @warn "Disabling vertical interpolation, the provided number of points is ignored (using $num_vpts)"
+        num_vpts = Spaces.nlevels(ClimaCore.Spaces.center_space(space))
+        num_vpts == last(num_points) ||
+            @warn "Disabling vertical interpolation, the provided number of points is ignored (using $num_vpts)"
         num_points = (num_vpts,)
     end
     vpts = target_coordinates(space, num_points, z_sampling_method)

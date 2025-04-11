@@ -15,6 +15,8 @@ Writers can implement:
 """
 module Writers
 
+import ClimaCore
+
 import ..AbstractWriter, ..ScheduledDiagnostic
 import ..ScheduledDiagnostics: output_short_name, output_long_name
 

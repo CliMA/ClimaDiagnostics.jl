@@ -10,6 +10,7 @@ import ClimaCore
 import ClimaCore.Fields
 import ClimaCore.Spaces
 import ClimaCore.Geometry
+import ClimaCore.CommonSpaces
 import ClimaComms
 
 import ClimaDiagnostics
@@ -38,6 +39,51 @@ output_dir = mktempdir(pwd())
 end
 
 @testset "NetCDFWriter" begin
+    @testset "default_num_points" begin
+        @test Writers.default_num_points(
+            CommonSpaces.ExtrudedCubedSphereSpace(;
+                z_elem = 10,
+                z_min = 0,
+                z_max = 1,
+                radius = 10,
+                h_elem = 10,
+                n_quad_points = 4,
+                staggering = CommonSpaces.CellCenter(),
+            ),
+        ) == (120, 60, 10)
+
+        @test Writers.default_num_points(
+            CommonSpaces.SliceXZSpace(;
+                z_elem = 10,
+                x_min = 0,
+                x_max = 1,
+                z_min = 0,
+                z_max = 1,
+                periodic_x = false,
+                n_quad_points = 4,
+                x_elem = 4,
+                staggering = CommonSpaces.CellCenter(),
+            ),
+        ) == (12, 10)
+        @test Writers.default_num_points(
+            CommonSpaces.Box3DSpace(;
+                z_elem = 10,
+                x_min = 0,
+                x_max = 1,
+                y_min = 0,
+                y_max = 1,
+                z_min = 0,
+                z_max = 10,
+                periodic_x = false,
+                periodic_y = false,
+                n_quad_points = 4,
+                x_elem = 3,
+                y_elem = 4,
+                staggering = CommonSpaces.CellCenter(),
+            ),
+        ) == (9, 12, 10)
+    end
+
     space = SphericalShellSpace()
     field = Fields.coordinate_field(space).z
 
