@@ -14,6 +14,14 @@ the interval `[0.0, 10.0]`. If one knows that the data represents a time
 average, then the time of `10.0` is the time average over the interval
 `[0.0, 10.0]`.
 
+### NetCDF writer now defaults to a reasonable number of points
+
+`ClimaDiagnostics.Writers.NetCDF` now has a new default argument that depends on
+the input Space. With this new default, obtained by calling the
+`ClimaDiagnostics.Writers.default_num_points(space)` function, the output
+diagnostics will be sampled with approximately the same resolution as the given
+`space`.
+
 ### Support for `lazy`
 
 Starting version `0.2.13`, `ClimaDiagnostics` supports diagnostic variables
