@@ -1,5 +1,13 @@
 # NEWS
 
+v0.2.14
+-------
+
+## Bug fixes
+
+Fixed the default target coordinates for the `NetCDFWriter` for boxes with only
+one point in the horizontal space.
+
 v0.2.13
 -------
 
