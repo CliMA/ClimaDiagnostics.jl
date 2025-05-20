@@ -318,8 +318,17 @@ function target_coordinates(
     xmax = Geometry.tofloat(domain.interval1.coord_max)
     ymin = Geometry.tofloat(domain.interval2.coord_min)
     ymax = Geometry.tofloat(domain.interval2.coord_max)
-    xpts = collect(range(xmin, xmax, num_points_x))
-    ypts = collect(range(ymin, ymax, num_points_y))
+    # Case of box with one single point
+    if num_points_x == 1
+        xpts = [(xmax + xmin) / 2]
+    else
+        xpts = collect(range(xmin, xmax, num_points_x))
+    end
+    if num_points_y == 1
+        ypts = [(ymax + ymin) / 2]
+    else
+        ypts = collect(range(ymin, ymax, num_points_y))
+    end
     return (xpts, ypts)
 end
 
