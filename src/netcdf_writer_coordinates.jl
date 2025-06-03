@@ -503,7 +503,7 @@ function add_space_coordinates_maybe!(
         add_space_coordinates_maybe!(nc, horizontal_space, num_points_horiz)
 
     vertical_space = Spaces.FiniteDifferenceSpace(
-        Spaces.vertical_topology(space),
+        Spaces.grid(space).vertical_grid,
         Spaces.staggering(space),
     )
 
@@ -611,7 +611,7 @@ function target_coordinates(
         target_coordinates(Spaces.horizontal_space(space), num_points_horiz)
 
     vertical_space = Spaces.FiniteDifferenceSpace(
-        Spaces.vertical_topology(space),
+        Spaces.grid(space).vertical_grid,
         Spaces.staggering(space),
     )
     vcoords =
@@ -681,14 +681,12 @@ Return a tuple with number of points that are optimally suited to interpolate th
 "Optimally suited" here means approximately the same as the number of points as the given
 `space`.
 """
-function default_num_points(
-    space::ClimaCore.Spaces.ExtrudedFiniteDifferenceSpace,
-)
-    horizontal_space = ClimaCore.Spaces.horizontal_space(space)
+function default_num_points(space::Spaces.ExtrudedFiniteDifferenceSpace)
+    horizontal_space = Spaces.horizontal_space(space)
     num_horz = default_num_points(horizontal_space)
 
-    vertical_space = ClimaCore.Spaces.FiniteDifferenceSpace(
-        Spaces.vertical_topology(space),
+    vertical_space = Spaces.FiniteDifferenceSpace(
+        Spaces.grid(space).vertical_grid,
         Spaces.staggering(space),
     )
     num_vert = default_num_points(vertical_space)
@@ -696,18 +694,16 @@ function default_num_points(
 end
 
 # 2D sphere
-function default_num_points(
-    space::ClimaCore.Spaces.CubedSphereSpectralElementSpace2D,
-)
+function default_num_points(space::Spaces.CubedSphereSpectralElementSpace2D)
     # A cubed sphere has 4 panels to cover the range of longitudes, each panel has
     # `num_elements_per_panel` elements, each with `unique_degrees_of_freedom` points. Same
     # for latitudes, except that we need 2 panels to cover from 0 to 180.
 
     unique_degrees_of_freedom = ClimaCore.Quadratures.unique_degrees_of_freedom(
-        ClimaCore.Grids.quadrature_style(space),
+        Grids.quadrature_style(space),
     )
     num_elements_per_panel = ClimaCore.Meshes.n_elements_per_panel_direction(
-        ClimaCore.Spaces.topology(space).mesh,
+        Spaces.topology(space).mesh,
     )
     num_lat = 2 * num_elements_per_panel * unique_degrees_of_freedom
     num_lon = 2num_lat
@@ -715,39 +711,32 @@ function default_num_points(
 end
 
 # TODO: Maybe move to ClimaCore?
-const RectilinearSpectralElementSpace1D =
-    ClimaCore.Spaces.SpectralElementSpace1D{
-        <:ClimaCore.Grids.SpectralElementGrid1D{
-            <:ClimaCore.Topologies.IntervalTopology,
-        },
-    }
+const RectilinearSpectralElementSpace1D = Spaces.SpectralElementSpace1D{
+    <:Grids.SpectralElementGrid1D{<:ClimaCore.Topologies.IntervalTopology},
+}
 
 # 1D box
 function default_num_points(space::RectilinearSpectralElementSpace1D)
     unique_degrees_of_freedom = ClimaCore.Quadratures.unique_degrees_of_freedom(
-        ClimaCore.Grids.quadrature_style(space),
+        Grids.quadrature_style(space),
     )
     return (
         unique_degrees_of_freedom *
-        ClimaCore.Meshes.nelements(ClimaCore.Spaces.topology(space).mesh),
+        ClimaCore.Meshes.nelements(Spaces.topology(space).mesh),
     )
 end
 
 # 2D box
-function default_num_points(
-    space::ClimaCore.Spaces.RectilinearSpectralElementSpace2D,
-)
+function default_num_points(space::Spaces.RectilinearSpectralElementSpace2D)
     unique_degrees_of_freedom = ClimaCore.Quadratures.unique_degrees_of_freedom(
-        ClimaCore.Grids.quadrature_style(space),
+        Grids.quadrature_style(space),
     )
 
     return (
-        unique_degrees_of_freedom * ClimaCore.Meshes.nelements(
-            ClimaCore.Spaces.topology(space).mesh.intervalmesh1,
-        ),
-        unique_degrees_of_freedom * ClimaCore.Meshes.nelements(
-            ClimaCore.Spaces.topology(space).mesh.intervalmesh2,
-        ),
+        unique_degrees_of_freedom *
+        ClimaCore.Meshes.nelements(Spaces.topology(space).mesh.intervalmesh1),
+        unique_degrees_of_freedom *
+        ClimaCore.Meshes.nelements(Spaces.topology(space).mesh.intervalmesh2),
     )
 end
 
@@ -755,5 +744,5 @@ end
 function default_num_points(space::Spaces.FiniteDifferenceSpace)
     # We always want the center space for interpolation
     cspace = Spaces.center_space(space)
-    return (ClimaCore.Spaces.nlevels(cspace),)
+    return (Spaces.nlevels(cspace),)
 end
