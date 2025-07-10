@@ -1,7 +1,8 @@
 import ClimaComms
 import ClimaCore: InputOutput, Spaces
-
 import ClimaUtilities.TimeManager: ITime
+
+import NVTX
 
 """
     HDF5Writer(output_dir)
@@ -37,7 +38,14 @@ The name of the file is determined by the `output_short_name` of the output
 
 `Field`s can be read back using the `InputOutput` module in `ClimaCore`.
 """
-function write_field!(writer::HDF5Writer, field, diagnostic, u, p, t)
+NVTX.@annotate function write_field!(
+    writer::HDF5Writer,
+    field,
+    diagnostic,
+    u,
+    p,
+    t,
+)
     axes(field) isa Spaces.PointSpace &&
         pkgversion(InputOutput) < v"0.14.27" &&
         error(
