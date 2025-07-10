@@ -1,4 +1,5 @@
 import Accessors
+import NVTX
 import SciMLBase
 import ClimaComms
 import ClimaCore: Spaces
@@ -215,7 +216,7 @@ end
 Loop over all the `ScheduledDiagnostics` in `diagnostic_handler` and run compute
 and output according to their schedule functions.
 """
-function orchestrate_diagnostics(
+NVTX.@annotate function orchestrate_diagnostics(
     integrator,
     diagnostic_handler::DiagnosticsHandler,
 )

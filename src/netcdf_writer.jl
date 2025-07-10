@@ -3,10 +3,10 @@ import Dates
 import ClimaCore: Domains, Geometry, Grids, Fields, Meshes, Spaces
 import ClimaCore.Remapping: Remapper, interpolate, interpolate!
 import ..Schedules: EveryStepSchedule
-
 import ClimaUtilities.TimeManager: ITime
 
 import NCDatasets
+import NVTX
 
 # Defines target_coordinates, add_space_coordinates_maybe!, add_time_maybe! for a bunch of
 # Spaces
@@ -310,7 +310,14 @@ end
 
 Perform interpolation of `field` and save output in preallocated areas of `writer`.
 """
-function interpolate_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
+NVTX.@annotate function interpolate_field!(
+    writer::NetCDFWriter,
+    field,
+    diagnostic,
+    u,
+    p,
+    t,
+)
 
     var = diagnostic.variable
 
@@ -414,7 +421,14 @@ Attributes are appended to the dataset:
 - `comments`
 - `start_date`
 """
-function write_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
+NVTX.@annotate function write_field!(
+    writer::NetCDFWriter,
+    field,
+    diagnostic,
+    u,
+    p,
+    t,
+)
     # Only the root process has to write
     ClimaComms.iamroot(ClimaComms.context(field)) || return nothing
 
