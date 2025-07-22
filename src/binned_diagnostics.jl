@@ -20,28 +20,29 @@ Base.Broadcast.broadcastable(bda::BinnedAccumulator) = Ref(bda)
 
 # Constructor for empty binned accumulator from a standard Vector
 function BinnedAccumulator(bin_edges::Vector{T}) where {T}
+    FT = eltype(bin_edges)
     n_edges = length(bin_edges)
     n_bins = n_edges - 1
-    return BinnedAccumulator{T, n_bins, n_edges}(
-        SVector{n_edges}(bin_edges),
-        zeros(SVector{n_bins, T}),
-        zero(T),
+    return BinnedAccumulator{FT, n_bins, n_edges}(
+        SVector{n_edges, FT}(bin_edges),
+        zeros(SVector{n_bins, FT}),
+        FT(0),
     )
 end
 
 # Constructor for resetting the accumulator (used by pre_output_hook!)
-function BinnedAccumulator(bin_edges::SVector{N_EDGES, T}) where {N_EDGES, T}
+function BinnedAccumulator(bin_edges::SVector{N_EDGES, FT}) where {N_EDGES, FT}
     n_bins = N_EDGES - 1
-    return BinnedAccumulator{T, n_bins, N_EDGES}(
+    return BinnedAccumulator{FT, n_bins, N_EDGES}(
         bin_edges,
-        zeros(SVector{n_bins, T}),
-        zero(T),
+        zeros(SVector{n_bins, FT}),
+        FT(0),
     )
 end
 
 # Copy constructor
-function Base.copy(bda::BinnedAccumulator{T, NB, NE}) where {T, NB, NE}
-    return BinnedAccumulator{T, NB, NE}(
+function Base.copy(bda::BinnedAccumulator{FT, NB, NE}) where {FT, NB, NE}
+    return BinnedAccumulator{FT, NB, NE}(
         bda.bin_edges,
         bda.bin_counts,
         bda.total_count,
@@ -152,6 +153,7 @@ function binned_diagnostic(
     compute_schedule,
     output_schedule,
     writer,
+    FT = Float64,
 ) where {T}
 
     # Validate inputs
@@ -172,7 +174,7 @@ function binned_diagnostic(
     )
 
     # Create an instance of our callable reducer, which holds the initial state.
-    initial_accumulator = BinnedAccumulator(bin_edges)
+    initial_accumulator = BinnedAccumulator(FT.(bin_edges))
     reducer = BinnedReducer(initial_accumulator)
 
     # Create the scheduled diagnostic with binned reduction
