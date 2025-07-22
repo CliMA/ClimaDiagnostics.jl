@@ -81,9 +81,9 @@ The reduction function that increments the appropriate histogram bin.
 This function is called element-wise across the diagnostic field.
 """
 function binned_reduction(
-    accumulator::BinnedAccumulator{T, N_BINS, N_EDGES},
-    new_value::T,
-) where {T, N_BINS, N_EDGES}
+    accumulator::BinnedAccumulator{FT, N_BINS, N_EDGES},
+    new_value::FT,
+) where {FT, N_BINS, N_EDGES}
     # Find which bin the new value belongs to
     bin_idx = bin_index(accumulator.bin_edges, new_value)
     isnothing(bin_idx) && return accumulator
@@ -91,14 +91,14 @@ function binned_reduction(
     # SVectors are immutable, so we create a new one with the updated count.
     new_counts = setindex(
         accumulator.bin_counts,
-        accumulator.bin_counts[bin_idx] + one(T),
+        accumulator.bin_counts[bin_idx] + FT(1),
         bin_idx,
     )
 
     return BinnedAccumulator{T, N_BINS, N_EDGES}(
         accumulator.bin_edges,
         new_counts,
-        accumulator.total_count + one(T),
+        accumulator.total_count + FT(1),
     )
 end
 

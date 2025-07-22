@@ -179,13 +179,20 @@ function DiagnosticsHandler(scheduled_diagnostics, Y, p, t; dt = nothing)
             write_field!(diag.output_writer, storage[i], diag, Y, p, t)
         else
             # Add to the accumulator
+            identity = identity_of_reduction(diag.reduction_time_func)
 
-            # We use similar + .= instead of copy because CUDA 5.2 does not supported nested
-            # wrappers with view(reshape(view)) objects. See discussion in
-            # https://github.com/CliMA/ClimaAtmos.jl/pull/2579 and
-            # https://github.com/JuliaGPU/Adapt.jl/issues/21
-            accumulators[i] = similar(storage[i])
-            accumulators[i] .= storage[i]
+            # Create a field of accumulators
+            if identity isa BinnedAccumulator
+                accumulators[i] = fill(identity, axes(out_field))
+            else
+                # For standard reductions, use similar + .=
+                accumulators[i] = similar(storage[i])
+                accumulators[i] .= identity
+            end
+
+            # The first value is the identity, so we just copy the first computed value
+            accumulators[i] .=
+                diag.reduction_time_func.(accumulators[i], storage[i])
         end
     end
     storage = value_types(storage)[storage...]
@@ -270,6 +277,7 @@ function orchestrate_diagnostics(
 
         isa_time_reduction = !isnothing(diag.reduction_time_func)
         if isa_time_reduction
+            # Broadcast the reduction function over the accumulator and storage fields
             diagnostic_handler.accumulators[diag_index] .=
                 diag.reduction_time_func.(
                     diagnostic_handler.accumulators[diag_index],
