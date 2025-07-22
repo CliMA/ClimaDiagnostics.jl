@@ -311,6 +311,13 @@ end
 Perform interpolation of `field` and save output in preallocated areas of `writer`.
 """
 function interpolate_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
+    space = axes(field)
+    if space isa Spaces.PointSpace
+        # No interpolation needed for a PointSpace, just copy the data. The data is in a
+        # Field with a single value, so we extract it.
+        writer.preallocated_output_arrays[diagnostic] = [parent(field)[]]
+        return nothing
+    end
 
     var = diagnostic.variable
 

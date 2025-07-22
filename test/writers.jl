@@ -2,6 +2,7 @@ using Test
 import Base
 import Dates
 using Profile
+using StaticArrays
 
 using BenchmarkTools
 import ProfileCanvas
@@ -477,6 +478,196 @@ end
     println("NCDatasets")
     show(stdout, MIME"text/plain"(), timing_ncdataset)
     println()
+end
+
+@testset "BinnedWriter" begin
+    # Binned Writer on a Point Space. We only run this on the root process because it
+    # writes files to disk.
+    if ClimaComms.iamroot(ClimaComms.context())
+        binned_output_dir = mktempdir(pwd())
+        point_space = Spaces.PointSpace(
+            ClimaComms.context(),
+            Geometry.ZPoint(zero(Float64)),
+        )
+
+        var = ClimaDiagnostics.DiagnosticVariable(
+            short_name = "test_var",
+            long_name = "Test Var",
+            units = "none",
+            compute! = (out, u, p, t) -> u.field,
+        )
+        bins = SVector(0.0, 1.0, 2.0, 5.0)
+        n_bins = length(bins) - 1
+
+        # Create a BinnedAccumulator to define the structure
+        initial_accumulator = ClimaDiagnostics.BinnedAccumulator(bins)
+
+        # Create a reducer to manage the BinnedAccumulator
+        reducer = ClimaDiagnostics.BinnedReducer(initial_accumulator)
+        accumulator = ClimaDiagnostics.identity_of_reduction(reducer)
+
+        # Simulate some reductions
+        accumulator = ClimaDiagnostics.binned_reduction(accumulator, 0.5)
+        accumulator = ClimaDiagnostics.binned_reduction(accumulator, 1.5)
+        accumulator = ClimaDiagnostics.binned_reduction(accumulator, 1.2)
+
+        # Create a field to hold the accumulator state
+        accumulator_field = fill(accumulator, point_space)
+
+        # Set up the writer and a diagnostic
+        writer = ClimaDiagnostics.Writers.NetCDFWriter(
+            point_space,
+            binned_output_dir,
+        )
+        binned_writer = ClimaDiagnostics.Writers.BinnedWriter(writer)
+        diagnostic = ClimaDiagnostics.ScheduledDiagnostic(;
+            variable = var,
+            output_writer = binned_writer,
+        )
+
+        # Write the field
+        t = 0.0
+        u = (; field = accumulator_field)
+        p = (;)
+        Writers.interpolate_field!(
+            binned_writer,
+            accumulator_field,
+            diagnostic,
+            u,
+            p,
+            t,
+        )
+        Writers.write_field!(
+            binned_writer,
+            accumulator_field,
+            diagnostic,
+            u,
+            p,
+            t,
+        )
+
+        # Close the writer to ensure data is flushed to disk
+        close(writer)
+
+        # Verify the output by checking each bin's file
+        for i in 1:n_bins
+            output_file = joinpath(binned_output_dir, "test_var_bin_$(i).nc")
+            @test isfile(output_file)
+
+            NCDatasets.NCDataset(output_file, "r") do ds
+                # Check variable name
+                @test haskey(ds, "test_var_bin_$(i)")
+
+                # Check attributes on the variable, not the dataset
+                var_name = "test_var_bin_$(i)"
+                @test ds[var_name].attrib["long_name"] ==
+                      "Test Var, Instantaneous (bin $(i))"
+                @test ds[var_name].attrib["units"] == "count"
+                @test ds[var_name].attrib["comments"] ==
+                      "bin_range = [$(bins[i]), $(bins[i+1]))"
+
+                # Check data
+                @test ds[var_name][:] == [accumulator.bin_counts[i]]
+            end
+        end
+    end
+
+    # Test BinnedWriter with SphericalShellSpace (more complex space with interpolation)
+    if ClimaComms.iamroot(ClimaComms.context())
+        binned_sphere_output_dir = mktempdir(pwd())
+        sphere_space = SphericalShellSpace()
+
+        # Create a simple field on the sphere for testing
+        sphere_field = Fields.coordinate_field(sphere_space).z
+
+        var = ClimaDiagnostics.DiagnosticVariable(
+            short_name = "sphere_var",
+            long_name = "Sphere Variable",
+            units = "m",
+            compute! = (out, u, p, t) -> u.field,
+        )
+        bins = SVector(-1000.0, 0.0, 1000.0, 2000.0)
+        n_bins = length(bins) - 1
+
+        # Create a BinnedAccumulator to define the structure
+        initial_accumulator = ClimaDiagnostics.BinnedAccumulator(bins)
+
+        # Create a reducer to manage the BinnedAccumulator
+        reducer = ClimaDiagnostics.BinnedReducer(initial_accumulator)
+        accumulator = ClimaDiagnostics.identity_of_reduction(reducer)
+
+        # Simulate some reductions with values that fall into different bins
+        # We'll use the coordinate field values which should span different bins
+        accumulator = ClimaDiagnostics.binned_reduction(accumulator, -500.0)  # bin 1
+        accumulator = ClimaDiagnostics.binned_reduction(accumulator, 500.0)   # bin 2
+        accumulator = ClimaDiagnostics.binned_reduction(accumulator, 1500.0)  # bin 3
+
+        # Create a field to hold the accumulator state
+        accumulator_field = fill(accumulator, sphere_space)
+
+        # Set up the writer and a diagnostic
+        writer = ClimaDiagnostics.Writers.NetCDFWriter(
+            sphere_space,
+            binned_sphere_output_dir;
+            num_points = (50, 100, 10),  # Smaller grid for testing
+        )
+        binned_writer = ClimaDiagnostics.Writers.BinnedWriter(writer)
+        diagnostic = ClimaDiagnostics.ScheduledDiagnostic(;
+            variable = var,
+            output_writer = binned_writer,
+            output_long_name = "Sphere Variable",  # Explicitly set to avoid "Instantaneous"
+        )
+
+        # Write the field
+        t = 0.0
+        u = (; field = accumulator_field)
+        p = (;)
+        Writers.interpolate_field!(
+            binned_writer,
+            accumulator_field,
+            diagnostic,
+            u,
+            p,
+            t,
+        )
+        Writers.write_field!(
+            binned_writer,
+            accumulator_field,
+            diagnostic,
+            u,
+            p,
+            t,
+        )
+
+        # Close the writer to ensure data is flushed to disk
+        close(writer)
+
+        # Verify the output by checking each bin's file
+        for i in 1:n_bins
+            output_file =
+                joinpath(binned_sphere_output_dir, "sphere_var_bin_$(i).nc")
+            @test isfile(output_file)
+
+            NCDatasets.NCDataset(output_file, "r") do ds
+                # Check variable name
+                @test haskey(ds, "sphere_var_bin_$(i)")
+
+                # Check attributes on the variable, not the dataset
+                var_name = "sphere_var_bin_$(i)"
+                @test ds[var_name].attrib["long_name"] ==
+                      "Sphere Variable (bin $(i))"
+                @test ds[var_name].attrib["units"] == "count"
+                @test ds[var_name].attrib["comments"] ==
+                      "bin_range = [$(bins[i]), $(bins[i+1]))"
+
+                # Check data dimensions (should be 3D: time, lat, lon)
+                @test size(ds[var_name]) == (1, 50, 100, 10)
+
+                # Check that the data contains the expected count (with tolerance for floating point)
+                @test ds[var_name][1, 1, 1, 1] ≈ accumulator.bin_counts[i]
+            end
+        end
+    end
 end
 
 @testset "NetCDFWriter write field time test" begin

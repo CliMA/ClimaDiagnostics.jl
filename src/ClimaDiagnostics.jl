@@ -11,5 +11,9 @@ import .ScheduledDiagnostics: ScheduledDiagnostic
 include("Writers.jl")
 
 include("clima_diagnostics.jl")
+include("binned_diagnostics.jl")
+
+export BinnedAccumulator
+export create_binned_diagnostic
 
 end

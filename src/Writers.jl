@@ -44,5 +44,6 @@ include("dummy_writer.jl")
 include("dict_writer.jl")
 include("hdf5_writer.jl")
 include("netcdf_writer.jl")
+include("binned_writer.jl")
 
 end
