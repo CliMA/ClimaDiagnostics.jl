@@ -96,7 +96,7 @@ function binned_reduction(
         bin_idx,
     )
 
-    return BinnedAccumulator{T, N_BINS, N_EDGES}(
+    return BinnedAccumulator{FT, N_BINS, N_EDGES}(
         accumulator.bin_edges,
         new_counts,
         accumulator.total_count + FT(1),
@@ -177,25 +177,14 @@ function binned_diagnostic(
     initial_accumulator = BinnedAccumulator(FT.(bin_edges))
     reducer = BinnedReducer(initial_accumulator)
 
-    # Create the scheduled diagnostic with binned reduction
+    # Create the scheduled diagnostic with binned reduction.
+    # No pre_output_hook! is needed, as the main diagnostics loop handles resetting
+    # the accumulator after output.
     return ScheduledDiagnostic(
         variable = binned_var,
         compute_schedule_func = compute_schedule,
         output_schedule_func = output_schedule,
         reduction_time_func = reducer,
-        pre_output_hook! = binned_pre_output_hook!,
         output_writer = ClimaDiagnostics.Writers.BinnedWriter(writer),
     )
-end
-
-"""
-    binned_pre_output_hook!(accumulator_field, counter)
-
-After writing output, this hook resets the accumulator for the next window.
-It does so by creating new accumulators with zero counts, preserving bin edges.
-"""
-function binned_pre_output_hook!(accumulator_field, counter)
-    @. accumulator_field =
-        BinnedAccumulator(getproperty(accumulator_field, :bin_edges))
-    return nothing
 end

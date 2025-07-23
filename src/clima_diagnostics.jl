@@ -291,34 +291,39 @@ function orchestrate_diagnostics(
         active_output[diag_index] || continue
         diag = scheduled_diagnostics[diag_index]
 
-        # Move accumulated value to storage so that we can output it (for reductions). This
-        # provides a unified interface to pre_output_hook! and output, at the cost of an
-        # additional copy. If this copy turns out to be too expensive, we can move the if
-        # statement below.
-        isnothing(diag.reduction_time_func) || (
-            diagnostic_handler.storage[diag_index] .=
-                diagnostic_handler.accumulators[diag_index]
-        )
+        # Determine the field to be processed and output.
+        # For binned diagnostics, we use the accumulator directly.
+        # For other reductions, we first copy the accumulated result into storage.
+        # For non-reductions, we just use the value in storage.
+        output_field = if diag.reduction_time_func isa BinnedReducer
+            diagnostic_handler.accumulators[diag_index]
+        else
+            if !isnothing(diag.reduction_time_func)
+                diagnostic_handler.storage[diag_index] .=
+                    diagnostic_handler.accumulators[diag_index]
+            end
+            diagnostic_handler.storage[diag_index]
+        end
 
         # Any operations we have to perform before writing to output? Here is where we would
         # divide by N to obtain an arithmetic average
         diag.pre_output_hook!(
-            diagnostic_handler.storage[diag_index],
+            output_field,
             diagnostic_handler.counters[diag_index],
         )
         # dont interpolate for point spaces
-        if axes(diagnostic_handler.storage[diag_index]) isa Spaces.PointSpace
+        if axes(output_field) isa Spaces.PointSpace
             # netCDFWriter expects diagnostic to be in preallocated_output_arrays
             if diag.output_writer isa NetCDFWriter && ClimaComms.iamroot(
-                ClimaComms.context(diagnostic_handler.storage[diag_index]),
+                ClimaComms.context(output_field),
             )
                 diag.output_writer.preallocated_output_arrays[diag] =
-                    copy(parent(diagnostic_handler.storage[diag_index]))
+                    copy(parent(output_field))
             end
         else
             interpolate_field!(
                 diag.output_writer,
-                diagnostic_handler.storage[diag_index],
+                output_field,
                 diag,
                 integrator.u,
                 integrator.p,
@@ -332,9 +337,16 @@ function orchestrate_diagnostics(
         active_output[diag_index] || continue
         diag = scheduled_diagnostics[diag_index]
 
+        # Determine which field was processed in the previous loop
+        field_to_write = if diag.reduction_time_func isa BinnedReducer
+            diagnostic_handler.accumulators[diag_index]
+        else
+            diagnostic_handler.storage[diag_index]
+        end
+
         write_field!(
             diag.output_writer,
-            diagnostic_handler.storage[diag_index],
+            field_to_write,
             diag,
             integrator.u,
             integrator.p,
@@ -359,7 +371,10 @@ function orchestrate_diagnostics(
             # identity_of_reduction works by dispatching over operation.
             # The function is defined in reduction_identities.jl
             identity = identity_of_reduction(diag.reduction_time_func)
-            fill!(parent(diagnostic_handler.accumulators[diag_index]), identity)
+            # Use broadcast assignment to reset the field of accumulators.
+            # This correctly handles the Field abstraction, whereas fill! on the
+            # parent array would fail for struct-based accumulators.
+            diagnostic_handler.accumulators[diag_index] .= identity
         end
         # Reset counter
         diagnostic_handler.counters[diag_index] = 0
