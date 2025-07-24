@@ -28,20 +28,13 @@ function write_field!(
     p,
     t,
 )
-    # To get the bin_edges, we can extract the :bin_edges property from the field.
-    # This returns a new field where each element is the `bin_edges` SVector.
-    # Since all bin_edges are the same, we can just take the first one.
-    # For a PointSpace, the underlying parent array has only one element.
-    bin_edges_field = getproperty(field, :bin_edges)
-
-    # Check the space type and extract appropriately
     space = axes(field)
     ncols = ClimaCore.Spaces.ncolumns(space)
     nlevs = ClimaCore.Spaces.nlevels(space)
 
     if ncols == 1 && nlevs == 1
-        # Single point/column - use directly
-        bin_edges = SVector(parent(bin_edges_field)...)
+        # Single point/column - access bin_edges directly from the field element
+        bin_edges = getproperty(field, :bin_edges)[]
     elseif ncols > 1 && nlevs == 1
         # 2D spectral element space - extract first point
         if space isa Spaces.SpectralElementSpace2D
@@ -51,16 +44,13 @@ function write_field!(
         else
             error("Unexpected 2D space type: $(typeof(space))")
         end
-        bin_edges_field_single = getproperty(single_point_field, :bin_edges)
-        bin_edges = SVector(parent(bin_edges_field_single)...)
+        bin_edges = getproperty(single_point_field, :bin_edges)[]
     elseif nlevs > 1
         # Extruded space - extract first column, then first level
         single_column_field = ClimaCore.column(field, 1, 1, 1)
         # Extract the first level from the column
         single_level_field = ClimaCore.Fields.level(single_column_field, 1)
-        bin_edges_field_single = getproperty(single_level_field, :bin_edges)
-        bin_edges = SVector(parent(bin_edges_field_single)...)
-
+        bin_edges = getproperty(single_level_field, :bin_edges)[]
     else
         error("Unexpected space dimensions: ncols=$ncols, nlevs=$nlevs")
     end
