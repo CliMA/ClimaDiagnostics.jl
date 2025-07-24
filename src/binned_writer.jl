@@ -1,6 +1,7 @@
 import StaticArrays.SVector
 import ..DiagnosticVariables: DiagnosticVariable
 import ..ScheduledDiagnostics: ScheduledDiagnostic
+import ClimaComms
 
 """
     BinnedWriter(base_writer)
@@ -32,9 +33,14 @@ function write_field!(
     ncols = ClimaCore.Spaces.ncolumns(space)
     nlevs = ClimaCore.Spaces.nlevels(space)
 
+    # Get device context for allowscalar operations
+    device = ClimaComms.device(space)
+
     if ncols == 1 && nlevs == 1
         # Single point/column - access bin_edges directly from the field element
-        bin_edges = getproperty(field, :bin_edges)[]
+        bin_edges = ClimaComms.allowscalar(device) do
+            getproperty(field, :bin_edges)[]
+        end
     elseif ncols > 1 && nlevs == 1
         # 2D spectral element space - extract first point
         if space isa Spaces.SpectralElementSpace2D
@@ -44,13 +50,17 @@ function write_field!(
         else
             error("Unexpected 2D space type: $(typeof(space))")
         end
-        bin_edges = getproperty(single_point_field, :bin_edges)[]
+        bin_edges = ClimaComms.allowscalar(device) do
+            getproperty(single_point_field, :bin_edges)[]
+        end
     elseif nlevs > 1
         # Extruded space - extract first column, then first level
         single_column_field = ClimaCore.column(field, 1, 1, 1)
         # Extract the first level from the column
         single_level_field = ClimaCore.Fields.level(single_column_field, 1)
-        bin_edges = getproperty(single_level_field, :bin_edges)[]
+        bin_edges = ClimaComms.allowscalar(device) do
+            getproperty(single_level_field, :bin_edges)[]
+        end
     else
         error("Unexpected space dimensions: ncols=$ncols, nlevs=$nlevs")
     end
