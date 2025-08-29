@@ -232,7 +232,7 @@ NVTX.@annotate function orchestrate_diagnostics(
     end
 
     # Compute
-    for diag_index in scheduled_diagnostics_keys
+    Threads.@threads :greedy for diag_index in scheduled_diagnostics_keys
         active_compute[diag_index] || continue
         diag = scheduled_diagnostics[diag_index]
 
@@ -265,7 +265,7 @@ NVTX.@annotate function orchestrate_diagnostics(
     end
 
     # Process possible time reductions (now we have evaluated storage[diag])
-    for diag_index in 1:length(scheduled_diagnostics)
+    Threads.@threads :greedy for diag_index in 1:length(scheduled_diagnostics)
         active_compute[diag_index] || continue
         diag = scheduled_diagnostics[diag_index]
 
@@ -280,7 +280,7 @@ NVTX.@annotate function orchestrate_diagnostics(
     end
 
     # Pre-output (averages/interpolation)
-    for diag_index in scheduled_diagnostics_keys
+    Threads.@threads :greedy for diag_index in scheduled_diagnostics_keys
         active_output[diag_index] || continue
         diag = scheduled_diagnostics[diag_index]
 
@@ -321,7 +321,7 @@ NVTX.@annotate function orchestrate_diagnostics(
     end
 
     # Save to disk
-    for diag_index in scheduled_diagnostics_keys
+    Threads.@threads :greedy for diag_index in scheduled_diagnostics_keys
         active_output[diag_index] || continue
         diag = scheduled_diagnostics[diag_index]
 
@@ -336,7 +336,7 @@ NVTX.@annotate function orchestrate_diagnostics(
     end
 
     # Post-output clean-up
-    for diag_index in scheduled_diagnostics_keys
+    Threads.@threads :greedy for diag_index in scheduled_diagnostics_keys
         diag = scheduled_diagnostics[diag_index]
 
         # First, maybe call sync for the writer. This might happen regardless of
