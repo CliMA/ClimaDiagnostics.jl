@@ -414,6 +414,13 @@ The target file is determined by `output_short_name(diagnostic)`. If the target 
 exists, append to it. If not, create a new file. If the file does not contain dimensions,
 they are added the first time something is written.
 
+Time handling:
+- For reduced diagnostics: timestamps are stored at the START of the reduction period, with
+  time_bnds showing [start, end] of the period. For the first write, t=0 is assumed; for
+  subsequent writes, the end of the previous period is used.
+- For instantaneous diagnostics: timestamps are stored at the current time, with time_bnds
+  showing [previous_time, current_time].
+
 Attributes are appended to the dataset:
 - `short_name`
 - `long_name`
@@ -546,11 +553,29 @@ NVTX.@annotate function write_field!(
     # position ever if we are writing the file for the first time)
     time_index = temporal_size + 1
 
+    # Time handling for reduced vs instantaneous diagnostics:
+    # - For reduced diagnostics: store time as the START of the reduction
+    #   period, with time_bnds showing [start, end] of the period.
+    # - For instantaneous diagnostics: store time as the current time, with
+    #   time_bnds showing [previous_time, current_time].
+    isa_time_reduction = !isnothing(diagnostic.reduction_time_func)
+
     # TODO: Use ITime here
-    nc["time"][time_index] = float(t)
+    if isa_time_reduction
+        # For reductions, timestamp at the start of the reduction period.
+        # Assume t=0 for the first write or use the end of the previous period.
+        time_to_save =
+            time_index == 1 ? zero(float(t)) :
+            nc["time_bnds"][2, time_index - 1]
+    else
+        # For instantaneous diagnostics, use current time
+        time_to_save = float(t)
+    end
+
+    nc["time"][time_index] = time_to_save
     nc["time_bnds"][:, time_index] =
         time_index == 1 ? [zero(float(t)); float(t)] :
-        [nc["time"][time_index - 1]; float(t)]
+        [nc["time_bnds"][2, time_index - 1]; float(t)]
 
     # FIXME: We are hardcoding p.start_date !
     # FIXME: We are rounding t
@@ -558,10 +583,19 @@ NVTX.@annotate function write_field!(
         # TODO: Use ITime here
         curr_date = start_date + Dates.Millisecond(round(1000 * float(t)))
         date_type = typeof(curr_date) # not necessarily a Dates.DateTime
-        nc["date"][time_index] = curr_date
+
+        if isa_time_reduction
+            date_to_save =
+                time_index == 1 ? start_date :
+                date_type(nc["date_bnds"][2, time_index - 1])
+        else
+            date_to_save = curr_date
+        end
+
+        nc["date"][time_index] = date_to_save
         nc["date_bnds"][:, time_index] =
             time_index == 1 ? [start_date; curr_date] :
-            [date_type(nc["date"][time_index - 1]); curr_date]
+            [date_type(nc["date_bnds"][2, time_index - 1]); curr_date]
     end
 
     colons = ntuple(_ -> Colon(), length(dim_names))
