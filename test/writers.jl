@@ -549,3 +549,167 @@ end
               Dates.Second(div(2^53, 1000))
     end
 end
+
+@testset "NetCDFWriter time reductions behavior" begin
+    space = SphericalShellSpace(FT = Float32)
+    field = Fields.coordinate_field(space).z
+
+    NUM = 10
+
+    start_date = Dates.DateTime(2010, 1, 1)
+
+    function compute!(out, u, p, t)
+        if isnothing(out)
+            return u.field
+        else
+            out .= u.field
+        end
+    end
+
+    u = (; field)
+    p = (; start_date = start_date)
+
+    @testset "Instantaneous diagnostics" begin
+        writer = Writers.NetCDFWriter(
+            space,
+            output_dir;
+            num_points = (NUM, 2NUM, 3NUM),
+            start_date = start_date,
+        )
+
+        diagnostic = ClimaDiagnostics.ScheduledDiagnostic(;
+            variable = ClimaDiagnostics.DiagnosticVariable(;
+                compute!,
+                short_name = "INST",
+            ),
+            output_short_name = "instant_test",
+            output_long_name = "Instantaneous Test",
+            output_writer = writer,
+        )
+
+        t1 = 10.0
+        t2 = 20.0
+        t3 = 30.0
+        for t in [t1, t2, t3]
+            Writers.interpolate_field!(writer, field, diagnostic, u, p, t)
+            Writers.write_field!(writer, field, diagnostic, u, p, t)
+        end
+
+        NCDatasets.NCDataset(joinpath(output_dir, "instant_test.nc")) do nc
+            @test nc["time"] == [t1, t2, t3]
+
+            dates = [
+                start_date + Dates.Millisecond(round(1000 * t1)),
+                start_date + Dates.Millisecond(round(1000 * t2)),
+                start_date + Dates.Millisecond(round(1000 * t3)),
+            ]
+            @test nc["date"] == dates
+
+            @test nc["time_bnds"][:, 1] == [0.0; t1]
+            @test nc["time_bnds"][:, 2] == [t1; t2]
+            @test nc["time_bnds"][:, 3] == [t2; t3]
+
+            @test nc["date_bnds"][:, 1] ==
+                  [start_date, start_date + Dates.Second(t1)]
+            @test nc["date_bnds"][:, 2] ==
+                  [start_date + Dates.Second(t1), start_date + Dates.Second(t2)]
+            @test nc["date_bnds"][:, 3] ==
+                  [start_date + Dates.Second(t2), start_date + Dates.Second(t3)]
+        end
+
+        close(writer)
+    end
+
+    @testset "Reduced diagnostics (average)" begin
+        writer = Writers.NetCDFWriter(
+            space,
+            output_dir;
+            num_points = (NUM, 2NUM, 3NUM),
+            start_date = start_date,
+        )
+
+        diagnostic = ClimaDiagnostics.ScheduledDiagnostic(;
+            variable = ClimaDiagnostics.DiagnosticVariable(;
+                compute!,
+                short_name = "REDUCED",
+            ),
+            output_short_name = "reduced_test",
+            output_long_name = "Reduced Test",
+            output_writer = writer,
+            reduction_time_func = (+),
+        )
+
+        t1 = 10.0
+        t2 = 20.0
+        t3 = 30.0
+        for t in [t1, t2, t3]
+            Writers.interpolate_field!(writer, field, diagnostic, u, p, t)
+            Writers.write_field!(writer, field, diagnostic, u, p, t)
+        end
+
+        NCDatasets.NCDataset(joinpath(output_dir, "reduced_test.nc")) do nc
+            @test nc["time"] == [0.0, t1, t2]
+
+            @test nc["date"][1] == start_date
+            @test nc["date"][2] == start_date + Dates.Second(t1)
+            @test nc["date"][3] == start_date + Dates.Second(t2)
+
+            @test nc["time_bnds"][:, 1] == [0.0; t1]
+            @test nc["time_bnds"][:, 2] == [t1; t2]
+            @test nc["time_bnds"][:, 3] == [t2; t3]
+
+            @test nc["date_bnds"][:, 1] ==
+                  [start_date, start_date + Dates.Second(t1)]
+            @test nc["date_bnds"][:, 2] ==
+                  [start_date + Dates.Second(t1), start_date + Dates.Second(t2)]
+            @test nc["date_bnds"][:, 3] ==
+                  [start_date + Dates.Second(t2), start_date + Dates.Second(t3)]
+        end
+
+        close(writer)
+    end
+
+    @testset "Calendar-based reductions (monthly)" begin
+        writer = Writers.NetCDFWriter(
+            space,
+            output_dir;
+            num_points = (NUM, 2NUM, 3NUM),
+            start_date = start_date,
+        )
+
+        # Test monthly to verify variable-length periods work correctly
+        # (Jan=31 days, Feb=28 days). This covers the general case since
+        # the code doesn't distinguish between different calendar periods.
+        diagnostic = ClimaDiagnostics.ScheduledDiagnostic(;
+            variable = ClimaDiagnostics.DiagnosticVariable(;
+                compute!,
+                short_name = "monthly",
+            ),
+            output_writer = writer,
+            reduction_time_func = (+),
+            output_schedule_func = ClimaDiagnostics.Schedules.EveryCalendarDtSchedule(
+                Dates.Month(1);
+                start_date,
+            ),
+        )
+
+        times = [31, 59] .* 86400.0  # End of Jan and Feb in seconds
+        for t in times
+            Writers.interpolate_field!(writer, field, diagnostic, u, p, t)
+            Writers.write_field!(writer, field, diagnostic, u, p, t)
+        end
+
+        NCDatasets.NCDataset(joinpath(output_dir, "monthly_1M_+.nc")) do nc
+            @test nc["date"][:] ==
+                  [Dates.DateTime(2010, 1, 1), Dates.DateTime(2010, 2, 1)]
+            @test nc["date_bnds"][1, :] ==
+                  [Dates.DateTime(2010, 1, 1), Dates.DateTime(2010, 2, 1)]
+            @test nc["date_bnds"][2, :] ==
+                  [Dates.DateTime(2010, 2, 1), Dates.DateTime(2010, 3, 1)]
+            @test nc["time_bnds"][1, :] == [0.0, first(times)]
+            @test nc["time_bnds"][2, :] == times
+        end
+
+        close(writer)
+    end
+end

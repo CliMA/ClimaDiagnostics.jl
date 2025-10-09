@@ -1,5 +1,11 @@
 # NEWS
 
+v0.3.0
+-------
+
+- ![][badge-💥breaking]  Reduced NetCDF diagnostics are now timestamped at the start
+  of the reduction period instead of the end. Instantaneous diagnostics are unchanged.
+
 v0.2.14
 -------
 
