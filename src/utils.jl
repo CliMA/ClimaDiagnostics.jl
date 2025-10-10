@@ -141,6 +141,8 @@ end
 
 Convert a time in seconds to a string representing the time in "short" units.
 
+Weeks are automatically converted to days (e.g., 1 week --> 7d).
+
 Examples:
 ========
 
@@ -165,9 +167,17 @@ julia> period_to_str_short(Dates.Minute(10))
 
 julia> period_to_str_short(Dates.Second(30))
 "30s"
+
+julia> period_to_str_short(Dates.Week(1))
+"7d"
 ```
 """
 function period_to_str_short(period::Dates.Period)
+    # Convert weeks to days to match ClimaAnalysis and CMIP convention
+    if period isa Dates.Week
+        period = Dates.Day(Dates.value(period) * 7)
+    end
+
     return replace(
         string(period),
         r"year(s)?" => "y",
@@ -185,6 +195,8 @@ end
     period_to_str_long(time_seconds::Real)
 
 Convert a time in seconds to a string representing the time in "long" units.
+
+Weeks are automatically converted to days (e.g., 1 week --> 7 days).
 
 Examples:
 ========
@@ -210,9 +222,17 @@ julia> period_to_str_long(Dates.Minute(30))
 
 julia> period_to_str_long(Dates.Second(45))
 "45 Seconds"
+
+julia> period_to_str_long(Dates.Week(1))
+"7 Days"
 ```
 """
 function period_to_str_long(period::Dates.Period)
+    # Convert weeks to days to match ClimaAnalysis and CMIP convention
+    if period isa Dates.Week
+        period = Dates.Day(Dates.value(period) * 7)
+    end
+
     period_str = replace(string(period), "," => "")
     return join(uppercasefirst.(split(period_str)), " ")
 end
