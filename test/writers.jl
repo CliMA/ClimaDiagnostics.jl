@@ -16,7 +16,7 @@ import ClimaComms
 import ClimaDiagnostics
 import ClimaDiagnostics.Writers
 
-import ClimaUtilities.TimeManager: ITime
+import ClimaUtilities.TimeManager: ITime, date
 
 include("TestTools.jl")
 
@@ -547,5 +547,129 @@ end
 
         @test Dates.Second(Dates.Millisecond(round(1000 * times[2]))) ==
               Dates.Second(div(2^53, 1000))
+    end
+end
+
+@testset "NetCDFBuffer tests" begin
+    NCDatasets.NCDataset(joinpath(output_dir, "buffer_test.nc"), "c") do nc
+
+        # Add dimensions
+        Writers.add_time_maybe!(nc, Float64, bounds = "time_bnds")
+        Writers.add_time_bounds_maybe!(
+            nc,
+            Float64;
+            comments = "time bounds for each time value",
+            units = "s",
+        )
+        start_date = Dates.DateTime(2010, 1, 1)
+        Writers.add_date_maybe!(
+            nc;
+            units = "seconds since $start_date",
+            bounds = "date_bnds",
+        )
+        Writers.add_date_bounds_maybe!(
+            nc;
+            comments = "date bounds for each date value",
+            units = "seconds since $start_date",
+        )
+        space = SphericalShellSpace()
+        NUM = 10
+        Writers.add_space_coordinates_maybe!(
+            nc,
+            space,
+            (NUM, 2NUM, 3NUM),
+            z_sampling_method = ClimaDiagnostics.Writers.FakePressureLevelsMethod(),
+        )
+
+        # Add variable
+        short_name = "buffer"
+        v = NCDatasets.defVar(
+            nc,
+            short_name,
+            Float64,
+            ("time", "lon", "lat", "z"),
+        )
+        v.attrib["short_name"] = short_name
+
+        t1 = ITime(1, period = Dates.Second(10), epoch = start_date)
+        data = ones(NUM, 2NUM, 3NUM)
+
+        buffer = Writers.NetCDFBuffer(
+            nc,
+            short_name,
+            start_date,
+            t1,
+            data,
+            max_capacity = 4,
+        )
+
+        # Test after initialization of buffer
+        @test !isempty(buffer)
+        @test length(buffer) == 1
+        @test !Writers.isfull(buffer)
+
+        @test buffer.short_name == "buffer"
+        @test buffer.start_date == start_date
+        @test buffer.t_start_idx[] == 1
+        @test buffer.times == [t1]
+        @test all(==(1), buffer.storage[1, :, :, :])
+        @test buffer.max_capacity == 4
+
+        # Push a value and test contents of buffer
+        t2 = ITime(2, period = Dates.Second(10), epoch = start_date)
+        push!(buffer, t2, 2 * data)
+
+        @test !isempty(buffer)
+        @test length(buffer) == 2
+        @test !Writers.isfull(buffer)
+
+        @test buffer.t_start_idx[] == 1
+        @test buffer.times == [t1, t2]
+        @test all(==(1), buffer.storage[1, :, :, :])
+        @test all(==(2), buffer.storage[2, :, :, :])
+
+        # Push two more values
+        t3 = ITime(3, period = Dates.Second(10), epoch = start_date)
+        t4 = ITime(4, period = Dates.Second(10), epoch = start_date)
+        push!(buffer, t3, 3 * data)
+        push!(buffer, t4, 4 * data)
+
+        @test !isempty(buffer)
+        @test length(buffer) == 4
+        @test Writers.isfull(buffer)
+
+        @test buffer.t_start_idx[] == 1
+        @test buffer.times == [t1, t2, t3, t4]
+        @test all(==(1), buffer.storage[1, :, :, :])
+        @test all(==(2), buffer.storage[2, :, :, :])
+        @test all(==(3), buffer.storage[3, :, :, :])
+        @test all(==(4), buffer.storage[4, :, :, :])
+
+        Writers.flush!(buffer)
+
+        @test isempty(buffer)
+        @test length(buffer) == 0
+        @test !Writers.isfull(buffer)
+
+        @test buffer.t_start_idx[] == 5
+
+        @test nc["time"][:] == float.([t1, t2, t3, t4])
+        @test nc["date"][:] == date.([t1, t2, t3, t4])
+        @test nc["time_bnds"][1, :] == [0.0, float.([t1, t2, t3])...]
+        @test nc["time_bnds"][2, :] == float.([t1, t2, t3, t4])
+        @test nc["date_bnds"][1, :] == [start_date, date.([t1, t2, t3])...]
+        @test nc["date_bnds"][2, :] == date.([t1, t2, t3, t4])
+        @test all(==(1), nc["buffer"][1, :, :, :])
+        @test all(==(2), nc["buffer"][2, :, :, :])
+        @test all(==(3), nc["buffer"][3, :, :, :])
+        @test all(==(4), nc["buffer"][4, :, :, :])
+
+        # Pushing when cache is full should flush it
+        for i in 5:9
+            t = ITime(i, period = Dates.Second(10), epoch = start_date)
+            push!(buffer, t, data)
+        end
+
+        @test length(nc["time"][:]) == 8
     end
 end
