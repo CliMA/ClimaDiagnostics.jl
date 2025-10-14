@@ -11,6 +11,7 @@ import NVTX
 # Defines target_coordinates, add_space_coordinates_maybe!, add_time_maybe! for a bunch of
 # Spaces
 include("netcdf_writer_coordinates.jl")
+include("netcdf_buffer.jl")
 
 """
     NetCDFWriter
@@ -22,6 +23,7 @@ struct NetCDFWriter{
     T,
     TS,
     DI,
+    DC,
     SYNC,
     ZSM <: Union{AbstractZSamplingMethod, Nothing},
     DATE,
@@ -62,6 +64,10 @@ struct NetCDFWriter{
     process uses this."""
     preallocated_output_arrays::DI
 
+    """Buffers for storing the output in preallocated_output_arrays before moving the data
+    to the NetCDF files. This could be nothing if no buffers are wanted"""
+    buffers::DC
+
     """Callable that determines when to call NetCDF.sync. NetCDF.sync is needed to flush the
     output to disk. Usually, the NetCDF is able to determine when to write the output to
     disk, but this sometimes fails (e.g., on GPUs). In that case, it is convenient to force
@@ -76,6 +82,9 @@ struct NetCDFWriter{
     """Date of the beginning of the simulation (it is used to convert seconds to dates)."""
     start_date::DATE
 
+    """Max capacity of the buffer"""
+    buffer_max_capacity::Int64
+
     # TODO: Add option to write dates as time
 end
 
@@ -85,6 +94,7 @@ end
 Close all the open files in `writer`.
 """
 function Base.close(writer::NetCDFWriter)
+    isnothing(writer.buffers) || foreach(flush!, values(writer.buffers))
     foreach(NCDatasets.close, values(writer.open_files))
     return nothing
 end
@@ -127,6 +137,7 @@ function NetCDFWriter(
                     EveryStepSchedule() : nothing,
     z_sampling_method = LevelsMethod(),
     start_date = nothing,
+    buffer_kwargs = (max_capacity = 0,),
 )
     has_horizontal_space =
         space isa Spaces.ExtrudedFiniteDifferenceSpace ||
@@ -187,12 +198,15 @@ function NetCDFWriter(
         Dict{ScheduledDiagnostic, ClimaComms.array_type(space)}() :
         Dict{ScheduledDiagnostic, Nothing}()
 
+    buffers, max_capacity = _initialize_buffers(buffer_kwargs, comms_ctx)
+
     unsynced_datasets = Set{NCDatasets.NCDataset}()
 
     return NetCDFWriter{
         typeof(num_points),
         typeof(interpolated_physical_z),
         typeof(preallocated_arrays),
+        typeof(buffers),
         typeof(sync_schedule),
         typeof(z_sampling_method),
         typeof(start_date),
@@ -205,9 +219,11 @@ function NetCDFWriter(
         Dict{String, NCDatasets.NCDataset}(),
         z_sampling_method,
         preallocated_arrays,
+        buffers,
         sync_schedule,
         unsynced_datasets,
         start_date,
+        max_capacity,
     )
 end
 
@@ -220,6 +236,7 @@ function NetCDFWriter(
                     EveryStepSchedule() : nothing,
     z_sampling_method = LevelsMethod(),
     start_date = nothing,
+    buffer_kwargs = (max_capacity = 0,),
 )
     if z_sampling_method isa LevelsMethod
         num_vpts = Spaces.nlevels(ClimaCore.Spaces.center_space(space))
@@ -245,12 +262,15 @@ function NetCDFWriter(
         Dict{ScheduledDiagnostic, ClimaComms.array_type(space)}() :
         Dict{ScheduledDiagnostic, Nothing}()
 
+    buffers, max_capacity = _initialize_buffers(buffer_kwargs, comms_ctx)
+
     unsynced_datasets = Set{NCDatasets.NCDataset}()
 
     return NetCDFWriter{
         typeof(num_points),
         typeof(interpolated_physical_z),
         typeof(preallocated_arrays),
+        typeof(buffers),
         typeof(sync_schedule),
         typeof(z_sampling_method),
         typeof(start_date),
@@ -263,9 +283,11 @@ function NetCDFWriter(
         Dict{String, NCDatasets.NCDataset}(),
         z_sampling_method,
         preallocated_arrays,
+        buffers,
         sync_schedule,
         unsynced_datasets,
         start_date,
+        max_capacity,
     )
 end
 
@@ -276,6 +298,7 @@ function NetCDFWriter(
     sync_schedule = ClimaComms.device(space) isa ClimaComms.CUDADevice ?
                     EveryStepSchedule() : nothing,
     start_date = nothing,
+    buffer_kwargs = (max_capacity = 0,),
     kwargs...,
 )
     comms_ctx = ClimaComms.context(space)
@@ -283,11 +306,15 @@ function NetCDFWriter(
         ClimaComms.iamroot(comms_ctx) ?
         Dict{ScheduledDiagnostic, ClimaComms.array_type(space)}() :
         Dict{ScheduledDiagnostic, Nothing}()
+
+    buffers, max_capacity = _initialize_buffers(buffer_kwargs, comms_ctx)
+
     unsynced_datasets = Set{NCDatasets.NCDataset}()
     return NetCDFWriter{
         Nothing,
         Nothing,
         typeof(preallocated_arrays),
+        typeof(buffers),
         typeof(sync_schedule),
         Nothing,
         typeof(start_date),
@@ -300,11 +327,39 @@ function NetCDFWriter(
         Dict{String, NCDatasets.NCDataset}(),
         nothing,
         preallocated_arrays,
+        buffers,
         sync_schedule,
         unsynced_datasets,
         start_date,
+        max_capacity,
     )
 end
+
+"""
+    _initialize_buffers(buffer_kwargs, comms_ctx)
+
+Initialize the buffers and return them and the max capacity of the buffers.
+
+The keyword argument `max_capacity` should be in `buffer_kwargs`.
+"""
+function _initialize_buffers(buffer_kwargs, comms_ctx)
+    (; max_capacity) = buffer_kwargs
+    max_capacity >= 0 ||
+        error("Capacity of buffer ($max_capacity) should be nonnegative")
+    if max_capacity <= 1
+        max_capacity == 1 && @warn(
+            "Buffer of size one does not provide much benefit compared to no buffer. Using no buffer instead"
+        )
+        buffers = nothing
+    else
+        buffers =
+            ClimaComms.iamroot(comms_ctx) ?
+            Dict{ScheduledDiagnostic, NetCDFBuffer}() :
+            Dict{ScheduledDiagnostic, Nothing}()
+    end
+    return buffers, max_capacity
+end
+
 """
     interpolate_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
 
@@ -546,30 +601,49 @@ NVTX.@annotate function write_field!(
     # position ever if we are writing the file for the first time)
     time_index = temporal_size + 1
 
-    # TODO: Use ITime here
-    nc["time"][time_index] = float(t)
-    nc["time_bnds"][:, time_index] =
-        time_index == 1 ? [zero(float(t)); float(t)] :
-        [nc["time"][time_index - 1]; float(t)]
-
-    # FIXME: We are hardcoding p.start_date !
-    # FIXME: We are rounding t
-    if !isnothing(start_date)
+    if isnothing(diagnostic.output_writer.buffers)
         # TODO: Use ITime here
-        curr_date = start_date + Dates.Millisecond(round(1000 * float(t)))
-        date_type = typeof(curr_date) # not necessarily a Dates.DateTime
-        nc["date"][time_index] = curr_date
-        nc["date_bnds"][:, time_index] =
-            time_index == 1 ? [start_date; curr_date] :
-            [date_type(nc["date"][time_index - 1]); curr_date]
+        nc["time"][time_index] = float(t)
+        nc["time_bnds"][:, time_index] =
+            time_index == 1 ? [zero(float(t)); float(t)] :
+            [nc["time"][time_index - 1]; float(t)]
+
+        # FIXME: We are hardcoding p.start_date !
+        # FIXME: We are rounding t
+        if !isnothing(start_date)
+            # TODO: Use ITime here
+            curr_date = start_date + Dates.Millisecond(round(1000 * float(t)))
+            date_type = typeof(curr_date) # not necessarily a Dates.DateTime
+            nc["date"][time_index] = curr_date
+            nc["date_bnds"][:, time_index] =
+                time_index == 1 ? [start_date; curr_date] :
+                [date_type(nc["date"][time_index - 1]); curr_date]
+        end
+
+        colons = ntuple(_ -> Colon(), length(dim_names))
+        v[time_index, colons...] = interpolated_field
+
+    else
+        buffer = get(diagnostic.output_writer.buffers, diagnostic, nothing)
+        if isnothing(buffer)
+            diagnostic.output_writer.buffers[diagnostic] = NetCDFBuffer(
+                nc,
+                var.short_name,
+                start_date,
+                t,
+                interpolated_field,
+                max_capacity = writer.buffer_max_capacity,
+            )
+        else
+            buffer = diagnostic.output_writer.buffers[diagnostic]
+            push!(buffer, t, interpolated_field)
+        end
     end
 
-    colons = ntuple(_ -> Colon(), length(dim_names))
-    v[time_index, colons...] = interpolated_field
-
     # Add file to list of files that might need manual sync
+    # If it is written to the buffer instead of the NetCDF file, then sync will
+    # also flush and sync
     push!(writer.unsynced_datasets, nc)
-
     return nothing
 end
 
@@ -578,8 +652,11 @@ end
 
 Call `NCDatasets.sync` on all the files in the `writer.unsynced_datasets` list.
 `NCDatasets.sync` ensures that the values are written to file.
+
+This also flush all existing buffers.
 """
 function sync(writer::NetCDFWriter)
+    isnothing(writer.buffers) || foreach(flush!, values(writer.buffers))
     foreach(NCDatasets.sync, writer.unsynced_datasets)
     empty!(writer.unsynced_datasets)
     return nothing

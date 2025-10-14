@@ -673,3 +673,70 @@ end
         @test length(nc["time"][:]) == 8
     end
 end
+
+@testset "Writer with NetCDFBuffer" begin
+    space = SphericalShellSpace(FT = Float32)
+    field = Fields.coordinate_field(space).z
+
+    # Number of interpolation points
+    NUM = 50
+
+    writer = Writers.NetCDFWriter(
+        space,
+        output_dir;
+        num_points = (NUM, 2NUM, 3NUM),
+        sync_schedule = ClimaDiagnostics.Schedules.DivisorSchedule(5),
+        z_sampling_method = ClimaDiagnostics.Writers.FakePressureLevelsMethod(),
+        buffer_kwargs = (max_capacity = 2,),
+    )
+
+    u = (; field)
+    # FIXME: We are hardcoding the start date
+    p = (; start_date = Dates.DateTime(2010, 1))
+
+    function compute!(out, u, p, t)
+        if isnothing(out)
+            return u.field
+        else
+            out .= u.field
+        end
+    end
+
+    diagnostic = ClimaDiagnostics.ScheduledDiagnostic(;
+        variable = ClimaDiagnostics.DiagnosticVariable(;
+            compute!,
+            short_name = "ABC",
+        ),
+        output_short_name = "writer_with_buffer",
+        output_long_name = "My Long Name",
+        output_writer = writer,
+    )
+
+    itimes = [
+        ITime(i, period = Dates.Second(1), epoch = Dates.DateTime(2010, 1))
+        for i in 1:3
+    ]
+    for t in itimes
+        Writers.interpolate_field!(writer, field, diagnostic, u, p, t)
+        Writers.write_field!(writer, field, diagnostic, u, p, t)
+    end
+
+    # Since the cache is size two and push! was called three times, there should
+    # only be two times in the NetCDF file with one time in the cache
+    NCDatasets.NCDataset(joinpath(output_dir, "writer_with_buffer.nc")) do nc
+        times = nc["time"][:]
+        @test length(times) == 2
+        @test times == float.(itimes[1:2])
+        @test nc["date"][:] == date.(itimes[1:2])
+    end
+
+    # Closing a writer should save all data including flushing the cache
+    close(writer)
+
+    NCDatasets.NCDataset(joinpath(output_dir, "writer_with_buffer.nc")) do nc
+        times = nc["time"][:]
+        @test length(times) == 3
+        @test times == float.(itimes)
+        @test nc["date"][:] == date.(itimes)
+    end
+end
