@@ -11,6 +11,7 @@ import NVTX
 # Defines target_coordinates, add_space_coordinates_maybe!, add_time_maybe! for a bunch of
 # Spaces
 include("netcdf_writer_coordinates.jl")
+include("sync_manager.jl")
 
 """
     NetCDFWriter
@@ -25,6 +26,7 @@ struct NetCDFWriter{
     SYNC,
     ZSM <: Union{AbstractZSamplingMethod, Nothing},
     DATE,
+    LOCKS <: Union{NetCDFLockManager, Nothing},
 } <: AbstractWriter
     """The base folder where to save the files."""
     output_dir::String
@@ -76,6 +78,9 @@ struct NetCDFWriter{
     """Date of the beginning of the simulation (it is used to convert seconds to dates)."""
     start_date::DATE
 
+    """Manage the locks for async IO for syncing the NetCDF files to disk"""
+    lock_manager::LOCKS
+
     # TODO: Add option to write dates as time
 end
 
@@ -85,6 +90,8 @@ end
 Close all the open files in `writer`.
 """
 function Base.close(writer::NetCDFWriter)
+    # TODO: Close the channel here too if there is a lock manager
+    isnothing(writer.lock_manager) || close(writer.lock_manager)
     foreach(NCDatasets.close, values(writer.open_files))
     return nothing
 end
@@ -189,6 +196,8 @@ function NetCDFWriter(
 
     unsynced_datasets = Set{NCDatasets.NCDataset}()
 
+    lock_manager = NetCDFLockManager()
+
     return NetCDFWriter{
         typeof(num_points),
         typeof(interpolated_physical_z),
@@ -196,6 +205,7 @@ function NetCDFWriter(
         typeof(sync_schedule),
         typeof(z_sampling_method),
         typeof(start_date),
+        typeof(lock_manager),
     }(
         output_dir,
         Dict{String, Remapper}(),
@@ -208,6 +218,7 @@ function NetCDFWriter(
         sync_schedule,
         unsynced_datasets,
         start_date,
+        lock_manager,
     )
 end
 
@@ -474,132 +485,146 @@ NVTX.@annotate function write_field!(
 
     nc = writer.open_files[output_path]
 
-    # Save as associated float if t is ITime
-    TT = typeof(float(t))
-    # Define time coordinate
-    add_time_maybe!(
-        nc,
-        TT;
-        units = "s",
-        axis = "T",
-        standard_name = "time",
-        long_name = "Time",
-        bounds = "time_bnds",
-    )
+    lock_manager = writer.lock_manager
+    lk = get_lock(lock_manager, nc)
 
-    dim_names = add_space_coordinates_maybe!(
-        nc,
-        space,
-        writer.num_points;
-        writer.z_sampling_method,
-        writer.interpolated_physical_z,
-    )
-
-    start_date = nothing
-    if isnothing(writer.start_date)
-        if hasproperty(p, :start_date)
-            start_date = getproperty(p, :start_date)
-        end
-    else
-        start_date = writer.start_date
-    end
-
-    add_time_bounds_maybe!(
-        nc,
-        TT;
-        comments = "time bounds for each time value",
-        units = "s",
-    )
-
-    if !isnothing(start_date)
-        add_date_maybe!(
-            nc;
-            units = "seconds since $start_date",
-            bounds = "date_bnds",
-        )
-        add_date_bounds_maybe!(
-            nc;
-            comments = "date bounds for each date value",
-            units = "seconds since $start_date",
-        )
-    end
-
-    if haskey(nc, "$(var.short_name)")
-        # We already have something in the file
-        v = nc["$(var.short_name)"]
-        temporal_size, spatial_size... = size(v)
-        interpolated_size = size(interpolated_field)
-        spatial_size == interpolated_size ||
-            error("incompatible dimensions for $(var.short_name)")
-    else
-        v = NCDatasets.defVar(
+    lock(lk)
+    try
+        @info "Writing data for $(output_short_name(diagnostic)).nc"
+        # Save as associated float if t is ITime
+        TT = typeof(float(t))
+        # Define time coordinate
+        add_time_maybe!(
             nc,
-            "$(var.short_name)",
-            FT,
-            ("time", dim_names...),
-            deflatelevel = writer.compression_level,
+            TT;
+            units = "s",
+            axis = "T",
+            standard_name = "time",
+            long_name = "Time",
+            bounds = "time_bnds",
         )
-        v.attrib["short_name"] = var.short_name::String
-        v.attrib["long_name"] = output_long_name(diagnostic)::String
-        v.attrib["units"] = var.units::String
-        v.attrib["comments"] = var.comments::String
-        if !isnothing(start_date) && !haskey(v.attrib, "start_date")
-            v.attrib["start_date"] = string(start_date)::String
-        end
-        temporal_size = 0
-    end
 
-    # We need to write to the next position after what we read from the data (or the first
-    # position ever if we are writing the file for the first time)
-    time_index = temporal_size + 1
+        dim_names = add_space_coordinates_maybe!(
+            nc,
+            space,
+            writer.num_points;
+            writer.z_sampling_method,
+            writer.interpolated_physical_z,
+        )
 
-    # Time handling for reduced vs instantaneous diagnostics:
-    # - For reduced diagnostics: store time as the START of the reduction
-    #   period, with time_bnds showing [start, end] of the period.
-    # - For instantaneous diagnostics: store time as the current time, with
-    #   time_bnds showing [previous_time, current_time].
-    isa_time_reduction = !isnothing(diagnostic.reduction_time_func)
-
-    # TODO: Use ITime here
-    if isa_time_reduction
-        # For reductions, timestamp at the start of the reduction period.
-        # Assume t=0 for the first write or use the end of the previous period.
-        time_to_save =
-            time_index == 1 ? zero(float(t)) :
-            nc["time_bnds"][2, time_index - 1]
-    else
-        # For instantaneous diagnostics, use current time
-        time_to_save = float(t)
-    end
-
-    nc["time"][time_index] = time_to_save
-    nc["time_bnds"][:, time_index] =
-        time_index == 1 ? [zero(float(t)); float(t)] :
-        [nc["time_bnds"][2, time_index - 1]; float(t)]
-
-    # FIXME: We are hardcoding p.start_date !
-    # FIXME: We are rounding t
-    if !isnothing(start_date)
-        # TODO: Use ITime here
-        curr_date = start_date + Dates.Millisecond(round(1000 * float(t)))
-        date_type = typeof(curr_date) # not necessarily a Dates.DateTime
-
-        if isa_time_reduction
-            date_to_save =
-                time_index == 1 ? start_date :
-                date_type(nc["date_bnds"][2, time_index - 1])
+        start_date = nothing
+        if isnothing(writer.start_date)
+            if hasproperty(p, :start_date)
+                start_date = getproperty(p, :start_date)
+            end
         else
-            date_to_save = curr_date
+            start_date = writer.start_date
         end
 
-        nc["date"][time_index] = date_to_save
-        nc["date_bnds"][:, time_index] =
-            time_index == 1 ? [start_date; curr_date] :
-            [date_type(nc["date_bnds"][2, time_index - 1]); curr_date]
+        add_time_bounds_maybe!(
+            nc,
+            TT;
+            comments = "time bounds for each time value",
+            units = "s",
+        )
+
+        if !isnothing(start_date)
+            add_date_maybe!(
+                nc;
+                units = "seconds since $start_date",
+                bounds = "date_bnds",
+            )
+            add_date_bounds_maybe!(
+                nc;
+                comments = "date bounds for each date value",
+                units = "seconds since $start_date",
+            )
+        end
+
+        if haskey(nc, "$(var.short_name)")
+            # We already have something in the file
+            v = nc["$(var.short_name)"]
+            temporal_size, spatial_size... = size(v)
+            interpolated_size = size(interpolated_field)
+            spatial_size == interpolated_size ||
+                error("incompatible dimensions for $(var.short_name)")
+        else
+            v = NCDatasets.defVar(
+                nc,
+                "$(var.short_name)",
+                FT,
+                ("time", dim_names...),
+                deflatelevel = writer.compression_level,
+            )
+            v.attrib["short_name"] = var.short_name::String
+            v.attrib["long_name"] = output_long_name(diagnostic)::String
+            v.attrib["units"] = var.units::String
+            v.attrib["comments"] = var.comments::String
+            if !isnothing(start_date) && !haskey(v.attrib, "start_date")
+                v.attrib["start_date"] = string(start_date)::String
+            end
+            temporal_size = 0
+        end
+
+        # We need to write to the next position after what we read from the data (or the first
+        # position ever if we are writing the file for the first time)
+        time_index = temporal_size + 1
+
+        # Time handling for reduced vs instantaneous diagnostics:
+        # - For reduced diagnostics: store time as the START of the reduction
+        #   period, with time_bnds showing [start, end] of the period.
+        # - For instantaneous diagnostics: store time as the current time, with
+        #   time_bnds showing [previous_time, current_time].
+        isa_time_reduction = !isnothing(diagnostic.reduction_time_func)
+
+        # TODO: Use ITime here
+        if isa_time_reduction
+            # For reductions, timestamp at the start of the reduction period.
+            # Assume t=0 for the first write or use the end of the previous period.
+            time_to_save =
+                time_index == 1 ? zero(float(t)) :
+                nc["time_bnds"][2, time_index - 1]
+        else
+            # For instantaneous diagnostics, use current time
+            time_to_save = float(t)
+        end
+
+        nc["time"][time_index] = time_to_save
+        nc["time_bnds"][:, time_index] =
+            time_index == 1 ? [zero(float(t)); float(t)] :
+            [nc["time_bnds"][2, time_index - 1]; float(t)]
+
+        # FIXME: We are hardcoding p.start_date !
+        # FIXME: We are rounding t
+        if !isnothing(start_date)
+            # TODO: Use ITime here
+            curr_date = start_date + Dates.Millisecond(round(1000 * float(t)))
+            date_type = typeof(curr_date) # not necessarily a Dates.DateTime
+
+            if isa_time_reduction
+                date_to_save =
+                    time_index == 1 ? start_date :
+                    date_type(nc["date_bnds"][2, time_index - 1])
+            else
+                date_to_save = curr_date
+            end
+
+            nc["date"][time_index] = date_to_save
+            nc["date_bnds"][:, time_index] =
+                time_index == 1 ? [start_date; curr_date] :
+                [date_type(nc["date_bnds"][2, time_index - 1]); curr_date]
+        end
+
+        colons = ntuple(_ -> Colon(), length(dim_names))
+        v[time_index, colons...] = interpolated_field
+        @info "Finished writing data for $(output_short_name(diagnostic)).nc"
+    finally
+        unlock(lk)
     end
 
-    colons = ntuple(_ -> Colon(), length(dim_names))
-    v[time_index, colons...] = interpolated_field
+    if !isnothing(lock_manager)
+        add_sync_request(lock_manager, nc)
+    end
 
     # Add file to list of files that might need manual sync
     push!(writer.unsynced_datasets, nc)
@@ -614,10 +639,29 @@ Call `NCDatasets.sync` on all the files in the `writer.unsynced_datasets` list.
 `NCDatasets.sync` ensures that the values are written to file.
 """
 function sync(writer::NetCDFWriter)
-    foreach(NCDatasets.sync, writer.unsynced_datasets)
+    foreach(nc -> _sync(nc, writer.lock_manager), writer.unsynced_datasets)
     empty!(writer.unsynced_datasets)
     return nothing
 end
+
+function _sync(nc::NCDatasets.NCDataset, lock_manager::NetCDFLockManager)
+    lk = get_lock(lock_manager, nc)
+    lock(lk)
+    try
+        @info "Syncing data from sync(writer)"
+        _sync(nc, nothing)
+        @info "Finished syncing data from sync(writer)"
+    finally
+        unlock(lk)
+    end
+    return nothing
+end
+
+function _sync(nc::NCDatasets.NCDataset, ::Nothing)
+    NCDatasets.sync(nc)
+    return nothing
+end
+
 
 function Base.show(io::IO, writer::NetCDFWriter)
     num_open_files = length(keys(writer.open_files))
