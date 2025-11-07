@@ -322,12 +322,14 @@ function target_coordinates(
     if num_points_x == 1
         xpts = [(xmax + xmin) / 2]
     else
-        xpts = collect(range(xmin, xmax, num_points_x))
+        delta_x = (xmax-xmin)/num_points_x
+        xpts = collect(range(xmin+delta_x/2, xmax-delta_x/2, num_points_x))
     end
     if num_points_y == 1
         ypts = [(ymax + ymin) / 2]
     else
-        ypts = collect(range(ymin, ymax, num_points_y))
+        delta_y = (ymax-ymin)/num_points_y
+        ypts = collect(range(ymin+delta_y/2, ymax-delta_y/2, num_points_y))
     end
     return (xpts, ypts)
 end
