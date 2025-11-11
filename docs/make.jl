@@ -2,6 +2,9 @@ using Documenter
 using ClimaDiagnostics
 import ClimaUtilities
 
+# Needed for documentation of NetCDFWriter
+import ClimaCore.Spaces
+
 pages = [
     "Overview" => "index.md",
     "User guide" => "user_guide.md",
@@ -25,6 +28,7 @@ format = Documenter.HTML(
     mathengine = mathengine,
 )
 
+
 DocMeta.setdocmeta!(
     ClimaDiagnostics,
     :DocTestSetup,
@@ -39,7 +43,7 @@ makedocs(
     pages = pages,
     checkdocs = :exports,
     doctest = true,
-    strict = false,
+    warnonly = :missing_docs,
     clean = true,
     modules = [ClimaDiagnostics],
 )

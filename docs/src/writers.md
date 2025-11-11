@@ -76,8 +76,8 @@ Variables are saved as datasets with attributes, where the attributes include
     resampled onto a Cartesian grids are supported. If you need such capability,
     consider using the [`ClimaDiagnostics.Writers.HDF5Writer`](@ref).
 
-```@docs
-ClimaDiagnostics.Writers.NetCDFWriter(space, output_dir; num_points, sync_schedule, z_sampling_method)
+```@docs; canonical = false
+ClimaDiagnostics.Writers.NetCDFWriter(space::Spaces.AbstractSpace, output_dir)
 ClimaDiagnostics.Writers.interpolate_field!(writer::ClimaDiagnostics.Writers.NetCDFWriter, field, diagnostic, u, p, t)
 ClimaDiagnostics.Writers.write_field!(writer::ClimaDiagnostics.Writers.NetCDFWriter, field, diagnostic, u, p, t)
 ClimaDiagnostics.Writers.sync(writer::ClimaDiagnostics.Writers.NetCDFWriter)
