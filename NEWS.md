@@ -6,6 +6,10 @@ v0.3.0
 - ![][badge-💥breaking]  Reduced NetCDF diagnostics are now timestamped at the start
   of the reduction period instead of the end. Instantaneous diagnostics are unchanged.
 
+## Bug fixes
+
+Fixed `num_points` representing Lat-Long-Z for a box domain.
+
 v0.2.14
 -------
 
