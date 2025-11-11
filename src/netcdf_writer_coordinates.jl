@@ -307,10 +307,12 @@ function target_coordinates(
     domain::Domains.RectangleDomain,
 )
     if islatlonbox(domain)
-        # ClimaCore assumes LatLon, but we really want LongLat, so we need to flip
-        # This function return Lat - Long points
+        # ClimaCore assumes LatLon, but we really want LongLat, so we need to
+        # flip. For this case, num_points is (lon, lat). However, x and y are
+        # lat and lon respectively, so we flip.
         num_points_y, num_points_x = num_points
     else
+        # For this case, num_points is (x, y), so no flipping is necessary.
         num_points_x, num_points_y = num_points
     end
 
@@ -329,7 +331,11 @@ function target_coordinates(
     else
         ypts = collect(range(ymin, ymax, num_points_y))
     end
-    return (xpts, ypts)
+    # target_coordinates should always return (lon, lat) or (x, y). If it is
+    # the first case, then x and y should be flipped, because x and y are
+    # lat and lon respectively. If it is the second case, then no flipping is
+    # necessary.
+    return islatlonbox(domain) ? (ypts, xpts) : (xpts, ypts)
 end
 
 # Plane
@@ -386,7 +392,6 @@ function add_space_coordinates_maybe!(
     name1, name2 = names
     num_points1, num_points2 = num_points
 
-    maybe_reverse = identity
     if islatlonbox(domain)
         more_attribs = (
             Dict(
@@ -402,8 +407,6 @@ function add_space_coordinates_maybe!(
                 :long_name => "Latitude",
             ),
         )
-        # ClimaCore assumes LatLon, but we really want LongLat, so we need to flip
-        maybe_reverse = reverse
     else
         more_attribs = (
             Dict(:units => "m", :axis => "X"),
@@ -415,7 +418,7 @@ function add_space_coordinates_maybe!(
     dim2_exists = dimension_exists(nc, name2, (num_points2,))
 
     if !dim1_exists && !dim2_exists
-        pts1, pts2 = maybe_reverse(target_coordinates(space, num_points))
+        pts1, pts2 = target_coordinates(space, num_points)
         add_dimension!(nc, name1, pts1; more_attribs[1]...)
         add_dimension!(nc, name2, pts2; more_attribs[2]...)
     end
@@ -651,8 +654,15 @@ function hcoords_from_horizontal_space(
             domain.interval2.coord_max,
         ),
     )
-
-    return [XYPointType(hc1, hc2) for hc1 in hpts[1], hc2 in hpts[2]]
+    if islatlonbox(domain)
+        longpts, latpts = hpts
+        # In this case, XYPointType is a Geometry.LatLongPoint
+        return [XYPointType(lat, long) for long in longpts, lat in latpts]
+    else
+        xpts, ypts = hpts
+        # In this case, XYPointType is a Geometry.XYPoint
+        return [XYPointType(xpt, ypt) for xpt in xpts, ypt in ypts]
+    end
 end
 
 function hcoords_from_horizontal_space(

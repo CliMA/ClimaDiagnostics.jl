@@ -447,14 +447,6 @@ NVTX.@annotate function write_field!(
     interpolated_field =
         maybe_move_to_cpu(writer.preallocated_output_arrays[diagnostic])
 
-    if islatlonbox(space)
-        # ClimaCore works with LatLong points, but we want to have longitude
-        # first in the output, so we have to flip things
-        perm = collect(1:length(size(interpolated_field)))
-        perm[1:2] .= (2, 1)
-        interpolated_field = permutedims(interpolated_field, perm)
-    end
-
     if space isa Spaces.PointSpace
         # If the space is a point space, we have to remove the singleton dimension
         interpolated_field = interpolated_field[]

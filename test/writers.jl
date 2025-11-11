@@ -11,6 +11,7 @@ import ClimaCore.Fields
 import ClimaCore.Spaces
 import ClimaCore.Geometry
 import ClimaCore.CommonSpaces
+import ClimaCore.Meshes
 import ClimaComms
 
 import ClimaDiagnostics
@@ -36,6 +37,124 @@ output_dir = mktempdir(pwd())
     @test writer.dict["mytest2"][8.0] == 50.0
 
     @test issorted(writer.dict["mytest"])
+end
+
+@testset "Target coordinates" begin
+    NUM = 50
+
+    # The order returned from target_coordinates should always be ((lon, lat), vertical) or ((x, y), vertical).
+    # As a result, hcoords_from_horizontal_space should return a matrix of LatLongPoint or XYPoint where each axis of the matrix corresponds to lon and lat or x and y respectively.
+    # Test spherical shell space
+    space = SphericalShellSpace()
+    hpts, vpts = Writers.target_coordinates(
+        space,
+        (NUM, 2NUM, 3NUM),
+        ClimaDiagnostics.Writers.FakePressureLevelsMethod(),
+    )
+    lons, lats = hpts
+    @test lons == range(-180.0, 180.0, NUM)
+    @test lats == range(-90.0, 90.0, 2NUM)
+    # It is a bit difficult to test the results of FakePressureLevelsMethod, so
+    # we just check the length of vpts
+    @test length(vpts) == 3NUM
+
+    horizontal_space = Spaces.horizontal_space(space)
+    hcoords = Writers.hcoords_from_horizontal_space(
+        horizontal_space,
+        Meshes.domain(Spaces.topology(horizontal_space)),
+        hpts,
+    )
+    @test size(hcoords) == (NUM, 2NUM)
+    @test hcoords ==
+          [Geometry.LatLongPoint(lat, lon) for lon in lons, lat in lats]
+
+    hpts, vpts = Writers.target_coordinates(
+        space,
+        (NUM, 2NUM, 3NUM),
+        ClimaDiagnostics.Writers.LevelsMethod(),
+    )
+    lons, lats = hpts
+    @test lons == range(-180.0, 180.0, NUM)
+    @test lats == range(-90.0, 90.0, 2NUM)
+    # LevelsMethod override 3NUM to choose points that correspond to the center of the cells
+    @test length(vpts) == 10
+
+    # Test BoxSpace with lonlat = false
+    xyboxspace = BoxSpace(; ylim = (-Float64(1), Float64(2)))
+    hpts, vpts = Writers.target_coordinates(
+        xyboxspace,
+        (NUM, 2NUM, 3NUM),
+        ClimaDiagnostics.Writers.LevelsMethod(),
+    )
+    xpts, ypts = hpts
+    @test xpts == range(-1, 1, NUM)
+    @test ypts == range(-1, 2, 2NUM)
+    @test length(vpts) == 10
+
+    horizontal_space = Spaces.horizontal_space(xyboxspace)
+    hcoords = Writers.hcoords_from_horizontal_space(
+        horizontal_space,
+        Meshes.domain(Spaces.topology(horizontal_space)),
+        hpts,
+    )
+    @test size(hcoords) == (NUM, 2NUM)
+    @test hcoords == [Geometry.XYPoint(x, y) for x in xpts, y in ypts]
+
+    # Test BoxSpace with lonlat = true
+    longlatboxspace =
+        BoxSpace(; lonlat = true, ylim = (-Float64(1), Float64(2)))
+    hpts, vpts = Writers.target_coordinates(
+        longlatboxspace,
+        (NUM, 2NUM, 3NUM),
+        ClimaDiagnostics.Writers.LevelsMethod(),
+    )
+    lons, lats = hpts
+    @test lons == range(-1, 2, NUM)
+    @test lats == range(-1, 1, 2NUM)
+    @test length(vpts) == 10
+
+    horizontal_space = Spaces.horizontal_space(longlatboxspace)
+    hcoords = Writers.hcoords_from_horizontal_space(
+        horizontal_space,
+        Meshes.domain(Spaces.topology(horizontal_space)),
+        hpts,
+    )
+    @test size(hcoords) == (NUM, 2NUM)
+    @test hcoords ==
+          [Geometry.LatLongPoint(lat, lon) for lon in lons, lat in lats]
+
+    # Test column spaces
+    colcenterspace = ColumnCenterFiniteDifferenceSpace()
+    vpts = Writers.target_coordinates(
+        colcenterspace,
+        (NUM,),
+        ClimaDiagnostics.Writers.LevelsMethod(),
+    )
+    @test length(vpts) == 10
+
+    colfacespace = ColumnFaceFiniteDifferenceSpace()
+    vpts = Writers.target_coordinates(
+        colfacespace,
+        (NUM,),
+        ClimaDiagnostics.Writers.LevelsMethod(),
+    )
+    @test length(vpts) == 10
+
+    # Test horizontal space
+    horizontal_space = ClimaCore.Spaces.level(space, 1)
+    hpts = Writers.target_coordinates(horizontal_space, (NUM, 2NUM))
+    lons, lats = hpts
+    @test lons == range(-180, 180, NUM)
+    @test lats == range(-90, 90, 2NUM)
+
+    hcoords = Writers.hcoords_from_horizontal_space(
+        horizontal_space,
+        Meshes.domain(Spaces.topology(horizontal_space)),
+        hpts,
+    )
+    @test size(hcoords) == (NUM, 2NUM)
+    @test hcoords ==
+          [Geometry.LatLongPoint(lat, lon) for lon in lons, lat in lats]
 end
 
 @testset "NetCDFWriter" begin
@@ -158,6 +277,17 @@ end
         @test nc["lat"].attrib["long_name"] == "Latitude"
         @test nc["lat"].attrib["axis"] == "Y"
 
+        # Test dimensions
+        hpts, vpts = Writers.target_coordinates(
+            space,
+            (NUM, 2NUM, 3NUM),
+            ClimaDiagnostics.Writers.FakePressureLevelsMethod(),
+        )
+        lon, lat = hpts
+        @test nc["lon"][:] == lon
+        @test nc["lat"][:] == lat
+        @test nc["z"][:] == vpts
+
         # Test bounds
         @test nc["time_bnds"][:, 1] == [0.0; 10.0]
         @test nc["date_bnds"][:, 1] == [
@@ -202,8 +332,21 @@ end
         t,
     )
 
+    NCDatasets.NCDataset(joinpath(output_dir, "my_short_name_novert.nc")) do nc
+        # Test dimensions
+        hpts, vpts = Writers.target_coordinates(
+            space,
+            (NUM, 2NUM, 3NUM),
+            ClimaDiagnostics.Writers.LevelsMethod(),
+        )
+        lon, lat = hpts
+        @test nc["lon"][:] == lon
+        @test nc["lat"][:] == lat
+        @test nc["z"][:] == vpts
+    end
+
     # Check boxes
-    xyboxspace = BoxSpace()
+    xyboxspace = BoxSpace(; ylim = (-Float64(1), Float64(2)))
     xyboxfield = Fields.coordinate_field(xyboxspace).z
 
     xyboxwriter = Writers.NetCDFWriter(
@@ -230,8 +373,23 @@ end
         t,
     )
     Writers.write_field!(xyboxwriter, xyboxfield, xyboxdiagnostic, xyboxu, p, t)
+    Writers.write_field!(xyboxwriter, xyboxfield, xyboxdiagnostic, xyboxu, p, t)
 
-    longlatboxspace = BoxSpace(; lonlat = true)
+    NCDatasets.NCDataset(joinpath(output_dir, "my_short_name_xybox.nc")) do nc
+        # Test dimensions
+        hpts, vpts = Writers.target_coordinates(
+            xyboxspace,
+            (NUM, 2NUM, 3NUM),
+            ClimaDiagnostics.Writers.LevelsMethod(),
+        )
+        lon, lat = hpts
+        @test nc["x"][:] == lon
+        @test nc["y"][:] == lat
+        @test nc["z"][:] == vpts
+    end
+
+    longlatboxspace =
+        BoxSpace(; lonlat = true, ylim = (-Float64(1), Float64(2)))
     longlatboxfield = Fields.coordinate_field(longlatboxspace).z
 
     longlatboxwriter = Writers.NetCDFWriter(
@@ -275,6 +433,22 @@ end
         t,
     )
 
+    NCDatasets.NCDataset(
+        joinpath(output_dir, "my_short_name_longlatbox.nc"),
+    ) do nc
+        # Test dimensions
+        hpts, vpts = Writers.target_coordinates(
+            longlatboxspace,
+            (NUM, 2NUM, 3NUM),
+            longlatboxwriter.z_sampling_method,
+        )
+
+        lon, lat = hpts
+        @test nc["lon"][:] == lon
+        @test nc["lat"][:] == lat
+        @test nc["z"][:] == vpts
+    end
+
     # Check columns
     if pkgversion(ClimaCore) >= v"0.14.23"
         # Center space
@@ -307,6 +481,18 @@ end
             Writers.write_field!(colwriter, colfield, coldiagnostic, colu, p, t)
             # Write a second time, to check consistency
             Writers.write_field!(colwriter, colfield, coldiagnostic, colu, p, t)
+            NCDatasets.NCDataset(
+                joinpath(output_dir, "my_short_name_c$(i).nc"),
+            ) do nc
+                # Test dimensions
+                vpts = Writers.target_coordinates(
+                    colspace,
+                    (NUM,),
+                    colwriter.z_sampling_method,
+                )
+
+                @test nc["z"][:] == vpts
+            end
         end
     end
 
@@ -408,6 +594,10 @@ end
         joinpath(output_dir, "my_short_name_horizontal.nc"),
     ) do nc
         @test size(nc["ABC"]) == (2, NUM, 2NUM)
+
+        lon, lat = Writers.target_coordinates(horizontal_space, (NUM, 2NUM))
+        @test nc["lon"][:] == lon
+        @test nc["lat"][:] == lat
     end
 
     ###############
