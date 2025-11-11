@@ -128,10 +128,6 @@ function NetCDFWriter(
     z_sampling_method = LevelsMethod(),
     start_date = nothing,
 )
-    has_horizontal_space =
-        space isa Spaces.ExtrudedFiniteDifferenceSpace ||
-        space isa Spaces.AbstractSpectralElementSpace
-
     horizontal_space = Spaces.horizontal_space(space)
     is_horizontal_space = horizontal_space == space
 
