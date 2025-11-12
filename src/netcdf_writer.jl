@@ -125,6 +125,8 @@ Keyword arguments
                    `sync_schedule` can also be set as `nothing`, in which case we let
                    handling buffered writes to disk.
 - `start_date`: Date of the beginning of the simulation.
+- `horizontal_pts`: A tuple of vectors of floats meaning Long-Lat or X-Y (the
+  details depend on the configuration being simulated).
 """
 function NetCDFWriter(
     space::Spaces.AbstractSpace,
@@ -135,6 +137,7 @@ function NetCDFWriter(
                     EveryStepSchedule() : nothing,
     z_sampling_method = LevelsMethod(),
     start_date = nothing,
+    horizontal_pts = nothing,
 )
     horizontal_space = Spaces.horizontal_space(space)
     is_horizontal_space = horizontal_space == space
@@ -163,6 +166,19 @@ function NetCDFWriter(
                 Tuple([num_points[1:num_horiz_dimensions]..., num_vpts])
         end
         hpts, vpts = target_coordinates(space, num_points, z_sampling_method)
+    end
+
+    if !isnothing(horizontal_pts)
+        length(hpts) != length(horizontal_pts) && error(
+            "Expected horizontal_pts to be of length $(length(hpts)); found $(length(horizontal_pts)) instead",
+        )
+        hpts = collect(horizontal_pts)
+        if is_horizontal_space
+            num_points = ntuple(i -> length(hpts[i]), length(hpts))
+        else
+            num_points =
+                (ntuple(i -> length(hpts[i]), length(hpts))..., length(vpts))
+        end
     end
 
     hcoords = hcoords_from_horizontal_space(
