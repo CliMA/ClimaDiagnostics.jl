@@ -3,8 +3,28 @@
 v0.3.0
 -------
 
+## Breaking changes
+
 - ![][badge-💥breaking]  Reduced NetCDF diagnostics are now timestamped at the start
   of the reduction period instead of the end. Instantaneous diagnostics are unchanged.
+
+## Specify points for horizontal interpolation
+
+With this relase, `horizontal_pts` is added as a keyword argument to
+`NetCDFWriter` which allow users to specify specific points for interpolation in
+the horizontal space.
+
+In the example below, interpolation is done at the points along the longitudes
+from 0.5 degrees to 179.5 degrees and the latitudes from -90.0 degrees to 90.0
+degrees with a step of 1 degree for both.
+
+```julia
+writer = NetCDFWriter(
+    space, # 2D space with longitudes and latitudes
+    output_dir;
+    horizontal_pts = (0.5:179.5, -90.0:90.0),
+)
+```
 
 ## Bug fixes
 
