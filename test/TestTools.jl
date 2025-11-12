@@ -54,6 +54,7 @@ function SphericalShellSpace(;
     nelements = 10,
     zelem = 10,
     npolynomial = 4,
+    use_hypsography = false,
     context = ClimaComms.context(),
     FT = Float64,
 )
@@ -79,9 +80,21 @@ function SphericalShellSpace(;
     quad = ClimaCore.Spaces.Quadratures.GLL{npolynomial + 1}()
     horzspace = ClimaCore.Spaces.SpectralElementSpace2D(horztopology, quad)
 
+    if use_hypsography
+        z_surface =
+            Geometry.ZPoint.(
+                cosd.(Fields.coordinate_field(horzspace).lat) .+
+                cosd.(Fields.coordinate_field(horzspace).long) .+ 1
+            )
+        hypsography = ClimaCore.Hypsography.LinearAdaption(z_surface)
+    else
+        hypsography = ClimaCore.Grids.Flat()
+    end
+
     return ClimaCore.Spaces.ExtrudedFiniteDifferenceSpace(
         horzspace,
         vert_center_space,
+        hypsography,
     )
 end
 
