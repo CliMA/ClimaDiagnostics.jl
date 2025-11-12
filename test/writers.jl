@@ -251,6 +251,7 @@ end
     )
     Writers.interpolate_field!(writer, field, diagnostic, u, p, t)
     Writers.write_field!(writer, field, diagnostic, u, p, t)
+    Writers.write_field!(writer, field, diagnostic, u, p, t)
 
     @test writer.unsynced_datasets ==
           Set((writer.open_files[joinpath(output_dir, "my_short_name.nc")],))
@@ -264,7 +265,7 @@ end
         @test nc["ABC"].attrib["units"] == ""
         @test nc["ABC"].attrib["start_date"] ==
               string(Dates.DateTime(1453, 5, 29))
-        @test size(nc["ABC"]) == (1, NUM, 2NUM, 3NUM)
+        @test size(nc["ABC"]) == (2, NUM, 2NUM, 3NUM)
         @test nc["time"][1] == 10.0
         @test nc["date"][1] == Dates.DateTime(1453, 5, 29) + Dates.Second(10.0)
         @test nc["time"].attrib["standard_name"] == "time"
