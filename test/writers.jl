@@ -346,6 +346,67 @@ end
         @test nc["z"][:] == vpts
     end
 
+    # Test with hypsography
+    space_with_hypsography = SphericalShellSpace(; use_hypsography = true)
+    field_hypsography = Fields.coordinate_field(space_with_hypsography).z
+
+    hypsography_writer = Writers.NetCDFWriter(
+        space_with_hypsography,
+        output_dir;
+        num_points = (NUM, 2NUM, 3NUM),
+    )
+
+    hypsography_diagnostic = ClimaDiagnostics.ScheduledDiagnostic(;
+        variable = ClimaDiagnostics.DiagnosticVariable(;
+            compute!,
+            short_name = "ABC",
+        ),
+        output_short_name = "my_short_name_hypsography",
+        output_long_name = "My Long Name",
+        output_writer = hypsography_writer,
+    )
+
+    space_with_hypsography_u = (; field_hypsography)
+    Writers.interpolate_field!(
+        hypsography_writer,
+        field_hypsography,
+        hypsography_diagnostic,
+        space_with_hypsography_u,
+        p,
+        t,
+    )
+    Writers.write_field!(
+        hypsography_writer,
+        field_hypsography,
+        hypsography_diagnostic,
+        space_with_hypsography_u,
+        p,
+        t,
+    )
+    Writers.write_field!(
+        hypsography_writer,
+        field_hypsography,
+        hypsography_diagnostic,
+        space_with_hypsography_u,
+        p,
+        t,
+    )
+
+    NCDatasets.NCDataset(
+        joinpath(output_dir, "my_short_name_hypsography.nc"),
+    ) do nc
+        hpts, vpts = Writers.target_coordinates(
+            space_with_hypsography,
+            (NUM, 2NUM, 3NUM),
+            ClimaDiagnostics.Writers.LevelsMethod(),
+        )
+        lon, lat = hpts
+        @test nc["lon"][:] == lon
+        @test nc["lat"][:] == lat
+        @test nc["z_reference"][:] == vpts
+        @test size(nc["z_physical"]) == (NUM, 2NUM, length(vpts))
+    end
+
     # Check boxes
     xyboxspace = BoxSpace(; ylim = (-Float64(1), Float64(2)))
     xyboxfield = Fields.coordinate_field(xyboxspace).z
