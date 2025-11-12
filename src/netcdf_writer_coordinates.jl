@@ -184,18 +184,26 @@ end
 """
     add_space_coordinates_maybe!(nc::NCDatasets.NCDataset,
                                  space::Spaces.AbstractSpace,
-                                 num_points;
+                                 num_points,
+                                 hpts,
+                                 vpts;
+                                 z_sampling_method,
+                                 interpolated_physical_z,
                                  names)
 
-Add dimensions relevant to the `space` to the given `nc` NetCDF file. The range is
-automatically determined and the number of points is set with `num_points`, which has to be
-an iterable of size N, where N is the number of dimensions of the space. For instance, 3 for
-a cubed sphere, 2 for a surface, 1 for a column.
+Add dimensions relevant to the `space` to the given `nc` NetCDF file. The horizontal
+dimensions are `hpts` and the vertical dimension is `vpts`. It is the responsibility of the
+user to ensure the `hpts` and `vpts` make sense for the given diagnostic variable.
 
 The function returns an array with the names of the relevant dimensions. (We want arrays
 because we want to preserve the order to match the one in num_points).
 
 In some cases, the names are adjustable passing the keyword `names`.
+
+Sampling points along the vertical dimension is specified by `z_sampling_method` (see
+`AbstractZSamplingMethod`). The `interpolated_physical_z` keyword argument is an array
+containing the physical altitude at each target interpolation point, with dimensions
+matching the grid defined by `hpts` and `vpts`.
 """
 function add_space_coordinates_maybe! end
 
@@ -253,18 +261,19 @@ end
 # Column
 function add_space_coordinates_maybe!(
     nc::NCDatasets.NCDataset,
-    space::Spaces.FiniteDifferenceSpace,
-    num_points_z;
+    ::Spaces.FiniteDifferenceSpace,
+    num_points_z,
+    hpts,
+    zpts::Vector{FT};
     z_sampling_method,
     names = ("z",),
     interpolated_physical_z = nothing, # Not needed here, but needed for consistency of
     # interface and dispatch
-)
+) where {FT <: AbstractFloat}
     name, _... = names
     z_dimension_exists = dimension_exists(nc, name, num_points_z)
 
     if !z_dimension_exists
-        zpts = target_coordinates(space, num_points_z, z_sampling_method)
         add_dimension!(nc, name, zpts, units = "m", axis = "Z")
     end
     return [name]
@@ -274,7 +283,9 @@ end
 function add_space_coordinates_maybe!(
     nc::NCDatasets.NCDataset,
     space::Spaces.PointSpace,
-    num_points_z;
+    num_points_z,
+    hpts,
+    zpts;
     z_sampling_method,
     names = (),
     interpolated_physical_z = nothing, # Not needed here, but needed for consistency of
@@ -286,14 +297,31 @@ end
 add_space_coordinates_maybe!(
     nc::NCDatasets.NCDataset,
     space::Spaces.AbstractSpectralElementSpace,
-    num_points;
+    num_points,
+    hpts;
 ) = add_space_coordinates_maybe!(
     nc,
     space,
     num_points,
+    hpts,
     Meshes.domain(Spaces.topology(space));
 )
 
+# Needed for horizontal space
+add_space_coordinates_maybe!(
+    nc::NCDatasets.NCDataset,
+    space::Spaces.AbstractSpectralElementSpace,
+    num_points,
+    hpts,
+    vpts;
+    kwargs...,
+) = add_space_coordinates_maybe!(
+    nc,
+    space,
+    num_points,
+    hpts,
+    Meshes.domain(Spaces.topology(space));
+)
 
 # For the horizontal space, we also have to look at the domain, so we define another set of
 # functions that dispatches over the domain
@@ -384,8 +412,9 @@ end
 
 function add_space_coordinates_maybe!(
     nc::NCDatasets.NCDataset,
-    space::Spaces.SpectralElementSpace2D,
+    ::Spaces.SpectralElementSpace2D,
     num_points,
+    hpts,
     domain::Domains.RectangleDomain;
     names = islatlonbox(domain) ? ("lon", "lat") : ("x", "y"),
 )
@@ -418,7 +447,7 @@ function add_space_coordinates_maybe!(
     dim2_exists = dimension_exists(nc, name2, (num_points2,))
 
     if !dim1_exists && !dim2_exists
-        pts1, pts2 = target_coordinates(space, num_points)
+        pts1, pts2 = hpts
         add_dimension!(nc, name1, pts1; more_attribs[1]...)
         add_dimension!(nc, name2, pts2; more_attribs[2]...)
     end
@@ -429,8 +458,9 @@ end
 # Plane
 function add_space_coordinates_maybe!(
     nc::NCDatasets.NCDataset,
-    space::Spaces.SpectralElementSpace1D,
+    ::Spaces.SpectralElementSpace1D,
     num_points,
+    xpts,
     ::Domains.IntervalDomain;
     names = ("x",),
 )
@@ -439,7 +469,6 @@ function add_space_coordinates_maybe!(
     x_dimension_exists = dimension_exists(nc, xname, (num_points_x,))
 
     if !x_dimension_exists
-        xpts = target_coordinates(space, num_points)
         add_dimension!(nc, xname, xpts; units = "m", axis = "X")
     end
     return [xname]
@@ -448,8 +477,9 @@ end
 # Cubed sphere
 function add_space_coordinates_maybe!(
     nc::NCDatasets.NCDataset,
-    space::Spaces.SpectralElementSpace2D,
+    ::Spaces.SpectralElementSpace2D,
     num_points,
+    hpts,
     ::Domains.SphereDomain;
     names = ("lon", "lat"),
 )
@@ -460,7 +490,7 @@ function add_space_coordinates_maybe!(
     lat_dimension_exists = dimension_exists(nc, latname, (num_points_lat,))
 
     if !long_dimension_exists && !lat_dimension_exists
-        longpts, latpts = target_coordinates(space, num_points)
+        longpts, latpts = hpts
         add_dimension!(
             nc,
             longname,
@@ -489,7 +519,9 @@ end
 function add_space_coordinates_maybe!(
     nc::NCDatasets.NCDataset,
     space::Spaces.ExtrudedFiniteDifferenceSpace,
-    num_points;
+    num_points,
+    hpts,
+    vpts;
     z_sampling_method,
     interpolated_physical_z = nothing,
 )
@@ -502,8 +534,12 @@ function add_space_coordinates_maybe!(
     # We can also assume that the vertical space has dimension 1
     horizontal_space = Spaces.horizontal_space(space)
 
-    hdims_names =
-        add_space_coordinates_maybe!(nc, horizontal_space, num_points_horiz)
+    hdims_names = add_space_coordinates_maybe!(
+        nc,
+        horizontal_space,
+        num_points_horiz,
+        hpts,
+    )
 
     vertical_space = Spaces.FiniteDifferenceSpace(
         Spaces.grid(space).vertical_grid,
@@ -514,7 +550,9 @@ function add_space_coordinates_maybe!(
         vdims_names = add_space_coordinates_maybe!(
             nc,
             vertical_space,
-            (num_points_vertic,);
+            (num_points_vertic,),
+            hpts,
+            vpts;
             z_sampling_method,
         )
     else
@@ -522,6 +560,7 @@ function add_space_coordinates_maybe!(
             nc,
             vertical_space,
             (num_points_vertic,),
+            vpts,
             interpolated_physical_z;
             z_sampling_method,
             names = ("z_reference",),
@@ -554,6 +593,7 @@ function add_space_coordinates_maybe!(
     nc::NCDatasets.NCDataset,
     space::Spaces.FiniteDifferenceSpace,
     num_points,
+    vpts,
     interpolated_physical_z;
     names = ("z_reference",),
     z_sampling_method,
@@ -566,8 +606,7 @@ function add_space_coordinates_maybe!(
         dimension_exists(nc, name, num_points)
 
     if !z_reference_dimension_dimension_exists
-        reference_altitudes =
-            target_coordinates(space, num_points, z_sampling_method)
+        reference_altitudes = vpts
         add_dimension!(nc, name, reference_altitudes; units = "m", axis = "Z")
     end
 
