@@ -20,3 +20,6 @@ ProfileCanvas = "efd6af41-a80b-495e-886c-e51b0c7d77a3"
 SafeTestsets = "1bc83da4-3b8d-516f-aca4-4fe02f6d838f"
 SciMLBase = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[compat]
+JuliaFormatter = "1"
