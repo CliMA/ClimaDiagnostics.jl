@@ -251,6 +251,7 @@ end
     )
     Writers.interpolate_field!(writer, field, diagnostic, u, p, t)
     Writers.write_field!(writer, field, diagnostic, u, p, t)
+    Writers.write_field!(writer, field, diagnostic, u, p, t)
 
     @test writer.unsynced_datasets ==
           Set((writer.open_files[joinpath(output_dir, "my_short_name.nc")],))
@@ -264,7 +265,7 @@ end
         @test nc["ABC"].attrib["units"] == ""
         @test nc["ABC"].attrib["start_date"] ==
               string(Dates.DateTime(1453, 5, 29))
-        @test size(nc["ABC"]) == (1, NUM, 2NUM, 3NUM)
+        @test size(nc["ABC"]) == (2, NUM, 2NUM, 3NUM)
         @test nc["time"][1] == 10.0
         @test nc["date"][1] == Dates.DateTime(1453, 5, 29) + Dates.Second(10.0)
         @test nc["time"].attrib["standard_name"] == "time"
@@ -343,6 +344,67 @@ end
         @test nc["lon"][:] == lon
         @test nc["lat"][:] == lat
         @test nc["z"][:] == vpts
+    end
+
+    # Test with hypsography
+    space_with_hypsography = SphericalShellSpace(; use_hypsography = true)
+    field_hypsography = Fields.coordinate_field(space_with_hypsography).z
+
+    hypsography_writer = Writers.NetCDFWriter(
+        space_with_hypsography,
+        output_dir;
+        num_points = (NUM, 2NUM, 3NUM),
+    )
+
+    hypsography_diagnostic = ClimaDiagnostics.ScheduledDiagnostic(;
+        variable = ClimaDiagnostics.DiagnosticVariable(;
+            compute!,
+            short_name = "ABC",
+        ),
+        output_short_name = "my_short_name_hypsography",
+        output_long_name = "My Long Name",
+        output_writer = hypsography_writer,
+    )
+
+    space_with_hypsography_u = (; field_hypsography)
+    Writers.interpolate_field!(
+        hypsography_writer,
+        field_hypsography,
+        hypsography_diagnostic,
+        space_with_hypsography_u,
+        p,
+        t,
+    )
+    Writers.write_field!(
+        hypsography_writer,
+        field_hypsography,
+        hypsography_diagnostic,
+        space_with_hypsography_u,
+        p,
+        t,
+    )
+    Writers.write_field!(
+        hypsography_writer,
+        field_hypsography,
+        hypsography_diagnostic,
+        space_with_hypsography_u,
+        p,
+        t,
+    )
+
+    NCDatasets.NCDataset(
+        joinpath(output_dir, "my_short_name_hypsography.nc"),
+    ) do nc
+        hpts, vpts = Writers.target_coordinates(
+            space_with_hypsography,
+            (NUM, 2NUM, 3NUM),
+            ClimaDiagnostics.Writers.LevelsMethod(),
+        )
+        lon, lat = hpts
+        @test nc["lon"][:] == lon
+        @test nc["lat"][:] == lat
+        @test nc["z_reference"][:] == vpts
+        @test size(nc["z_physical"]) == (NUM, 2NUM, length(vpts))
     end
 
     # Check boxes
@@ -901,5 +963,197 @@ end
         end
 
         close(writer)
+    end
+end
+
+@testset "NetCDFWriter different horizontal points" begin
+    NUM = 10
+
+    start_date = Dates.DateTime(2010, 1, 1)
+
+    function compute!(out, u, p, t)
+        if isnothing(out)
+            return u.field
+        else
+            out .= u.field
+        end
+    end
+
+    p = (; start_date = start_date)
+
+    sphericalspace = SphericalShellSpace(FT = Float32)
+    longlatboxspace =
+        BoxSpace(; lonlat = true, ylim = (-Float64(1), Float64(2)))
+    for (i, space) in enumerate((sphericalspace, longlatboxspace))
+        field = deepcopy(Fields.coordinate_field(space).z)
+        vec(parent(field)) .+= 1:length(parent(field))
+
+        u = (; field)
+
+        writer = Writers.NetCDFWriter(
+            space,
+            output_dir;
+            num_points = (NUM, 2NUM, 3NUM),
+            start_date = start_date,
+        )
+        hpts, vpts = Writers.target_coordinates(
+            space,
+            (NUM, 2NUM, 3NUM),
+            ClimaDiagnostics.Writers.FakePressureLevelsMethod(),
+        )
+        lon, lat = hpts
+        writer_diff_pts = Writers.NetCDFWriter(
+            space,
+            output_dir;
+            num_points = (NUM, 2NUM, 3NUM),
+            start_date = start_date,
+            horizontal_pts = (vcat(lon, lon), vcat(lat, lat)),
+        )
+
+        diagnostic = ClimaDiagnostics.ScheduledDiagnostic(;
+            variable = ClimaDiagnostics.DiagnosticVariable(;
+                compute!,
+                short_name = "ABC",
+            ),
+            output_short_name = "default_pts_$i",
+            output_long_name = "Different horizontal points test",
+            output_writer = writer,
+        )
+        diagnostic_diff_pts = ClimaDiagnostics.ScheduledDiagnostic(;
+            variable = ClimaDiagnostics.DiagnosticVariable(;
+                compute!,
+                short_name = "ABC",
+            ),
+            output_short_name = "diff_pts_$i",
+            output_long_name = "Different horizontal points test",
+            output_writer = writer_diff_pts,
+        )
+
+        t = 42.0
+        combinations =
+            ((writer, diagnostic), (writer_diff_pts, diagnostic_diff_pts))
+        for (writ, diag) in combinations
+            Writers.interpolate_field!(writ, field, diag, u, p, t)
+            Writers.write_field!(writ, field, diag, u, p, t)
+            Writers.write_field!(writ, field, diag, u, p, t)
+        end
+
+        NCDatasets.NCDataset(
+            joinpath(output_dir, "diff_pts_$i.nc"),
+        ) do nc_diff_pts
+            @test nc_diff_pts["lon"][:] == vcat(lon, lon)
+            @test nc_diff_pts["lat"][:] == vcat(lat, lat)
+            @test size(nc_diff_pts["ABC"]) == (2, 2 .* length.(hpts)..., 10)
+            @test nc_diff_pts["ABC"][:, 1:length(lon), 1:length(lat), :] ==
+                  nc_diff_pts["ABC"][
+                :,
+                (length(lon) + 1):end,
+                (length(lat) + 1):end,
+                :,
+            ]
+            NCDatasets.NCDataset(
+                joinpath(output_dir, "default_pts_$i.nc"),
+            ) do nc_default_pts
+                @test nc_diff_pts["ABC"][:, 1:length(lon), 1:length(lat), :] ==
+                      nc_default_pts["ABC"][:, :, :, :]
+                @test nc_diff_pts["lon"][1:length(lon)] ==
+                      nc_default_pts["lon"][:]
+                @test nc_diff_pts["lat"][1:length(lat)] ==
+                      nc_default_pts["lat"][:]
+            end
+        end
+
+        close(writer)
+        close(writer_diff_pts)
+    end
+
+    # TODO: Test with only a horizontal space
+    horizontal_space = ClimaCore.Spaces.level(sphericalspace, 1)
+    horizontal_field = Fields.coordinate_field(horizontal_space).z
+
+    lon, lat = Writers.target_coordinates(horizontal_space, (NUM, 2NUM))
+
+    # Pick every other point
+    horizontal_writer = Writers.NetCDFWriter(
+        horizontal_space,
+        output_dir;
+        num_points = (NUM, 2NUM),
+    )
+    horizontal_writer_diff_pts = Writers.NetCDFWriter(
+        horizontal_space,
+        output_dir;
+        num_points = (NUM, 2NUM),
+        horizontal_pts = (lon[1:2:end], lat[1:2:end]),
+    )
+    horizontal_u = (; field = horizontal_field)
+
+    horizontal_diagnostic = ClimaDiagnostics.ScheduledDiagnostic(;
+        variable = ClimaDiagnostics.DiagnosticVariable(;
+            compute!,
+            short_name = "ABC",
+        ),
+        output_short_name = "default_pts_horizontal",
+        output_long_name = "Horizontal points with horizontal space test",
+        output_writer = horizontal_writer,
+    )
+    horizontal_diagnostic_diff_pts = ClimaDiagnostics.ScheduledDiagnostic(;
+        variable = ClimaDiagnostics.DiagnosticVariable(;
+            compute!,
+            short_name = "ABC",
+        ),
+        output_short_name = "diff_pts_horizontal",
+        output_long_name = "Different horizontal points with horizontal space test",
+        output_writer = horizontal_writer_diff_pts,
+    )
+
+    t = 42.0
+    combinations = (
+        (horizontal_writer_diff_pts, horizontal_diagnostic_diff_pts),
+        (horizontal_writer, horizontal_diagnostic),
+    )
+
+    for (writer, diagnostics) in combinations
+        Writers.interpolate_field!(
+            writer,
+            horizontal_field,
+            diagnostics,
+            horizontal_u,
+            p,
+            t,
+        )
+        Writers.write_field!(
+            writer,
+            horizontal_field,
+            diagnostics,
+            horizontal_u,
+            p,
+            t,
+        )
+        # Write a second time
+        Writers.write_field!(
+            writer,
+            horizontal_field,
+            diagnostics,
+            horizontal_u,
+            p,
+            t,
+        )
+    end
+
+    close(horizontal_writer)
+    close(horizontal_writer_diff_pts)
+
+    NCDatasets.NCDataset(
+        joinpath(output_dir, "diff_pts_horizontal.nc"),
+    ) do nc_diff_pts
+        @test nc_diff_pts["lon"][:] == lon[1:2:end]
+        @test nc_diff_pts["lat"][:] == lat[1:2:end]
+        @test size(nc_diff_pts["ABC"]) == (2, NUM / 2, NUM)
+        NCDatasets.NCDataset(
+            joinpath(output_dir, "default_pts_horizontal.nc"),
+        ) do nc_default_pts
+            @test Array(nc_diff_pts["ABC"]) ==
+                  nc_default_pts["ABC"][:, 1:2:end, 1:2:end]
+        end
     end
 end

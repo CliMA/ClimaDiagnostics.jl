@@ -25,6 +25,8 @@ struct NetCDFWriter{
     SYNC,
     ZSM <: Union{AbstractZSamplingMethod, Nothing},
     DATE,
+    HPTS,
+    VPTS,
 } <: AbstractWriter
     """The base folder where to save the files."""
     output_dir::String
@@ -76,6 +78,12 @@ struct NetCDFWriter{
     """Date of the beginning of the simulation (it is used to convert seconds to dates)."""
     start_date::DATE
 
+    """The horizontal points along the long-lat dimensions or x-y dimensions."""
+    hpts::HPTS
+
+    """The vertical points along the vertical dimension."""
+    vpts::VPTS
+
     # TODO: Add option to write dates as time
 end
 
@@ -117,6 +125,8 @@ Keyword arguments
                    `sync_schedule` can also be set as `nothing`, in which case we let
                    handling buffered writes to disk.
 - `start_date`: Date of the beginning of the simulation.
+- `horizontal_pts`: A tuple of vectors of floats meaning Long-Lat or X-Y (the
+  details depend on the configuration being simulated).
 """
 function NetCDFWriter(
     space::Spaces.AbstractSpace,
@@ -127,11 +137,8 @@ function NetCDFWriter(
                     EveryStepSchedule() : nothing,
     z_sampling_method = LevelsMethod(),
     start_date = nothing,
+    horizontal_pts = nothing,
 )
-    has_horizontal_space =
-        space isa Spaces.ExtrudedFiniteDifferenceSpace ||
-        space isa Spaces.AbstractSpectralElementSpace
-
     horizontal_space = Spaces.horizontal_space(space)
     is_horizontal_space = horizontal_space == space
 
@@ -159,6 +166,19 @@ function NetCDFWriter(
                 Tuple([num_points[1:num_horiz_dimensions]..., num_vpts])
         end
         hpts, vpts = target_coordinates(space, num_points, z_sampling_method)
+    end
+
+    if !isnothing(horizontal_pts)
+        length(hpts) != length(horizontal_pts) && error(
+            "Expected horizontal_pts to be of length $(length(hpts)); found $(length(horizontal_pts)) instead",
+        )
+        hpts = collect(horizontal_pts)
+        if is_horizontal_space
+            num_points = ntuple(i -> length(hpts[i]), length(hpts))
+        else
+            num_points =
+                (ntuple(i -> length(hpts[i]), length(hpts))..., length(vpts))
+        end
     end
 
     hcoords = hcoords_from_horizontal_space(
@@ -196,6 +216,8 @@ function NetCDFWriter(
         typeof(sync_schedule),
         typeof(z_sampling_method),
         typeof(start_date),
+        typeof(hpts),
+        typeof(vpts),
     }(
         output_dir,
         Dict{String, Remapper}(),
@@ -208,6 +230,8 @@ function NetCDFWriter(
         sync_schedule,
         unsynced_datasets,
         start_date,
+        hpts,
+        vpts,
     )
 end
 
@@ -254,6 +278,8 @@ function NetCDFWriter(
         typeof(sync_schedule),
         typeof(z_sampling_method),
         typeof(start_date),
+        Nothing,
+        typeof(vpts),
     }(
         output_dir,
         Dict{String, Remapper}(),
@@ -266,6 +292,8 @@ function NetCDFWriter(
         sync_schedule,
         unsynced_datasets,
         start_date,
+        nothing,
+        vpts,
     )
 end
 
@@ -291,6 +319,8 @@ function NetCDFWriter(
         typeof(sync_schedule),
         Nothing,
         typeof(start_date),
+        Nothing,
+        Nothing,
     }(
         output_dir,
         Dict{String, Remapper}(),
@@ -303,6 +333,8 @@ function NetCDFWriter(
         sync_schedule,
         unsynced_datasets,
         start_date,
+        nothing,
+        nothing,
     )
 end
 """
@@ -352,14 +384,10 @@ NVTX.@annotate function interpolate_field!(
 
         if has_horizontal_space
             if is_horizontal_space
-                hpts = target_coordinates(space, writer.num_points)
+                hpts = writer.hpts
                 vpts = []
             else
-                hpts, vpts = target_coordinates(
-                    space,
-                    writer.num_points,
-                    writer.z_sampling_method,
-                )
+                hpts, vpts = writer.hpts, writer.vpts
             end
 
             target_hcoords = hcoords_from_horizontal_space(
@@ -368,11 +396,7 @@ NVTX.@annotate function interpolate_field!(
                 hpts,
             )
         else
-            vpts = target_coordinates(
-                space,
-                writer.num_points,
-                writer.z_sampling_method,
-            )
+            vpts = writer.vpts
         end
 
         target_zcoords = Geometry.ZPoint.(vpts)
@@ -482,7 +506,9 @@ NVTX.@annotate function write_field!(
     dim_names = add_space_coordinates_maybe!(
         nc,
         space,
-        writer.num_points;
+        writer.num_points,
+        writer.hpts,
+        writer.vpts;
         writer.z_sampling_method,
         writer.interpolated_physical_z,
     )
