@@ -571,16 +571,6 @@ function add_space_coordinates_maybe!(
     return (hdims_names..., vdims_names...)
 end
 
-# Ignore the interpolated_physical_z/z_sampling_method keywords in the general
-# case (we only case about the specialized one for extruded spaces)
-add_space_coordinates_maybe!(
-    nc::NCDatasets.NCDataset,
-    space,
-    num_points;
-    interpolated_physical_z = nothing,
-    z_sampling_method = nothing,
-) = add_space_coordinates_maybe!(nc::NCDatasets.NCDataset, space, num_points)
-
 # Elevation with topography
 
 # `depending_on_dimensions` identifies the dimensions upon which the current one depends on
