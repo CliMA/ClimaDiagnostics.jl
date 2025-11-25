@@ -1206,3 +1206,45 @@ end
         @test nc.attrib["global"] == "attribs"
     end
 end
+
+# TODO: Maybe write something here for the functions needed for pressure coordinates
+@testset "Pressure coordinates" begin
+    # space = SphericalShellSpace(FT = Float32)
+    # field = Fields.coordinate_field(space).z
+
+    # # Number of interpolation points
+    # NUM = 50
+
+    # start_date = Dates.DateTime(2010, 1, 1)
+
+    # writer = Writers.NetCDFWriter(
+    #     space,
+    #     output_dir;
+    #     num_points = (NUM, 2NUM, 3NUM),
+    #     sync_schedule = ClimaDiagnostics.Schedules.DivisorSchedule(2),
+    #     z_sampling_method = ClimaDiagnostics.Writers.FakePressureLevelsMethod(),
+    # )
+
+    # u = (; field)
+    # t = 0.0
+
+    # function compute!(out, u, p, t)
+    #     if isnothing(out)
+    #         return u.field
+    #     else
+    #         out .= u.field
+    #     end
+    # end
+
+    # diagnostic = ClimaDiagnostics.ScheduledDiagnostic(;
+    #     variable = ClimaDiagnostics.DiagnosticVariable(;
+    #         compute!,
+    #         short_name = "ABC",
+    #     ),
+    #     output_short_name = "timetest",
+    #     output_long_name = "My Long Name",
+    #     output_writer = writer,
+    # )
+    # Writers.interpolate_field!(writer, field, diagnostic, u, p, t)
+    # Writers.write_field!(writer, field, diagnostic, u, p, t)
+end

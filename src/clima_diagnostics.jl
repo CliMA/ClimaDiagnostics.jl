@@ -11,13 +11,16 @@ import .Writers:
 # We define all the known identities in reduction_identities.jl
 include("reduction_identities.jl")
 
+abstract type AbstractDiagnosticsHandler end
+
 """
     DiagnosticsHandler
 
 A struct that contains the scheduled diagnostics, ancillary data and areas of memory needed
 to store and accumulate results.
 """
-struct DiagnosticsHandler{SD, V <: Vector{Int}, STORAGE, ACC <: Dict, COUNT}
+struct DiagnosticsHandler{SD, V <: Vector{Int}, STORAGE, ACC <: Dict, COUNT} <:
+       AbstractDiagnosticsHandler
     """An iterable with the `ScheduledDiagnostic`s that are scheduled."""
     scheduled_diagnostics::SD
 
@@ -401,7 +404,7 @@ end
 
 Translate a `DiagnosticsHandler` into a SciML callback ready to be used.
 """
-function DiagnosticsCallback(diagnostics_handler::DiagnosticsHandler)
+function DiagnosticsCallback(diagnostics_handler::AbstractDiagnosticsHandler)
     sciml_callback(integrator) =
         orchestrate_diagnostics(integrator, diagnostics_handler)
 
@@ -460,3 +463,5 @@ function IntegratorWithDiagnostics(
 
     return integrator
 end
+
+include("pfull_clima_diagnostics.jl")

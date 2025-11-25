@@ -15,6 +15,8 @@ using Test
 @safetestset "Diagnostics helpers" begin @time include("diagnostic_helper.jl") end
 
 @safetestset "Integration test" begin @time include("integration_test.jl") end
+
+@safetestset "Pressure coordinates" begin @time include("pressure_coords_test.jl") end
 #! format: on
 
 return nothing

@@ -97,7 +97,36 @@ end
 Close all the open files in `writer`.
 """
 function Base.close(writer::NetCDFWriter)
+    # TODO: This should be overwritten, so that close can do more postprocessing
+    # for pressure coordinates
+    # This is impossible to tell from just the writer, so we must look inside
+    # and check
     foreach(NCDatasets.close, values(writer.open_files))
+
+    # # TODO: Making these directories will break ClimaAnalysis SimDir
+    # _pfull_dir = joinpath(writer.output_dir, "_pfull_coords")
+    # # TODO: I am not sure how this works with restarts
+    # pfull_dir = joinpath(writer.output_dir, "pfull_coords")
+    # # If it already exists, then the pressure coordinates are converted already
+    # # TODO: Restarts...
+    # isdir(pfull_dir) && return nothing
+    # mkdir(pfull_dir)
+    # if isdir(_pfull_dir)
+    #     pfull_nc_filepaths = filter!(
+    #         filepath -> isfile(filepath) && endswith(filepath, ".nc"),
+    #         readdir(_pfull_dir, join = true),
+    #     )
+    #     target_lon, target_lat = writer.hpts
+    #     for pfull_nc_filepath in pfull_nc_filepaths
+    #         write_h_indices_to_h_coords(
+    #             pfull_nc_filepath,
+    #             target_lon,
+    #             target_lat,
+    #             output_dir = pfull_dir,
+    #         )
+    #     end
+    # end
+
     return nothing
 end
 
@@ -669,3 +698,5 @@ function Base.show(io::IO, writer::NetCDFWriter)
         "NetCDFWriter, writing to $(writer.output_dir) ($num_open_files files open)",
     )
 end
+
+include("pfull_netcdf_writer.jl")
