@@ -3,6 +3,25 @@
 main
 -------
 
+## Add global attributes to NetCDF files
+
+With this release, you can now add global attributes that are the same across
+all NetCDF files for a given `NetCDFWriter`. For example, you may be interested
+in specifying the `source` and `experiment` which are the same across all
+NetCDF files produced for a single simulation. You can do this via the
+`global_attribs` keyword argument for the `NetCDFWriter`. The global attributes
+must be a subtype of an `AbstractDict{String, String}`. If the order of the
+attributes matter, you may want to use an `OrderedDict` from
+`OrderedCollections`.
+
+```julia
+writer = NetCDFWriter(
+    space,
+    output_dir;
+    global_attribs = Dict("source" => "CliMA Coupler Simulation", "experiment" => "AMIP"),
+)
+```
+
 v0.3.0
 -------
 

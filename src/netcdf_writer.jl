@@ -27,6 +27,7 @@ struct NetCDFWriter{
     DATE,
     HPTS,
     VPTS,
+    GA <: Union{AbstractDict{String, String}, Nothing},
 } <: AbstractWriter
     """The base folder where to save the files."""
     output_dir::String
@@ -84,6 +85,9 @@ struct NetCDFWriter{
     """The vertical points along the vertical dimension."""
     vpts::VPTS
 
+    """Global attributes in each NetCDF file"""
+    global_attribs::GA
+
     # TODO: Add option to write dates as time
 end
 
@@ -127,6 +131,10 @@ Keyword arguments
 - `start_date`: Date of the beginning of the simulation.
 - `horizontal_pts`: A tuple of vectors of floats meaning Long-Lat or X-Y (the
   details depend on the configuration being simulated).
+- `global_attribs`: Optional dictionary of global attributes to include in all NetCDF files
+  produced by this `NetCDFWriter`. These attributes are useful for storing metadata such as
+  `source`, `creation_date`, or `frequency`. Must be `nothing` or a subtype of
+  `AbstractDict{String, String}`. Default is `nothing`.
 """
 function NetCDFWriter(
     space::Spaces.AbstractSpace,
@@ -138,6 +146,7 @@ function NetCDFWriter(
     z_sampling_method = LevelsMethod(),
     start_date = nothing,
     horizontal_pts = nothing,
+    global_attribs = nothing,
 )
     horizontal_space = Spaces.horizontal_space(space)
     is_horizontal_space = horizontal_space == space
@@ -218,6 +227,7 @@ function NetCDFWriter(
         typeof(start_date),
         typeof(hpts),
         typeof(vpts),
+        typeof(global_attribs),
     }(
         output_dir,
         Dict{String, Remapper}(),
@@ -232,6 +242,7 @@ function NetCDFWriter(
         start_date,
         hpts,
         vpts,
+        global_attribs,
     )
 end
 
@@ -244,6 +255,7 @@ function NetCDFWriter(
                     EveryStepSchedule() : nothing,
     z_sampling_method = LevelsMethod(),
     start_date = nothing,
+    global_attribs = nothing,
 )
     if z_sampling_method isa LevelsMethod
         num_vpts = Spaces.nlevels(ClimaCore.Spaces.center_space(space))
@@ -280,6 +292,7 @@ function NetCDFWriter(
         typeof(start_date),
         Nothing,
         typeof(vpts),
+        typeof(global_attribs),
     }(
         output_dir,
         Dict{String, Remapper}(),
@@ -294,6 +307,7 @@ function NetCDFWriter(
         start_date,
         nothing,
         vpts,
+        global_attribs,
     )
 end
 
@@ -304,6 +318,7 @@ function NetCDFWriter(
     sync_schedule = ClimaComms.device(space) isa ClimaComms.CUDADevice ?
                     EveryStepSchedule() : nothing,
     start_date = nothing,
+    global_attribs = nothing,
     kwargs...,
 )
     comms_ctx = ClimaComms.context(space)
@@ -321,6 +336,7 @@ function NetCDFWriter(
         typeof(start_date),
         Nothing,
         Nothing,
+        typeof(global_attribs),
     }(
         output_dir,
         Dict{String, Remapper}(),
@@ -335,6 +351,7 @@ function NetCDFWriter(
         start_date,
         nothing,
         nothing,
+        global_attribs,
     )
 end
 """
@@ -484,8 +501,16 @@ NVTX.@annotate function write_field!(
     if !haskey(writer.open_files, output_path)
         # Append or write a new file
         open_mode = isfile(output_path) ? "a" : "c"
-        writer.open_files[output_path] =
-            NCDatasets.Dataset(output_path, open_mode)
+        if isnothing(writer.global_attribs)
+            ds = NCDatasets.Dataset(output_path, open_mode)
+        else
+            ds = NCDatasets.Dataset(
+                output_path,
+                open_mode,
+                attrib = writer.global_attribs,
+            )
+        end
+        writer.open_files[output_path] = ds
     end
 
     nc = writer.open_files[output_path]

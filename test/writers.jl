@@ -1067,7 +1067,7 @@ end
         close(writer_diff_pts)
     end
 
-    # TODO: Test with only a horizontal space
+    # Test with only a horizontal space
     horizontal_space = ClimaCore.Spaces.level(sphericalspace, 1)
     horizontal_field = Fields.coordinate_field(horizontal_space).z
 
@@ -1155,5 +1155,54 @@ end
             @test Array(nc_diff_pts["ABC"]) ==
                   nc_default_pts["ABC"][:, 1:2:end, 1:2:end]
         end
+    end
+end
+
+
+@testset "NetCDFWriter with global attributes" begin
+    t = 0.0
+    NUM = 10
+
+    start_date = Dates.DateTime(2010, 1, 1)
+
+    function compute!(out, u, p, t)
+        if isnothing(out)
+            return u.field
+        else
+            out .= u.field
+        end
+    end
+
+    p = (; start_date = start_date)
+
+    space = SphericalShellSpace(FT = Float32)
+
+    field = Fields.coordinate_field(space).z
+    u = (; field)
+
+    writer = Writers.NetCDFWriter(
+        space,
+        output_dir;
+        num_points = (NUM, 2NUM, 3NUM),
+        start_date = start_date,
+        global_attribs = Dict("global" => "attribs"),
+    )
+
+    diagnostic = ClimaDiagnostics.ScheduledDiagnostic(;
+        variable = ClimaDiagnostics.DiagnosticVariable(;
+            compute!,
+            short_name = "ABC",
+        ),
+        output_short_name = "global_attrib_test",
+        output_long_name = "Add global attributes test",
+        output_writer = writer,
+    )
+
+    Writers.interpolate_field!(writer, field, diagnostic, u, p, t)
+    Writers.write_field!(writer, field, diagnostic, u, p, t)
+    Writers.write_field!(writer, field, diagnostic, u, p, t)
+
+    NCDatasets.NCDataset(joinpath(output_dir, "global_attrib_test.nc")) do nc
+        @test nc.attrib["global"] == "attribs"
     end
 end
