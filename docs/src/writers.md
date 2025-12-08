@@ -71,6 +71,24 @@ be synced.
 Variables are saved as datasets with attributes, where the attributes include
 `long_name`, `standard_name`, `units`...
 
+Global attributes can be added to the NetCDF files via the `global_attribs`
+keyword argument for the `NetCDFWriter`. For example, you may want to specify
+the `source` and `experiment` attributes, which are the same across all NetCDF
+files produced for a single simulation.
+
+```julia
+writer = NetCDFWriter(
+    space, # 2D space with longitudes and latitudes
+    output_dir;
+    global_attribs = Dict("source" => "CliMA Coupler Simulation", "experiment" => "AMIP"),
+)
+```
+
+The global attributes must be a subtype of `AbstractDict{String, String}`. If
+the order of the attributes matters, you may want to use an
+[`OrderedDict`](https://juliacollections.github.io/OrderedCollections.jl/dev/#OrderedDicts)
+from `OrderedCollections.jl`.
+
 !!! note
     The `NetCDFWriter` cannot save raw `ClimaCore.Fields`, only fields that are
     resampled onto a Cartesian grids are supported. If you need such capability,
