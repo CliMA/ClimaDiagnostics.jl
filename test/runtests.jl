@@ -12,6 +12,8 @@ using Test
 @safetestset "DiagnosticVariable" begin @time include("diagnostic_variable.jl") end
 @safetestset "SchduledDiagnostics" begin @time include("diagnostics.jl") end
 
+@safetestset "Diagnostics helpers" begin @time include("diagnostic_helper.jl") end
+
 @safetestset "Integration test" begin @time include("integration_test.jl") end
 #! format: on
 
