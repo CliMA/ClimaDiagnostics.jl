@@ -104,38 +104,9 @@ function DiagnosticsHandler(scheduled_diagnostics, Y, p, t; dt = nothing)
     for (i, diag) in enumerate(unique_scheduled_diagnostics)
         push!(scheduled_diagnostics_keys, i)
 
-        variable = diag.variable
         isa_time_reduction = !isnothing(diag.reduction_time_func)
 
-        # We have three cases:
-
-        # 1. The diagnostic has `compute!`. In this case, the first time we call compute! we
-        # use its return value. All the subsequent times (in the callbacks), we will write
-        # the result in place.
-        #
-        # 2a. The diagnostic has a `compute` function that returns a `Field`. In this case,
-        # we can directly copy over the result.
-        #
-        # 2b. The diagnostic has a `compute` function that returns a
-        # `Base.Broadcast.Broadcasted` (when using LazyBroadcast.jl). In this case, we have
-        # to manually materialize the result.
-
-        has_inplace_compute = !isnothing(variable.compute!)
-
-        if has_inplace_compute
-            # Case 1
-            out_field = variable.compute!(nothing, Y, p, t)
-        else
-            out_or_broadcasted = variable.compute(Y, p, t)
-            if out_or_broadcasted isa Base.AbstractBroadcasted
-                # Case 2b
-                out_field = Base.Broadcast.materialize(out_or_broadcasted)
-            else
-                # Case 2a
-                out_field = out_or_broadcasted
-            end
-        end
-
+        out_field = compute_field(diag, Y, p, t)
         # We call `copy` to acquire ownership of the data in case compute! returned a
         # reference.
         push!(storage, copy(out_field))
@@ -215,6 +186,74 @@ function _check_dt_schedules(dt, diagnostics)
     return nothing
 end
 
+"""
+    compute_field(diag::ScheduledDiagnostic, Y, p, t)
+
+Compute the field from `compute!` or `compute` from the diagnostic variable
+`diag.variable`.
+"""
+function compute_field(diag::ScheduledDiagnostic, Y, p, t)
+    # We have three cases:
+
+    # 1. The diagnostic has `compute!`. In this case, the first time we call
+    # compute! we use its return value. All the subsequent times (in the
+    # callbacks), we will write the result in place.
+    #
+    # 2a. The diagnostic has a `compute` function that returns a `Field`. In
+    # this case, we can directly copy over the result.
+    #
+    # 2b. The diagnostic has a `compute` function that returns a
+    # `Base.Broadcast.Broadcasted` (when using LazyBroadcast.jl). In this case,
+    # we have to manually materialize the result.
+    variable = diag.variable
+    has_inplace_compute = !isnothing(variable.compute!)
+
+    if has_inplace_compute
+        # Case 1
+        out_field = variable.compute!(nothing, Y, p, t)
+    else
+        out_or_broadcasted = variable.compute(Y, p, t)
+        if out_or_broadcasted isa Base.AbstractBroadcasted
+            # Case 2b
+            out_field = Base.Broadcast.materialize(out_or_broadcasted)
+        else
+            # Case 2a
+            out_field = out_or_broadcasted
+        end
+    end
+    return out_field
+end
+
+"""
+    compute_field!(dest, diag::ScheduledDiagnostic, Y, p, t)
+
+Compute a field using `compute!` or `compute` from the diagnostic variable
+`diag.variable` and store the field in `dest`.
+"""
+function compute_field!(dest, diag::ScheduledDiagnostic, Y, p, t)
+    # We have two cases:
+    #
+    # 1. The variable has an in-place `compute!` function. In this case, we
+    # simply evaluate it and overwrite the associated storage.
+    #
+    # 2. The variable has a `compute` function that returns a Field or a
+    # `Base.Broadcast.Broadcasted`. In this case, we copy it over/materialize to
+    # the storage.
+    variable = diag.variable
+    has_inplace_compute = !isnothing(variable.compute!)
+
+    if has_inplace_compute
+        # Case 1
+        diag.variable.compute!(dest, Y, p, t)
+    else
+        # Case 2
+        out_or_broadcasted = diag.variable.compute(Y, p, t)
+
+        dest .= out_or_broadcasted
+    end
+    return nothing
+end
+
 # Does the writer associated to `diag` need to be synced?
 # It does only when it has a sync_schedule that is a callable and that
 # callable returns true when called on the integrator
@@ -251,31 +290,13 @@ NVTX.@annotate function orchestrate_diagnostics(
         diag = scheduled_diagnostics[diag_index]
 
         diagnostic_handler.counters[diag_index] += 1
-
-        # We have two cases:
-        #
-        # 1. The variable has an in-place `compute!` function. In this case, we simply
-        # evaluate it and overwrite the associated storage.
-        #
-        # 2. The variable has a `compute` function that returns a Field or a
-        # `Base.Broadcast.Broadcasted`. In this case, we copy it over/materialize to the
-        # storage.
-        has_inplace_compute = !isnothing(diag.variable.compute!)
-        if has_inplace_compute
-            # Case 1
-            diag.variable.compute!(
-                diagnostic_handler.storage[diag_index],
-                integrator.u,
-                integrator.p,
-                integrator.t,
-            )
-        else
-            # Case 2
-            out_or_broadcasted =
-                diag.variable.compute(integrator.u, integrator.p, integrator.t)
-
-            diagnostic_handler.storage[diag_index] .= out_or_broadcasted
-        end
+        compute_field!(
+            diagnostic_handler.storage[diag_index],
+            diag,
+            integrator.u,
+            integrator.p,
+            integrator.t,
+        )
     end
 
     # Process possible time reductions (now we have evaluated storage[diag])
