@@ -99,25 +99,9 @@ function DiagnosticsHandler(scheduled_diagnostics, Y, p, t; dt = nothing)
         @warn "Given list of diagnostics contains duplicates, removing them"
     end
 
+    _check_dt_schedules(dt, unique_scheduled_diagnostics)
+
     for (i, diag) in enumerate(unique_scheduled_diagnostics)
-        if isnothing(dt)
-            @warn "dt was not passed to DiagnosticsHandler. No checks will be performed on the frequency of the diagnostics"
-        else
-            if diag.compute_schedule_func isa EveryDtSchedule
-                compute_dt = diag.compute_schedule_func.dt
-                every_num_iteration = compute_dt / dt
-                every_num_iteration ≈ round(every_num_iteration) || error(
-                    "Compute dt ($compute_dt) for $(diag.output_short_name) is not an even multiple of the timestep ($dt)",
-                )
-            end
-            if diag.output_schedule_func isa EveryDtSchedule
-                output_dt = diag.output_schedule_func.dt
-                every_num_iteration = output_dt / dt
-                every_num_iteration ≈ round(every_num_iteration) || error(
-                    "Output dt ($output_dt) for $(diag.output_short_name) is not an even multiple of the timestep ($dt)",
-                )
-            end
-        end
         push!(scheduled_diagnostics_keys, i)
 
         variable = diag.variable
@@ -199,6 +183,36 @@ function DiagnosticsHandler(scheduled_diagnostics, Y, p, t; dt = nothing)
         accumulators,
         counters,
     )
+end
+
+"""
+    _check_dt_schedules(dt, diagnostics)
+
+Check if the compute and output schedules of the `diagnostics` are compatible
+with `dt`.
+"""
+function _check_dt_schedules(dt, diagnostics)
+    if isnothing(dt)
+        @warn "dt was not passed to DiagnosticsHandler. No checks will be performed on the frequency of the diagnostics"
+        return nothing
+    end
+    for diag in diagnostics
+        if diag.compute_schedule_func isa EveryDtSchedule
+            compute_dt = diag.compute_schedule_func.dt
+            every_num_iteration = compute_dt / dt
+            compute_dt ≈ dt * round(every_num_iteration) || error(
+                "Compute dt ($compute_dt) for $(diag.output_short_name) is not an even multiple of the timestep ($dt)",
+            )
+        end
+        if diag.output_schedule_func isa EveryDtSchedule
+            output_dt = diag.output_schedule_func.dt
+            every_num_iteration = output_dt / dt
+            output_dt ≈ dt * round(every_num_iteration) || error(
+                "Output dt ($output_dt) for $(diag.output_short_name) is not an even multiple of the timestep ($dt)",
+            )
+        end
+    end
+    return nothing
 end
 
 # Does the writer associated to `diag` need to be synced?
