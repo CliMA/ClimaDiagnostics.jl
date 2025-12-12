@@ -10,7 +10,7 @@ using Test
 
 @safetestset "Schedules" begin @time include("schedules.jl") end
 @safetestset "DiagnosticVariable" begin @time include("diagnostic_variable.jl") end
-@safetestset "SchduledDiagnostics" begin @time include("diagnostics.jl") end
+@safetestset "ScheduledDiagnostics" begin @time include("diagnostics.jl") end
 
 @safetestset "Diagnostics helpers" begin @time include("diagnostic_helper.jl") end
 
