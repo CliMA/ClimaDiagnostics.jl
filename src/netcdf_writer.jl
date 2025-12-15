@@ -12,6 +12,9 @@ import NVTX
 # Spaces
 include("netcdf_writer_coordinates.jl")
 
+# Define styles for converting to another coordinates system or not
+include("coordinates_style.jl")
+
 """
     NetCDFWriter
 
@@ -28,6 +31,7 @@ struct NetCDFWriter{
     HPTS,
     VPTS,
     GA <: Union{AbstractDict{String, String}, Nothing},
+    CS <: AbstractCoordsStyle,
 } <: AbstractWriter
     """The base folder where to save the files."""
     output_dir::String
@@ -88,6 +92,10 @@ struct NetCDFWriter{
     """Global attributes in each NetCDF file"""
     global_attribs::GA
 
+    """Coordinate style which tells NetCDFWriter to convert to another coordinates system
+    or not."""
+    coordinates_style::CS
+
     # TODO: Add option to write dates as time
 end
 
@@ -97,36 +105,9 @@ end
 Close all the open files in `writer`.
 """
 function Base.close(writer::NetCDFWriter)
-    # TODO: This should be overwritten, so that close can do more postprocessing
-    # for pressure coordinates
-    # This is impossible to tell from just the writer, so we must look inside
-    # and check
     foreach(NCDatasets.close, values(writer.open_files))
-
-    # # TODO: Making these directories will break ClimaAnalysis SimDir
-    # _pfull_dir = joinpath(writer.output_dir, "_pfull_coords")
-    # # TODO: I am not sure how this works with restarts
-    # pfull_dir = joinpath(writer.output_dir, "pfull_coords")
-    # # If it already exists, then the pressure coordinates are converted already
-    # # TODO: Restarts...
-    # isdir(pfull_dir) && return nothing
-    # mkdir(pfull_dir)
-    # if isdir(_pfull_dir)
-    #     pfull_nc_filepaths = filter!(
-    #         filepath -> isfile(filepath) && endswith(filepath, ".nc"),
-    #         readdir(_pfull_dir, join = true),
-    #     )
-    #     target_lon, target_lat = writer.hpts
-    #     for pfull_nc_filepath in pfull_nc_filepaths
-    #         write_h_indices_to_h_coords(
-    #             pfull_nc_filepath,
-    #             target_lon,
-    #             target_lat,
-    #             output_dir = pfull_dir,
-    #         )
-    #     end
-    # end
-
+    writer.coordinates_style isa PfullCoordsStyle &&
+        Postprocessing.write_h_indices_to_regular_grid(writer)
     return nothing
 end
 
@@ -176,6 +157,7 @@ function NetCDFWriter(
     start_date = nothing,
     horizontal_pts = nothing,
     global_attribs = nothing,
+    coords_style = NoConversionStyle(),
 )
     horizontal_space = Spaces.horizontal_space(space)
     is_horizontal_space = horizontal_space == space
@@ -257,6 +239,7 @@ function NetCDFWriter(
         typeof(hpts),
         typeof(vpts),
         typeof(global_attribs),
+        typeof(coords_style),
     }(
         output_dir,
         Dict{String, Remapper}(),
@@ -272,6 +255,7 @@ function NetCDFWriter(
         hpts,
         vpts,
         global_attribs,
+        coords_style,
     )
 end
 
@@ -322,6 +306,7 @@ function NetCDFWriter(
         Nothing,
         typeof(vpts),
         typeof(global_attribs),
+        NoConversionStyle,
     }(
         output_dir,
         Dict{String, Remapper}(),
@@ -337,6 +322,7 @@ function NetCDFWriter(
         nothing,
         vpts,
         global_attribs,
+        NoConversionStyle(),
     )
 end
 
@@ -366,6 +352,7 @@ function NetCDFWriter(
         Nothing,
         Nothing,
         typeof(global_attribs),
+        NoConversionStyle,
     }(
         output_dir,
         Dict{String, Remapper}(),
@@ -381,6 +368,7 @@ function NetCDFWriter(
         nothing,
         nothing,
         global_attribs,
+        NoConversionStyle(),
     )
 end
 """

@@ -11,5 +11,4 @@ import .ScheduledDiagnostics: ScheduledDiagnostic
 include("Writers.jl")
 
 include("clima_diagnostics.jl")
-include("pfull_postprocessing.jl")
 end

@@ -119,14 +119,37 @@ function PfullCoordsDiagnosticsHandler(
     Y,
     p,
     t,
-    pfull_compute!;
+    pfull_compute!; # Might move to coordinates style
     dt = nothing,
-    pfull_levels = era5_pressure_levels(),
 )
     # TODO: Add some error handling for the space in the scheduled diagnostics
     # This can be done by checking each compute_fields
     # TODO: Make sure the reshape work for cases when it is not VIJH whatever
     # This is going to involve refactoring the reshape function
+
+
+    # Check output_writers are NetCDFWriter
+    all(
+        diag.output_writer isa NetCDFWriter for diag in scheduled_diagnostics
+    ) || error(
+        "PfullCoordsDiagnosticsHandler only supports diagnostics using NetCDFWriter",
+    )
+
+    # Check all scheduled_diagnostics have the right coordinates style
+    all(
+        diag.output_writer.coordinates_style isa Writers.PfullCoordsStyle for
+        diag in scheduled_diagnostics
+    ) || error("NetCDFWriters must use PfullCoordsStyle")
+
+    # TODO: Remove this later, done for now to simplify things
+    pfull_levels =
+        first(
+            scheduled_diagnostics,
+        ).output_writer.coordinates_style.pressure_levels
+    all(
+        diag.output_writer.coordinates_style.pressure_levels == pfull_levels for
+        diag in scheduled_diagnostics
+    ) || error("Currently only support for one set of pressure levels")
 
     # For diagnostics that perform reductions, the storage is used for the values computed
     # at each call. Reductions also save the accumulated value in accumulators.
@@ -156,6 +179,14 @@ function PfullCoordsDiagnosticsHandler(
 
     pfull_field = pfull_compute!(nothing, Y, p, t)
     FT = eltype(pfull_field)
+
+    # Make reference to pfull_field for PfullCoordsStyle
+    foreach(
+        diag ->
+            diag.output_writer.coordinates_style.pressure_field[] = pfull_field,
+        scheduled_diagnostics,
+    )
+
 
     typeofarray = ClimaComms.array_type(pfull_field)
     pfull_array = typeofarray{FT}(
