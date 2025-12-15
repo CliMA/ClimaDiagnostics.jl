@@ -460,3 +460,20 @@ function IntegratorWithDiagnostics(
 
     return integrator
 end
+
+"""
+    Base.close(diagnostic_handler::DiagnosticsHandler)
+
+Close all the output writers in the scheduled diagnostics found in
+`diagnostic_handler`.
+"""
+function Base.close(diagnostic_handler::DiagnosticsHandler)
+    # IdSet is exported in 1.11, but not in older versions of Julia
+    # Keep unique output writers by object ID to prevent calling close on the
+    # same output writers multiple times
+    output_writers = Base.IdSet{AbstractWriter}(
+        diag.output_writer for diag in diagnostic_handler.scheduled_diagnostics
+    )
+    foreach(close, output_writers)
+    return nothing
+end

@@ -117,6 +117,7 @@ include("TestTools.jl")
 
     @test dict_writer[short_name][0.5][] ≈ sum(t0:dt:(tf / 2))
     @test dict_writer[short_name][1.0][] ≈ sum((tf / 2 + dt):dt:tf)
+    @test isnothing(close(diagnostic_handler))
 
     # Incompatible timestep in output
     diagnostic_incompatible_timestep = ClimaDiagnostics.ScheduledDiagnostic(
@@ -183,4 +184,34 @@ include("TestTools.jl")
 
     @test length(handler_dup.scheduled_diagnostics) == 2
 
+end
+
+@testset "Close diagnostics handler" begin
+    # Use depe
+    mutable struct FakeWriter <: ClimaDiagnostics.AbstractWriter
+        count::Int
+    end
+    function Base.close(writer::FakeWriter)
+        writer.count += 1
+        return nothing
+    end
+    struct FakeDiagnostic
+        output_writer::FakeWriter
+    end
+    writer1 = FakeWriter(0)
+    writer2 = FakeWriter(0)
+    diag1 = FakeDiagnostic(writer1)
+    diag2 = FakeDiagnostic(writer1)
+    diag3 = FakeDiagnostic(writer2)
+    scheduled_diagnostics = [diag1, diag2, diag3]
+    diag_handler = ClimaDiagnostics.DiagnosticsHandler(
+        scheduled_diagnostics,
+        Int[],
+        nothing,
+        Dict(),
+        nothing,
+    )
+    close(diag_handler)
+    @test isone(writer1.count)
+    @test isone(writer2.count)
 end

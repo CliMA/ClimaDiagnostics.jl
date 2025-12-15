@@ -7,6 +7,7 @@ ClimaDiagnostics.DiagnosticsHandler
 ClimaDiagnostics.orchestrate_diagnostics
 ClimaDiagnostics.DiagnosticsCallback
 ClimaDiagnostics.IntegratorWithDiagnostics
+Base.close(diagnostic_handler::DiagnosticsHandler)
 ```
 
 ## `Schedules`

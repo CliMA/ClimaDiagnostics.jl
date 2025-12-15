@@ -22,6 +22,12 @@ writer = NetCDFWriter(
 )
 ```
 
+## Close diagnostic handler
+
+Instead of closing all the output writers, you can now call `close` on the
+`DiagnosticHandler` to close all the output writers for the scheduled
+diagnostics.
+
 v0.3.0
 -------
 
