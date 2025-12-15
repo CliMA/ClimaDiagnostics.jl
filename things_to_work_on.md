@@ -14,3 +14,8 @@ Look into why the diagnostics doesn't work with both of them
 
 1. Get a level of a climacore field as scratch space (ClimaCore.Fields.level)
 2. ClimaCore.DataLayouts.array2data(interp_arr[2,:], ClimaCore.Fields.field_values(surface_field))
+
+
+
+
+Another thing that can be done to reduce the code 

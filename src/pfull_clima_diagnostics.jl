@@ -169,59 +169,14 @@ function PfullCoordsDiagnosticsHandler(
 
     preallocated_arrays = Dict{ScheduledDiagnostic, Matrix{FT}}()
 
+    _check_dt_schedules(dt, unique_scheduled_diagnostics)
+
     for (i, diag) in enumerate(unique_scheduled_diagnostics)
-        if isnothing(dt)
-            @warn "dt was not passed to DiagnosticsHandler. No checks will be performed on the frequency of the diagnostics"
-        else
-            if diag.compute_schedule_func isa EveryDtSchedule
-                compute_dt = diag.compute_schedule_func.dt
-                every_num_iteration = compute_dt / dt
-                every_num_iteration ≈ round(every_num_iteration) || error(
-                    "Compute dt ($compute_dt) for $(diag.output_short_name) is not an even multiple of the timestep ($dt)",
-                )
-            end
-            if diag.output_schedule_func isa EveryDtSchedule
-                output_dt = diag.output_schedule_func.dt
-                every_num_iteration = output_dt / dt
-                every_num_iteration ≈ round(every_num_iteration) || error(
-                    "Output dt ($output_dt) for $(diag.output_short_name) is not an even multiple of the timestep ($dt)",
-                )
-            end
-        end
         push!(scheduled_diagnostics_keys, i)
 
-        variable = diag.variable
+        out_field = compute_field(diag, Y, p, t)
 
-        # We have three cases:
-
-        # 1. The diagnostic has `compute!`. In this case, the first time we call compute! we
-        # use its return value. All the subsequent times (in the callbacks), we will write
-        # the result in place.
-        #
-        # 2a. The diagnostic has a `compute` function that returns a `Field`. In this case,
-        # we can directly copy over the result.
-        #
-        # 2b. The diagnostic has a `compute` function that returns a
-        # `Base.Broadcast.Broadcasted` (when using LazyBroadcast.jl). In this case, we have
-        # to manually materialize the result.
-
-        has_inplace_compute = !isnothing(variable.compute!)
-
-        if has_inplace_compute
-            # Case 1
-            out_field = variable.compute!(nothing, Y, p, t)
-        else
-            out_or_broadcasted = variable.compute(Y, p, t)
-            if out_or_broadcasted isa Base.AbstractBroadcasted
-                # Case 2b
-                out_field = Base.Broadcast.materialize(out_or_broadcasted)
-            else
-                # Case 2a
-                out_field = out_or_broadcasted
-            end
-        end
-
-        push!(compute_fields, out_field)
+        push!(compute_fields, copy(out_field))
         push!(storage, copy(pfull_array))
         push!(counters, 1)
     end
@@ -337,31 +292,13 @@ function orchestrate_diagnostics(
         diag = scheduled_diagnostics[diag_index]
 
         diagnostic_handler.counters[diag_index] += 1
-
-        # We have two cases:
-        #
-        # 1. The variable has an in-place `compute!` function. In this case, we simply
-        # evaluate it and overwrite the associated storage.
-        #
-        # 2. The variable has a `compute` function that returns a Field or a
-        # `Base.Broadcast.Broadcasted`. In this case, we copy it over/materialize to the
-        # storage.
-        has_inplace_compute = !isnothing(diag.variable.compute!)
-        if has_inplace_compute
-            # Case 1
-            diag.variable.compute!(
-                diagnostic_handler.compute_fields[diag_index],
-                integrator.u,
-                integrator.p,
-                integrator.t,
-            )
-        else
-            # Case 2
-            out_or_broadcasted =
-                diag.variable.compute(integrator.u, integrator.p, integrator.t)
-
-            diagnostic_handler.compute_fields[diag_index] .= out_or_broadcasted
-        end
+        compute_field!(
+            diagnostic_handler.compute_fields[diag_index],
+            diag,
+            integrator.u,
+            integrator.p,
+            integrator.t,
+        )
     end
 
     # Move all the relevant fields to pressure coordinates and store in storage
