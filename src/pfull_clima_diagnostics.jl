@@ -82,7 +82,6 @@ end
         t,
         pfull_compute!;
         dt = nothing,
-        pfull_levels = era5_pressure_levels(),
     )
 
 An object to instantiate and manage storage spaces for `ScheduledDiagnostics`.
@@ -119,7 +118,7 @@ function PfullCoordsDiagnosticsHandler(
     Y,
     p,
     t,
-    pfull_compute!; # Might move to coordinates style
+    pfull_compute!; # TODO: Might move to coordinates style
     dt = nothing,
 )
     # TODO: Add some error handling for the space in the scheduled diagnostics
@@ -249,8 +248,6 @@ function PfullCoordsDiagnosticsHandler(
                 Y,
                 p,
                 t,
-                pfull_field,
-                pfull_levels,
             )
         else
             # Add to the accumulator
@@ -398,8 +395,6 @@ function orchestrate_diagnostics(
             integrator.u,
             integrator.p,
             integrator.t,
-            diagnostic_handler.pfull_field,
-            diagnostic_handler.pfull_levels,
         )
     end
 
@@ -526,47 +521,15 @@ function IntegratorWithPfullCoordsDiagnostics(
     return integrator
 end
 
+#! format: off
 """
     era5_pressure_levels()
 
 Return the pressure levels used by ERA5 whose units are Pa.
 """
 era5_pressure_levels() = return 100.0 .* [
-    1,
-    2,
-    3,
-    5,
-    7,
-    10,
-    20,
-    30,
-    50,
-    70,
-    100,
-    125,
-    150,
-    175,
-    200,
-    225,
-    250,
-    300,
-    350,
-    400,
-    450,
-    500,
-    550,
-    600,
-    650,
-    700,
-    750,
-    775,
-    800,
-    825,
-    850,
-    875,
-    900,
-    925,
-    950,
-    975,
-    1000,
+    1, 2, 3, 5, 7, 10, 20, 30, 50, 70, 100, 125, 150, 175, 200, 225, 250, 300,
+    350, 400, 450, 500, 550, 600, 650, 700, 750, 775, 800, 825, 850, 875, 900,
+925, 950, 975, 1000,
 ]
+#! format: on

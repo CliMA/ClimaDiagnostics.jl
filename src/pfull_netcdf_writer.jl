@@ -30,8 +30,6 @@ end
         u,
         p,
         t,
-        pfull_field,
-        pfull_levels,
     )
 
 Save the resampled array produced by `diagnostic` as directed by the `writer`.
@@ -63,9 +61,11 @@ function write_field_in_pfull_coords!(
     u,
     p,
     t,
-    pfull_field,
-    pfull_levels,
 )
+    pfull_levels = writer.coordinates_style.pressure_levels
+    # TODO: Not sure about this, but this could be stored as the field itself
+    # if I passed pfull_compute! to it
+    pfull_field = writer.coordinates_style.pressure_field[]
     # Only the root process has to write
     ClimaComms.iamroot(ClimaComms.context(pfull_field)) || return nothing
 
