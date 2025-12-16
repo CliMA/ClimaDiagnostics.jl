@@ -28,7 +28,6 @@ struct PfullCoordsDiagnosticsHandler{
     PRESSURE,
     FIELDS,
     PERM_MATRIX <: AbstractMatrix,
-    PRESSURE_LEVELS,
 } <: AbstractDiagnosticsHandler
     """An iterable with the `ScheduledDiagnostic`s that are scheduled."""
     scheduled_diagnostics::SD
@@ -48,6 +47,8 @@ struct PfullCoordsDiagnosticsHandler{
     accumulate results. The element type is a two dimensional CuArray."""
     accumulators::ACC
 
+    # TODO: Can remove all of these fields and access from any one of the coordinates
+    # style (problem is singleton then...)
     """Function to compute the pressure field"""
     pfull_compute!::F # TODO: Add check that this is the same across all coords style
 
@@ -61,9 +62,6 @@ struct PfullCoordsDiagnosticsHandler{
     """A permutation matrix, created by sortperm, for
     sorting the pressures for each column"""
     perm_matrix::PERM_MATRIX # TODO: This is the same across all pressure_coords_style, so no need to remove
-
-    """A vector of pressure levels. These pressure must be sorted."""
-    pfull_levels::PRESSURE_LEVELS # TODO: This should be removed probably, since different writers can have different pressure levels
 end
 
 """
@@ -71,8 +69,7 @@ end
         scheduled_diagnostics,
         Y,
         p,
-        t,
-        pfull_compute!;
+        t;
         dt = nothing,
     )
 
@@ -139,18 +136,8 @@ function PfullCoordsDiagnosticsHandler(
         diag in scheduled_diagnostics
     ) || error("NetCDFWriters must use PfullCoordsStyle")
 
-    # TODO: Remove this later, done for now to simplify things (ideally you
-    # should be able to have different pressure levels)
-    pfull_levels =
-        first(
-            scheduled_diagnostics,
-        ).output_writer.coordinates_style.pressure_levels
-    all(
-        diag.output_writer.coordinates_style.pressure_levels == pfull_levels for
-        diag in scheduled_diagnostics
-    ) || error("Currently only support for one set of pressure levels")
-
-    # TODO: Can be simplified probably
+    # TODO: Can be simplified maybe (pfull field is already in coordinates_style, but only
+    # one of them exist though)
     pfull_field = first(
             scheduled_diagnostics,
         ).output_writer.coordinates_style.pressure_field
@@ -269,7 +256,6 @@ function PfullCoordsDiagnosticsHandler(
         pfull_field,
         counters,
         perm_matrix,
-        pfull_levels,
     )
 end
 

@@ -43,12 +43,12 @@ struct PfullCoordsStyle{F, FT <: AbstractFloat, PFULL_FIELD <: ClimaCore.Fields.
     pressure_levels::Vector{FT}
 
     """Compute function for pressure"""
-    pfull_compute!::F
+    pfull_compute!::F # This should be the same across all PfullCoordsStyle
 
     """A ClimaCore.Field representing pressure. This is used at
     the end of the simulation to interpolate offline along the horizontal
-    direction"""
-    pressure_field::PFULL_FIELD
+    direction. However, this pay the price of allocating a pressure field""" # TODO: This could be made more efficient by singleton design pattern?
+    pressure_field::PFULL_FIELD # This should be the same across all PfullCoordsStyle
 
     """A dictionary mapping diagnostics to arrays on CPU."""
     preallocated_output_arrays::DI

@@ -57,12 +57,20 @@ output_dir = mktempdir(pwd())
         z_sampling_method = ClimaDiagnostics.Writers.FakePressureLevelsMethod(),
     )
 
-    pfull_netcdf_writer = Writers.NetCDFWriter(
+    pfull_netcdf_writer1 = Writers.NetCDFWriter(
         space,
         output_dir;
         num_points = (NUM, 2NUM, 3NUM),
         sync_schedule = ClimaDiagnostics.Schedules.DivisorSchedule(2),
         coords_style = ClimaDiagnostics.Writers.PfullCoordsStyle(Y, p, 0.0, compute_field!),
+    )
+
+    pfull_netcdf_writer2 = Writers.NetCDFWriter(
+        space,
+        output_dir;
+        num_points = (NUM, 2NUM, 3NUM),
+        sync_schedule = ClimaDiagnostics.Schedules.DivisorSchedule(2),
+        coords_style = ClimaDiagnostics.Writers.PfullCoordsStyle(Y, p, 0.0, compute_field!, pfull_levels = 100.0 .* [1.0, 10.0, 100.0]),
     )
 
     time_reduction_diagnostic_every_step = ClimaDiagnostics.ScheduledDiagnostic(
@@ -81,14 +89,14 @@ output_dir = mktempdir(pwd())
     pfull_time_reduction_diagnostic_every_step =
         ClimaDiagnostics.ScheduledDiagnostic(
             variable = simple_var,
-            output_writer = pfull_netcdf_writer,
+            output_writer = pfull_netcdf_writer1,
             reduction_time_func = max,
             output_short_name = "yo_max",
         )
 
     pfull_inst_diagnostic_every_step = ClimaDiagnostics.ScheduledDiagnostic(
         variable = simple_var,
-        output_writer = pfull_netcdf_writer,
+        output_writer = pfull_netcdf_writer2,
         output_short_name = "yo_inst",
     )
 
@@ -147,7 +155,8 @@ output_dir = mktempdir(pwd())
     end
 
     close(netcdf_writer)
-    close(pfull_netcdf_writer)
+    close(pfull_netcdf_writer1)
+    close(pfull_netcdf_writer2)
 
     @test isfile(joinpath(output_dir, "pfull_coords", "yo_inst.nc"))
     @test isfile(joinpath(output_dir, "pfull_coords", "yo_max.nc"))
