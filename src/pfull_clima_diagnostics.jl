@@ -51,13 +51,13 @@ struct PfullCoordsDiagnosticsHandler{
     accumulators::ACC
 
     """Function to compute the pressure field"""
-    pfull_compute!::F
+    pfull_compute!::F # TODO: Add check that this is the same across all coords style
 
     """ClimaCore field of pressure created by pfull_compute!"""
-    pfull_field::PRESSURE
+    pfull_field::PRESSURE # TODO: Add check that this is the same across all coords style
 
     """Two dimensional array of pressures"""
-    pressure_coords::PRESSURE_COORDS
+    pressure_coords::PRESSURE_COORDS # TODO: Maybe move to coords style
 
     """Container holding a counter that tracks how many times the given
     diagnostics was computed from the last time it was output to disk."""
@@ -71,7 +71,7 @@ struct PfullCoordsDiagnosticsHandler{
     preallocated_output_arrays::DI
 
     """A vector of pressure levels. These pressure must be sorted."""
-    pfull_levels::PRESSURE_LEVELS
+    pfull_levels::PRESSURE_LEVELS # TODO: This should be removed probably, since different writers can have different pressure levels
 end
 
 """
@@ -117,8 +117,7 @@ function PfullCoordsDiagnosticsHandler(
     scheduled_diagnostics,
     Y,
     p,
-    t,
-    pfull_compute!; # TODO: Might move to coordinates style
+    t;
     dt = nothing,
 )
     # TODO: Add some error handling for the space in the scheduled diagnostics
@@ -134,13 +133,22 @@ function PfullCoordsDiagnosticsHandler(
         "PfullCoordsDiagnosticsHandler only supports diagnostics using NetCDFWriter",
     )
 
+
+    # TODO: Should use a singleton pattern here. Make it, so there is only
+    # one PfullCoordsStyle (although really only one pfull_field and compute
+    # functions)
+    # Or make it work with different PfullCoordsStyle objects (for different
+    # netcdf writers), since only the pfull_field and compute functions need to
+    # be the same or be okay with that inefficiency
+
     # Check all scheduled_diagnostics have the right coordinates style
     all(
         diag.output_writer.coordinates_style isa Writers.PfullCoordsStyle for
         diag in scheduled_diagnostics
     ) || error("NetCDFWriters must use PfullCoordsStyle")
 
-    # TODO: Remove this later, done for now to simplify things
+    # TODO: Remove this later, done for now to simplify things (ideally you
+    # should be able to have different pressure levels)
     pfull_levels =
         first(
             scheduled_diagnostics,
@@ -149,6 +157,17 @@ function PfullCoordsDiagnosticsHandler(
         diag.output_writer.coordinates_style.pressure_levels == pfull_levels for
         diag in scheduled_diagnostics
     ) || error("Currently only support for one set of pressure levels")
+
+    # TODO: Can be simplified probably
+    pfull_field = first(
+            scheduled_diagnostics,
+        ).output_writer.coordinates_style.pressure_field
+    all(diag.output_writer.coordinates_style.pressure_field === pfull_field for
+        diag in scheduled_diagnostics) || error("There are multiple copies of the pressure field. Only initialize one PfullCoordsStyle")
+
+    pfull_compute! = first(
+            scheduled_diagnostics,
+        ).output_writer.coordinates_style.pfull_compute!
 
     # For diagnostics that perform reductions, the storage is used for the values computed
     # at each call. Reductions also save the accumulated value in accumulators.
@@ -176,26 +195,12 @@ function PfullCoordsDiagnosticsHandler(
         @warn "Given list of diagnostics contains duplicates, removing them"
     end
 
-    pfull_field = pfull_compute!(nothing, Y, p, t)
     FT = eltype(pfull_field)
-
-    # Make reference to pfull_field for PfullCoordsStyle
-    foreach(
-        diag ->
-            diag.output_writer.coordinates_style.pressure_field[] = pfull_field,
-        scheduled_diagnostics,
-    )
-
 
     typeofarray = ClimaComms.array_type(pfull_field)
     pfull_array = typeofarray{FT}(
         zeros(length(pfull_levels), Spaces.ncolumns(axes(pfull_field))),
     )
-
-    issorted(pfull_levels, rev = true) && sort!(pfull_levels)
-    issorted(pfull_levels) ||
-        error("Pressure levels ($pfull_levels) are not sorted")
-    eltype(pfull_levels) == FT || (pfull_levels = FT.(pfull_levels))
 
     preallocated_arrays = Dict{ScheduledDiagnostic, Matrix{FT}}()
 
@@ -218,6 +223,7 @@ function PfullCoordsDiagnosticsHandler(
     perm_matrix = typeofarray{Int32}(
         zeros(Spaces.nlevels(pfull_field), Spaces.ncolumns(axes(pfull_field))),
     )
+    # This can be simplified maybe?
     pressure_coordinates = typeofarray{FT}(
         repeat(pfull_levels, 1, Spaces.ncolumns(axes(pfull_field))),
     )
@@ -495,8 +501,7 @@ keyword arguments.
 """
 function IntegratorWithPfullCoordsDiagnostics(
     integrator,
-    scheduled_diagnostics,
-    pfull_compute!;
+    scheduled_diagnostics;
     state_name = :u,
     cache_name = :p,
 )
@@ -504,8 +509,7 @@ function IntegratorWithPfullCoordsDiagnostics(
         scheduled_diagnostics,
         getproperty(integrator, state_name),
         getproperty(integrator, cache_name),
-        integrator.t,
-        pfull_compute!; # TODO: Might be nice to look through scheduled_diagnostics for a pressure compute function
+        integrator.t;
         integrator.dt,
     )
 

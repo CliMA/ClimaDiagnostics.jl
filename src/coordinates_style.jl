@@ -37,15 +37,21 @@ A coordinate style for interpolating diagnostic output to pressure levels.
 When using `PfullCoordsStyle`, diagnostic data on model vertical levels is
 interpolated onto the specified pressure levels.
 """
-struct PfullCoordsStyle{FT <: AbstractFloat} <: AbstractCoordsStyle
+struct PfullCoordsStyle{F, FT <: AbstractFloat, PFULL_FIELD <: ClimaCore.Fields.Field, DI} <: AbstractCoordsStyle
     """A vector of pressure levels to indicate how pressure levels should be
        outputted"""
     pressure_levels::Vector{FT}
 
-    """A reference to a ClimaCore.Field representing pressure. This is used at
+    """Compute function for pressure"""
+    pfull_compute!::F
+
+    """A ClimaCore.Field representing pressure. This is used at
     the end of the simulation to interpolate offline along the horizontal
     direction"""
-    pressure_field::Base.RefValue{Union{ClimaCore.Fields.Field, Nothing}}
+    pressure_field::PFULL_FIELD
+
+    """A dictionary mapping diagnostics to arrays on CPU."""
+    preallocated_output_arrays::DI
 end
 
 # TODO: Might be worth it to stuff things like units, attributes for the netcdf
@@ -60,14 +66,20 @@ Construct a `PfullCoordsStyle` from an iterable of pressure levels.
 The pressure levels must be in sorted in ascending or descending order.
 This ignore `z_sampling_method`.
 """
-function PfullCoordsStyle(; pfull_levels = era5_pressure_levels())
+function PfullCoordsStyle(Y, p, t, pfull_compute!; pfull_levels = era5_pressure_levels())
     pfull_levels = collect(pfull_levels)
-    issorted(pfull_levels, rev = true) && sort!(pfull_levels)
+    issorted(pfull_levels, rev = true) && reverse!(pfull_levels)
     issorted(pfull_levels) ||
-        error("Pressure levels ($pfull_levels) are not sorted")
+    error("Pressure levels ($pfull_levels) are not sorted")
+    pfull_field = pfull_compute!(nothing, Y, p, t)
+
+    FT = eltype(pfull_field)
+    preallocated_output_arrays = Dict{ScheduledDiagnostic, Matrix{FT}}()
     return PfullCoordsStyle(
         pfull_levels,
-        Ref{Union{ClimaCore.Fields.Field, Nothing}}(nothing),
+        pfull_compute!,
+        pfull_field,
+        preallocated_output_arrays
     )
 end
 

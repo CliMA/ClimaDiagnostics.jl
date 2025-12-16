@@ -10,7 +10,7 @@ import ClimaCore: Remapping, Geometry
 
 function write_h_indices_to_regular_grid(writer::NetCDFWriter)
     remapper = create_pfull_coords_remapper(
-        writer.coordinates_style.pressure_field[],
+        writer.coordinates_style.pressure_field,
         writer,
     )
 
