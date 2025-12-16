@@ -10,11 +10,11 @@ Move `array` on GPU/CPU to CPU array in `preallocated_output_arrays`.
 """
 # TODO: Rename this...
 function move_array_to_output_arrays!(
-    ::NetCDFWriter,
-    preallocated_output_arrays,
+    writer::NetCDFWriter,
     array,
     diagnostic,
 )
+    preallocated_output_arrays = writer.coordinates_style.preallocated_output_arrays
     if !haskey(preallocated_output_arrays, diagnostic)
         preallocated_output_arrays[diagnostic] = Array(array)
     else
@@ -56,12 +56,12 @@ Attributes are appended to the dataset:
 """
 function write_field_in_pfull_coords!(
     writer::NetCDFWriter,
-    output_arrays,
     diagnostic,
     u,
     p,
     t,
 )
+    output_arrays = writer.coordinates_style.preallocated_output_arrays
     pfull_levels = writer.coordinates_style.pressure_levels
     # TODO: Not sure about this, but this could be stored as the field itself
     # if I passed pfull_compute! to it

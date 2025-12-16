@@ -29,7 +29,6 @@ struct PfullCoordsDiagnosticsHandler{
     FIELDS,
     PRESSURE_COORDS <: AbstractMatrix,
     PERM_MATRIX <: AbstractMatrix,
-    DI,
     PRESSURE_LEVELS,
 } <: AbstractDiagnosticsHandler
     """An iterable with the `ScheduledDiagnostic`s that are scheduled."""
@@ -66,9 +65,6 @@ struct PfullCoordsDiagnosticsHandler{
     """A permutation matrix, created by sortperm, for
     sorting the pressures for each column"""
     perm_matrix::PERM_MATRIX
-
-    """A dictionary mapping diagnostics to arrays on CPU."""
-    preallocated_output_arrays::DI
 
     """A vector of pressure levels. These pressure must be sorted."""
     pfull_levels::PRESSURE_LEVELS # TODO: This should be removed probably, since different writers can have different pressure levels
@@ -202,8 +198,6 @@ function PfullCoordsDiagnosticsHandler(
         zeros(length(pfull_levels), Spaces.ncolumns(axes(pfull_field))),
     )
 
-    preallocated_arrays = Dict{ScheduledDiagnostic, Matrix{FT}}()
-
     _check_dt_schedules(dt, unique_scheduled_diagnostics)
 
     for (i, diag) in enumerate(unique_scheduled_diagnostics)
@@ -243,13 +237,11 @@ function PfullCoordsDiagnosticsHandler(
         if !isa_time_reduction
             move_array_to_output_arrays!(
                 diag.output_writer,
-                preallocated_arrays,
                 storage[i],
                 diag,
             )
             write_field_in_pfull_coords!(
                 diag.output_writer,
-                preallocated_arrays,
                 diag,
                 Y,
                 p,
@@ -270,7 +262,6 @@ function PfullCoordsDiagnosticsHandler(
     compute_fields = value_types(compute_fields)[compute_fields...]
     storage = value_types(storage)[storage...]
     accumulators = Dict{Int, value_types(accumulators)}(accumulators...)
-
     return PfullCoordsDiagnosticsHandler(
         unique_scheduled_diagnostics,
         scheduled_diagnostics_keys,
@@ -282,7 +273,6 @@ function PfullCoordsDiagnosticsHandler(
         pressure_coordinates,
         counters,
         perm_matrix,
-        preallocated_arrays,
         pfull_levels,
     )
 end
@@ -384,7 +374,6 @@ function orchestrate_diagnostics(
         # TODO: Check what a PointSpace is exactly and if I need to worry about it
         move_array_to_output_arrays!(
             diag.output_writer,
-            diagnostic_handler.preallocated_output_arrays,
             diagnostic_handler.storage[diag_index],
             diag,
         )
@@ -396,7 +385,6 @@ function orchestrate_diagnostics(
         diag = scheduled_diagnostics[diag_index]
         write_field_in_pfull_coords!(
             diag.output_writer,
-            diagnostic_handler.preallocated_output_arrays,
             diag,
             integrator.u,
             integrator.p,
