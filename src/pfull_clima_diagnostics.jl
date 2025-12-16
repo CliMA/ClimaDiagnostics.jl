@@ -27,7 +27,6 @@ struct PfullCoordsDiagnosticsHandler{
     F <: Function,
     PRESSURE,
     FIELDS,
-    PRESSURE_COORDS <: AbstractMatrix,
     PERM_MATRIX <: AbstractMatrix,
     PRESSURE_LEVELS,
 } <: AbstractDiagnosticsHandler
@@ -54,9 +53,6 @@ struct PfullCoordsDiagnosticsHandler{
 
     """ClimaCore field of pressure created by pfull_compute!"""
     pfull_field::PRESSURE # TODO: Add check that this is the same across all coords style
-
-    """Two dimensional array of pressures"""
-    pressure_coords::PRESSURE_COORDS # TODO: This should be removed probably, since different writers can have different pressure levels
 
     """Container holding a counter that tracks how many times the given
     diagnostics was computed from the last time it was output to disk."""
@@ -219,19 +215,18 @@ function PfullCoordsDiagnosticsHandler(
     perm_matrix = typeofarray{Int32}(
         zeros(Spaces.nlevels(pfull_field), Spaces.ncolumns(axes(pfull_field))),
     )
-    # This can be simplified maybe?
-    pressure_coordinates = typeofarray{FT}(
-        repeat(pfull_levels, 1, Spaces.ncolumns(axes(pfull_field))),
-    )
 
-    interpolate_field_to_pfull_coords!(
-        storage,
-        compute_fields,
-        pfull_field,
-        pressure_coordinates,
-        perm_matrix,
-        true,
-    )
+    pfull_array = sort_pressure_columns!(pfull_field, perm_matrix)
+    for diag_index in 1:length(scheduled_diagnostics)
+        diag = scheduled_diagnostics[diag_index]
+        interpolate_field_to_pfull_coords!(
+                storage[diag_index],
+                compute_fields[diag_index],
+                diag.output_writer.coordinates_style.pressure_coords,
+                perm_matrix,
+                pfull_array,
+            )
+    end
 
     for (i, diag) in enumerate(unique_scheduled_diagnostics)
         isa_time_reduction = !isnothing(diag.reduction_time_func)
@@ -272,7 +267,6 @@ function PfullCoordsDiagnosticsHandler(
         accumulators,
         pfull_compute!,
         pfull_field,
-        pressure_coordinates,
         counters,
         perm_matrix,
         pfull_levels,
@@ -295,7 +289,6 @@ function orchestrate_diagnostics(
         compute_fields,
         pfull_compute!,
         pfull_field,
-        pressure_coords,
         perm_matrix,
     ) = diagnostic_handler
     active_compute = Bool[]
@@ -328,14 +321,20 @@ function orchestrate_diagnostics(
     end
 
     # Move all the relevant fields to pressure coordinates and store in storage
-    interpolate_field_to_pfull_coords!(
-        diagnostic_handler.storage,
-        compute_fields,
-        pfull_field,
-        pressure_coords,
-        perm_matrix,
-        active_compute,
-    )
+    if any(active_compute)
+        pfull_array = sort_pressure_columns!(pfull_field, perm_matrix)
+        for diag_index in 1:length(scheduled_diagnostics)
+        active_compute[diag_index] || continue
+        diag = scheduled_diagnostics[diag_index]
+        interpolate_field_to_pfull_coords!(
+                diagnostic_handler.storage[diag_index],
+                compute_fields[diag_index],
+                diag.output_writer.coordinates_style.pressure_coords,
+                perm_matrix,
+                pfull_array,
+            )
+    end
+    end
 
     # TODO: Because there can be different coords style
     # I think the above need to be split into two different
@@ -424,6 +423,17 @@ function orchestrate_diagnostics(
     end
 end
 
+function sort_pressure_columns!(pfull_field, sort_indices)
+    # First axis is along the z dimension and the second axis is an enumeration of the
+    # columns
+    reshape_to_cols(f) =
+        reshape(parent(f), Spaces.nlevels(axes(f)), Spaces.ncolumns(axes(f)))
+    pfull_array = reshape_to_cols(pfull_field)
+    pressure_sortperm = sortperm!(sort_indices, pfull_array, dims = 1)
+    pfull_array .= pfull_array[pressure_sortperm]
+    return pfull_array
+end
+
 """
     interpolate_field_to_pfull_coords!(
         arrays,
@@ -439,22 +449,14 @@ The resulting type is a two dimensional array, where the first axis is the
 pressures and the second axis is an enumeration of the columns.
 """
 function interpolate_field_to_pfull_coords!(
-    arrays,
-    fields,
-    pfull_field,
+    array,
+    field,
     pressure_coordinates,
     sort_indices,
-    active_compute, # TODO: One thing that I can do is split this up into two functions (setup and actually interpolating) or pass active compute
+    pfull_array,
 )
-    # First axis is along the z dimension and the second axis is an enumeration of the
-    # columns
     reshape_to_cols(f) =
         reshape(parent(f), Spaces.nlevels(axes(f)), Spaces.ncolumns(axes(f)))
-    pfull_array = reshape_to_cols(pfull_field)
-    pressure_sortperm = sortperm!(sort_indices, pfull_array, dims = 1)
-    pfull_array .= pfull_array[pressure_sortperm]
-    map(fields, arrays, active_compute) do field, array, compute
-        if compute
             field = reshape_to_cols(field)
             field .= field[sort_indices]
             # TODO: Check what happen if not all the values are unique...
@@ -466,8 +468,6 @@ function interpolate_field_to_pfull_coords!(
                 ClimaInterpolations.Interpolation1D.Linear(),
                 ClimaInterpolations.Interpolation1D.Flat(),
             )
-        end
-    end
     return nothing
 end
 

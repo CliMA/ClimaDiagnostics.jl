@@ -37,7 +37,7 @@ A coordinate style for interpolating diagnostic output to pressure levels.
 When using `PfullCoordsStyle`, diagnostic data on model vertical levels is
 interpolated onto the specified pressure levels.
 """
-struct PfullCoordsStyle{F, FT <: AbstractFloat, PFULL_FIELD <: ClimaCore.Fields.Field, DI} <: AbstractCoordsStyle
+struct PfullCoordsStyle{F, FT <: AbstractFloat, PFULL_FIELD <: ClimaCore.Fields.Field, DI, PRESSURE_COORDS <: AbstractMatrix,} <: AbstractCoordsStyle
     """A vector of pressure levels to indicate how pressure levels should be
        outputted"""
     pressure_levels::Vector{FT}
@@ -52,6 +52,9 @@ struct PfullCoordsStyle{F, FT <: AbstractFloat, PFULL_FIELD <: ClimaCore.Fields.
 
     """A dictionary mapping diagnostics to arrays on CPU."""
     preallocated_output_arrays::DI
+
+    """Two dimensional array of pressures"""
+    pressure_coords::PRESSURE_COORDS
 end
 
 # TODO: Might be worth it to stuff things like units, attributes for the netcdf
@@ -75,11 +78,18 @@ function PfullCoordsStyle(Y, p, t, pfull_compute!; pfull_levels = era5_pressure_
 
     FT = eltype(pfull_field)
     preallocated_output_arrays = Dict{ScheduledDiagnostic, Matrix{FT}}()
+
+    typeofarray = ClimaComms.array_type(pfull_field)
+    pressure_coordinates = typeofarray{FT}(
+        repeat(pfull_levels, 1, Spaces.ncolumns(axes(pfull_field))),
+    )
+
     return PfullCoordsStyle(
         pfull_levels,
         pfull_compute!,
         pfull_field,
-        preallocated_output_arrays
+        preallocated_output_arrays,
+        pressure_coordinates,
     )
 end
 
