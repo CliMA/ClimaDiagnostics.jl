@@ -337,6 +337,11 @@ function orchestrate_diagnostics(
         active_compute,
     )
 
+    # TODO: Because there can be different coords style
+    # I think the above need to be split into two different
+    # functions, one for setting up the pressure field (sorting and computing perm)
+    # and the other need to do the reshape and interpolate
+
 
     # Process possible time reductions (now we have evaluated storage[diag])
     for diag_index in 1:length(scheduled_diagnostics)
@@ -374,6 +379,7 @@ function orchestrate_diagnostics(
             diagnostic_handler.counters[diag_index],
         )
         # TODO: Check what a PointSpace is exactly and if I need to worry about it
+        # TODO: This is serving the same function as interpolate_field!, but with no interpolation
         move_array_to_output_arrays!(
             diag.output_writer,
             diagnostic_handler.storage[diag_index],
