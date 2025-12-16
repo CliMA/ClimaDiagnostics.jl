@@ -111,9 +111,7 @@ function write_field_in_pfull_coords!(
     dim_names = add_space_coordinates_maybe!(
         writer,
         nc,
-        pfull_levels,
         array,
-        pfull_field,
     )
 
     start_date = nothing
@@ -250,10 +248,10 @@ horizontal indices.
 function add_space_coordinates_maybe!(
     writer::NetCDFWriter,
     nc,
-    pfull_levels,
-    array, # TODO: Rename array to something else
-    pfull_field,
+    array, # TODO: Rename array to something else (also I am not sure if I need this?)
 )
+    pfull_levels = writer.coordinates_style.pressure_levels
+    pfull_field = writer.coordinates_style.pressure_field
     # TODO: Rename pressure_levels to pressure_level
     haskey(nc, "horizontal_index") &&
         return ("pressure_level", "horizontal_index")

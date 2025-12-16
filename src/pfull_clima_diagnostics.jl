@@ -56,7 +56,7 @@ struct PfullCoordsDiagnosticsHandler{
     pfull_field::PRESSURE # TODO: Add check that this is the same across all coords style
 
     """Two dimensional array of pressures"""
-    pressure_coords::PRESSURE_COORDS # TODO: Maybe move to coords style
+    pressure_coords::PRESSURE_COORDS # TODO: This should be removed probably, since different writers can have different pressure levels
 
     """Container holding a counter that tracks how many times the given
     diagnostics was computed from the last time it was output to disk."""
@@ -64,7 +64,7 @@ struct PfullCoordsDiagnosticsHandler{
 
     """A permutation matrix, created by sortperm, for
     sorting the pressures for each column"""
-    perm_matrix::PERM_MATRIX
+    perm_matrix::PERM_MATRIX # TODO: This is the same across all pressure_coords_style, so no need to remove
 
     """A vector of pressure levels. These pressure must be sorted."""
     pfull_levels::PRESSURE_LEVELS # TODO: This should be removed probably, since different writers can have different pressure levels
@@ -194,9 +194,6 @@ function PfullCoordsDiagnosticsHandler(
     FT = eltype(pfull_field)
 
     typeofarray = ClimaComms.array_type(pfull_field)
-    pfull_array = typeofarray{FT}(
-        zeros(length(pfull_levels), Spaces.ncolumns(axes(pfull_field))),
-    )
 
     _check_dt_schedules(dt, unique_scheduled_diagnostics)
 
@@ -206,6 +203,11 @@ function PfullCoordsDiagnosticsHandler(
         out_field = compute_field(diag, Y, p, t)
 
         push!(compute_fields, copy(out_field))
+
+        pfull_levels = diag.output_writer.coordinates_style.pressure_levels
+        pfull_array = typeofarray{FT}(
+            zeros(length(pfull_levels), Spaces.ncolumns(axes(pfull_field))),
+        )
         push!(storage, copy(pfull_array))
         push!(counters, 1)
     end
