@@ -50,7 +50,7 @@ struct PfullCoordsDiagnosticsHandler{
     accumulators::ACC
 
     # TODO: Can remove all of these fields and access from any one of the coordinates
-    # style (problem is singleton then...)
+    # style (problem is establishing a singleton then...)
     """Function to compute the pressure field"""
     pfull_compute!::F # TODO: Add check that this is the same across all coords style
 

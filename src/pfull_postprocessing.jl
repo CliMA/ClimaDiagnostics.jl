@@ -32,10 +32,7 @@ function write_cc_grid_to_regular_grid(writer::NetCDFWriter)
     isdir(pfull_dir) && return nothing
     mkdir(pfull_dir)
 
-    remapper = create_pfull_coords_remapper(
-        writer.coordinates_style.pressure_field,
-        writer,
-    )
+    remapper = LevelRemapper(writer)
     if isdir(_pfull_dir)
         pfull_nc_filepaths = filter!(
             filepath -> isfile(filepath) && endswith(filepath, ".nc"),
@@ -94,8 +91,9 @@ function write_cc_grid_to_regular_grid(
     data = Array(ds[varname])
 
     # Do interpolation here!
-    interpolated_data =
-        interpolate_to_regular_grid(ds, varname, remapper, netcdf_writer)
+    interpolated_data = interpolate(remapper, ds, varname)
+    # interpolated_data =
+    #     interpolate_to_regular_grid(ds, varname, remapper, netcdf_writer)
 
     # Make new dataset
     # Anything that is not varname, pressure_levels, horizontal_index, lon, and lat
@@ -183,62 +181,66 @@ function write_cc_grid_to_regular_grid(
     return nothing
 end
 
+# Do not need to store times because times is not necessarily the same between
+# all of them
+# Can store horizontal points because it is the same across all NetCDFWriter
+struct LevelRemapper{R, FL <: ClimaCore.Fields.Field, HPTS}
+    """ClimaCore remapper object defined on a level of the pressure field."""
+    cc_remapper::R
 
-# TODO: Make a struct that can handle the remapping?
-"""
-    create_pfull_coords_remapper(pfull_field, netcdf_writer::NetCDFWriter)
+    """A level of the pressure field."""
+    field_level::FL
 
-Create a ClimaCore remapper for remapping from a ClimaCore field to a
-regular grid.
-"""
-function create_pfull_coords_remapper(pfull_field, netcdf_writer::NetCDFWriter)
-    # TODO: Determine if this should be on CPU or GPU (not sure if it is worth
-    # transfering the data to GPU...)
-    # Get pressure field and the first level of the pressure field
+    """The horizontal points to interpolate to."""
+    hpts::HPTS
+end
+
+function LevelRemapper(writer::NetCDFWriter)
+    pfull_field = writer.coordinates_style.pressure_field
     pfull_field_level = ClimaCore.to_cpu(ClimaCore.level(pfull_field, 1))
 
     # Create Remapper object with the specified horizontal and vertical points
     space = axes(pfull_field_level)
-    lons, lats = netcdf_writer.hpts
+    lons, lats = writer.hpts
     target_hcoords =
         [Geometry.LatLongPoint(lat, lon) for lon in lons, lat in lats]
     remapper = Remapping.Remapper(space, target_hcoords)
-    return (; remapper, pfull_field_level)
+    return LevelRemapper(remapper, pfull_field_level, writer.hpts)
 end
 
-"""
-    interpolate_to_regular_grid(
-        ds,
-        varname,
-        remapper,
-        netcdf_writer::NetCDFWriter,
-    )
-"""
-function interpolate_to_regular_grid(
-    ds,
-    varname,
-    remapper,
-    netcdf_writer::NetCDFWriter,
+function interpolate(
+    remapper::LevelRemapper,
+    ds::NCDatasets.NCDataset,
+    varname::String,
 )
-    (; remapper, pfull_field_level) = remapper
-    # Note: Order is ("time", "pressure_level", "lon", "lat")
-    lons, lats = netcdf_writer.hpts
+    data = Array(ds[varname])
+    dimnames = NCDatasets.dimnames(ds[varname])
+    return interpolate(remapper, data, dimnames)
+end
+
+function interpolate(remapper::LevelRemapper, data::Array, dimnames)
+    ndims(data) == length(dimnames) || error(
+        "Number of dimensions of data is not the same as the length of dimnames",
+    )
+    dim_lengths = Dict(zip(dimnames, size(data)))
+    lons, lats = remapper.hpts
     lon_length = length(lons)
     lat_length = length(lats)
-    pfull_length = length(ds["pressure_level"])
-    time_length = length(ds["time"])
-
+    # TODO: Names are hardcoded
+    time_length = dim_lengths["time"]
+    pfull_length = dim_lengths["pressure_level"]
     interpolated_data = zeros(time_length, pfull_length, lon_length, lat_length)
-    data = Array(ds[varname])
 
+    # TODO: Ordering of the dimensions are hardcoded
+    field_level = remapper.field_level
     for (idx, level) in pairs(eachslice(data, dims = (1, 2)))
         values = ClimaCore.DataLayouts.array2data(
             level,
-            ClimaCore.Fields.field_values(pfull_field_level),
+            ClimaCore.Fields.field_values(field_level),
         )
-        field = ClimaCore.Fields.Field(values, axes(pfull_field_level))
+        field = ClimaCore.Fields.Field(values, axes(field_level))
         dest = @view interpolated_data[idx, :, :]
-        Remapping.interpolate!(dest, remapper, field)
+        Remapping.interpolate!(dest, remapper.cc_remapper, field)
     end
     return interpolated_data
 end
