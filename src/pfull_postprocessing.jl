@@ -4,46 +4,70 @@ import NCDatasets
 # import ClimaDiagnostics.Writers as Writers
 # import ..Writers: NetCDFWriter
 import ..Writers
-import ..Writers: NetCDFWriter
+import ..Writers: NetCDFWriter, PfullCoordsStyle
 import ClimaCore
 import ClimaCore: Remapping, Geometry
 
-function write_h_indices_to_regular_grid(writer::NetCDFWriter)
-    remapper = create_pfull_coords_remapper(
-        writer.coordinates_style.pressure_field,
-        writer,
-    )
+"""
+    write_cc_grid_to_regular_grid(
+        writer::NetCDFWriter{CS},
+    ) where {CS <: PfullCoordsStyle}
+
+Given the NetCDF `writer` whose coordinate style is `PfullCoordsStyle`,
+convert the all NetCDF files to a regular grid of longitude, latitude, and
+pressure levels.
+"""
+function write_cc_grid_to_regular_grid(writer::NetCDFWriter)
+    # TODO: I don't know why I can't put this in the type declaration
+    writer.coordinates_style isa PfullCoordsStyle ||
+        error("NetCDFWriter must have pressure coordinates style")
 
     _pfull_dir = joinpath(writer.output_dir, "_pfull_coords")
     # TODO: I am not sure how this works with restarts
     pfull_dir = joinpath(writer.output_dir, "pfull_coords")
     # If it already exists, then the pressure coordinates are converted already
     # TODO: Deal with restarts...
-    # TODO: This can be relaxed a little bit and try out each file and seeing if
-    # it exists in case of partial failure
+    # TODO: This can be relaxed a little bit by checking each file and seeing if
+    # it exists or not.
     isdir(pfull_dir) && return nothing
     mkdir(pfull_dir)
+
+    remapper = create_pfull_coords_remapper(
+        writer.coordinates_style.pressure_field,
+        writer,
+    )
     if isdir(_pfull_dir)
         pfull_nc_filepaths = filter!(
             filepath -> isfile(filepath) && endswith(filepath, ".nc"),
             readdir(_pfull_dir, join = true),
         )
         for pfull_nc_filepath in pfull_nc_filepaths
-            write_h_indices_to_regular_grid(
-                pfull_nc_filepath,
+            write_cc_grid_to_regular_grid(
+                writer,
                 remapper,
                 pfull_dir,
-                writer,
+                pfull_nc_filepath,
             )
         end
     end
 end
 
-function write_h_indices_to_regular_grid(
-    filepath::String,
+"""
+    write_cc_grid_to_regular_grid(
+        netcdf_writer::NetCDFWriter,
+        remapper,
+        output_dir,
+        filepath::String,
+    )
+
+Write a NetCDF file consisting of a ClimaCore grid to a regular grid of
+longitude, latitude, and pressure levels.
+"""
+function write_cc_grid_to_regular_grid(
+    netcdf_writer::NetCDFWriter,
     remapper,
     output_dir,
-    netcdf_writer,
+    filepath::String,
 )
     isdir(filepath) && return nothing
     endswith(filepath, ".nc") || return nothing
@@ -71,7 +95,7 @@ function write_h_indices_to_regular_grid(
 
     # Do interpolation here!
     interpolated_data =
-        convert_to_regular_grid(ds, varname, remapper, netcdf_writer)
+        interpolate_to_regular_grid(ds, varname, remapper, netcdf_writer)
 
     # Make new dataset
     # Anything that is not varname, pressure_levels, horizontal_index, lon, and lat
@@ -160,15 +184,20 @@ function write_h_indices_to_regular_grid(
 end
 
 
+# TODO: Make a struct that can handle the remapping?
+"""
+    create_pfull_coords_remapper(pfull_field, netcdf_writer::NetCDFWriter)
 
+Create a ClimaCore remapper for remapping from a ClimaCore field to a
+regular grid.
+"""
 function create_pfull_coords_remapper(pfull_field, netcdf_writer::NetCDFWriter)
-    # TODO: Determine if this should be on CPU or GPU (not sure if it is worth transfering the data to
-    # GPU...)
-    # Get pressure field and any level of the pressure field
-    # pfull_field = pfull_diag_handler.pfull_field
+    # TODO: Determine if this should be on CPU or GPU (not sure if it is worth
+    # transfering the data to GPU...)
+    # Get pressure field and the first level of the pressure field
     pfull_field_level = ClimaCore.to_cpu(ClimaCore.level(pfull_field, 1))
 
-    # Create Remapper object with specified horizontal and vertical points
+    # Create Remapper object with the specified horizontal and vertical points
     space = axes(pfull_field_level)
     lons, lats = netcdf_writer.hpts
     target_hcoords =
@@ -177,9 +206,15 @@ function create_pfull_coords_remapper(pfull_field, netcdf_writer::NetCDFWriter)
     return (; remapper, pfull_field_level)
 end
 
-# Possible implementation of conversion to regular grid
-# Not sure if I want to pass in a netcdf file or open it myself...
-function convert_to_regular_grid(
+"""
+    interpolate_to_regular_grid(
+        ds,
+        varname,
+        remapper,
+        netcdf_writer::NetCDFWriter,
+    )
+"""
+function interpolate_to_regular_grid(
     ds,
     varname,
     remapper,

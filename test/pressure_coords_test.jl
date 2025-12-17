@@ -62,7 +62,12 @@ output_dir = mktempdir(pwd())
         output_dir;
         num_points = (NUM, 2NUM, 3NUM),
         sync_schedule = ClimaDiagnostics.Schedules.DivisorSchedule(2),
-        coords_style = ClimaDiagnostics.Writers.PfullCoordsStyle(Y, p, 0.0, compute_field!),
+        coords_style = ClimaDiagnostics.Writers.PfullCoordsStyle(
+            Y,
+            p,
+            0.0,
+            compute_field!,
+        ),
     )
 
     pfull_netcdf_writer2 = Writers.NetCDFWriter(
@@ -70,7 +75,13 @@ output_dir = mktempdir(pwd())
         output_dir;
         num_points = (NUM, 2NUM, 3NUM),
         sync_schedule = ClimaDiagnostics.Schedules.DivisorSchedule(2),
-        coords_style = ClimaDiagnostics.Writers.PfullCoordsStyle(Y, p, 0.0, compute_field!, pfull_levels = 100.0 .* [1.0, 10.0, 100.0]),
+        coords_style = ClimaDiagnostics.Writers.PfullCoordsStyle(
+            Y,
+            p,
+            0.0,
+            compute_field!,
+            pfull_levels = 100.0 .* [1.0, 10.0, 100.0],
+        ),
     )
 
     time_reduction_diagnostic_every_step = ClimaDiagnostics.ScheduledDiagnostic(

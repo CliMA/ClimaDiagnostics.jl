@@ -37,7 +37,13 @@ A coordinate style for interpolating diagnostic output to pressure levels.
 When using `PfullCoordsStyle`, diagnostic data on model vertical levels is
 interpolated onto the specified pressure levels.
 """
-struct PfullCoordsStyle{F, FT <: AbstractFloat, PFULL_FIELD <: ClimaCore.Fields.Field, DI, PRESSURE_COORDS <: AbstractMatrix,} <: AbstractCoordsStyle
+struct PfullCoordsStyle{
+    F,
+    FT <: AbstractFloat,
+    PFULL_FIELD <: ClimaCore.Fields.Field,
+    DI,
+    PRESSURE_COORDS <: AbstractMatrix,
+} <: AbstractCoordsStyle
     """A vector of pressure levels to indicate how pressure levels should be
        outputted"""
     pressure_levels::Vector{FT}
@@ -69,11 +75,17 @@ Construct a `PfullCoordsStyle` from an iterable of pressure levels.
 The pressure levels must be in sorted in ascending or descending order.
 This ignore `z_sampling_method`.
 """
-function PfullCoordsStyle(Y, p, t, pfull_compute!; pfull_levels = era5_pressure_levels())
+function PfullCoordsStyle(
+    Y,
+    p,
+    t,
+    pfull_compute!;
+    pfull_levels = era5_pressure_levels(),
+)
     pfull_levels = collect(pfull_levels)
     issorted(pfull_levels, rev = true) && reverse!(pfull_levels)
     issorted(pfull_levels) ||
-    error("Pressure levels ($pfull_levels) are not sorted")
+        error("Pressure levels ($pfull_levels) are not sorted")
     pfull_field = pfull_compute!(nothing, Y, p, t)
 
     FT = eltype(pfull_field)

@@ -145,8 +145,12 @@ function PfullCoordsDiagnosticsHandler(
     pfull_field = first_diag.output_writer.coordinates_style.pressure_field
     pfull_compute! = first_diag.output_writer.coordinates_style.pfull_compute!
 
-    all(diag.output_writer.coordinates_style.pressure_field === pfull_field for
-        diag in scheduled_diagnostics) || error("There are multiple copies of the pressure field. Only initialize one PfullCoordsStyle")
+    all(
+        diag.output_writer.coordinates_style.pressure_field === pfull_field for
+        diag in scheduled_diagnostics
+    ) || error(
+        "There are multiple copies of the pressure field. Only initialize one PfullCoordsStyle",
+    )
 
 
     # For diagnostics that perform reductions, the storage is used for the values computed
@@ -208,30 +212,20 @@ function PfullCoordsDiagnosticsHandler(
     for diag_index in 1:length(scheduled_diagnostics)
         diag = scheduled_diagnostics[diag_index]
         interpolate_field_to_pfull_coords!(
-                storage[diag_index],
-                compute_fields[diag_index],
-                diag.output_writer.coordinates_style.pressure_coords,
-                perm_matrix,
-                pfull_array,
-            )
+            storage[diag_index],
+            compute_fields[diag_index],
+            diag.output_writer.coordinates_style.pressure_coords,
+            perm_matrix,
+            pfull_array,
+        )
     end
 
     for (i, diag) in enumerate(unique_scheduled_diagnostics)
         isa_time_reduction = !isnothing(diag.reduction_time_func)
         # If it is not a reduction, call the output writer as well
         if !isa_time_reduction
-            move_array_to_output_arrays!(
-                diag.output_writer,
-                storage[i],
-                diag,
-            )
-            write_field_in_pfull_coords!(
-                diag.output_writer,
-                diag,
-                Y,
-                p,
-                t,
-            )
+            move_array_to_output_arrays!(diag.output_writer, storage[i], diag)
+            write_field_in_pfull_coords!(diag.output_writer, diag, Y, p, t)
         else
             # Add to the accumulator
 
@@ -314,13 +308,13 @@ function orchestrate_diagnostics(
             active_compute[diag_index] || continue
             diag = scheduled_diagnostics[diag_index]
             interpolate_field_to_pfull_coords!(
-                    diagnostic_handler.storage[diag_index],
-                    compute_fields[diag_index],
-                    diag.output_writer.coordinates_style.pressure_coords,
-                    perm_matrix,
-                    pfull_array,
-                )
-    end
+                diagnostic_handler.storage[diag_index],
+                compute_fields[diag_index],
+                diag.output_writer.coordinates_style.pressure_coords,
+                perm_matrix,
+                pfull_array,
+            )
+        end
     end
 
     # Process possible time reductions (now we have evaluated storage[diag])
@@ -446,17 +440,17 @@ function interpolate_field_to_pfull_coords!(
 )
     reshape_to_cols(f) =
         reshape(parent(f), Spaces.nlevels(axes(f)), Spaces.ncolumns(axes(f)))
-            field = reshape_to_cols(field)
-            field .= field[permutation_matrix]
-            # TODO: Check what happen if not all the values are unique...
-            ClimaInterpolations.Interpolation1D.interpolate1d!(
-                array,
-                pfull_array,
-                pressure_coordinates,
-                field,
-                ClimaInterpolations.Interpolation1D.Linear(),
-                ClimaInterpolations.Interpolation1D.Flat(),
-            )
+    field = reshape_to_cols(field)
+    field .= field[permutation_matrix]
+    # TODO: Check what happen if not all the values are unique...
+    ClimaInterpolations.Interpolation1D.interpolate1d!(
+        array,
+        pfull_array,
+        pressure_coordinates,
+        field,
+        ClimaInterpolations.Interpolation1D.Linear(),
+        ClimaInterpolations.Interpolation1D.Flat(),
+    )
     return nothing
 end
 

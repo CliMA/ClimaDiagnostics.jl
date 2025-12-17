@@ -9,12 +9,9 @@
 Move `array` on GPU/CPU to CPU array in `preallocated_output_arrays`.
 """
 # TODO: Rename this...
-function move_array_to_output_arrays!(
-    writer::NetCDFWriter,
-    array,
-    diagnostic,
-)
-    preallocated_output_arrays = writer.coordinates_style.preallocated_output_arrays
+function move_array_to_output_arrays!(writer::NetCDFWriter, array, diagnostic)
+    preallocated_output_arrays =
+        writer.coordinates_style.preallocated_output_arrays
     if !haskey(preallocated_output_arrays, diagnostic)
         preallocated_output_arrays[diagnostic] = Array(array)
     else
@@ -54,13 +51,7 @@ Attributes are appended to the dataset:
 - `comments`
 - `start_date`
 """
-function write_field_in_pfull_coords!(
-    writer::NetCDFWriter,
-    diagnostic,
-    u,
-    p,
-    t,
-)
+function write_field_in_pfull_coords!(writer::NetCDFWriter, diagnostic, u, p, t)
     output_arrays = writer.coordinates_style.preallocated_output_arrays
     pfull_levels = writer.coordinates_style.pressure_levels
     # TODO: Not sure about this, but this could be stored as the field itself
@@ -108,11 +99,7 @@ function write_field_in_pfull_coords!(
 
     # TODO: Add the attributes for pressure levels here
     # Probably from diagnostics handler
-    dim_names = add_space_coordinates_maybe!(
-        writer,
-        nc,
-        array,
-    )
+    dim_names = add_space_coordinates_maybe!(writer, nc, array)
 
     start_date = nothing
     if isnothing(writer.start_date)

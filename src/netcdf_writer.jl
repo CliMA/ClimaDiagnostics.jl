@@ -107,7 +107,7 @@ Close all the open files in `writer`.
 function Base.close(writer::NetCDFWriter)
     foreach(NCDatasets.close, values(writer.open_files))
     writer.coordinates_style isa PfullCoordsStyle &&
-        Postprocessing.write_h_indices_to_regular_grid(writer)
+        Postprocessing.write_cc_grid_to_regular_grid(writer)
     return nothing
 end
 
@@ -145,6 +145,8 @@ Keyword arguments
   produced by this `NetCDFWriter`. These attributes are useful for storing metadata such as
   `source`, `creation_date`, or `frequency`. Must be `nothing` or a subtype of
   `AbstractDict{String, String}`. Default is `nothing`.
+- `coords_style`: A style to indicates whether to convert to another coordinates system or
+   not. The options are `NoConversionStyle` and `PfullCoordsStyle`.
 """
 function NetCDFWriter(
     space::Spaces.AbstractSpace,
