@@ -53,7 +53,6 @@ Attributes are appended to the dataset:
 """
 function write_field_in_pfull_coords!(writer::NetCDFWriter, diagnostic, u, p, t)
     output_arrays = writer.coordinates_style.preallocated_output_arrays
-    pfull_levels = writer.coordinates_style.pressure_levels
     # TODO: Not sure about this, but this could be stored as the field itself
     # if I passed pfull_compute! to it
     pfull_field = writer.coordinates_style.pressure_field
@@ -217,9 +216,7 @@ end
     add_space_coordinates_maybe!(
         writer::NetCDFWriter,
         nc,
-        pfull_levels,
         array,
-        pfull_field,
     )
 
 TODO: This does not work for a single column
