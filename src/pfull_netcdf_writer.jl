@@ -8,8 +8,11 @@
 
 Move `array` on GPU/CPU to CPU array in `preallocated_output_arrays`.
 """
-# TODO: Rename this...
 function move_array_to_output_arrays!(writer::NetCDFWriter, array, diagnostic)
+    # TODO: Rename this...
+    # TODO: Maybe this function can be renamed to interpolate_field! (even though
+    # it doesn't do that, since I need to mimic it if I want to use all of
+    # orchestrate_diagnostics)
     preallocated_output_arrays =
         writer.coordinates_style.preallocated_output_arrays
     if !haskey(preallocated_output_arrays, diagnostic)
@@ -20,14 +23,7 @@ function move_array_to_output_arrays!(writer::NetCDFWriter, array, diagnostic)
 end
 
 """
-    write_field_in_pfull_coords!(
-        writer::NetCDFWriter,
-        output_arrays,
-        diagnostic,
-        u,
-        p,
-        t,
-    )
+    write_field_in_pfull_coords!(writer::NetCDFWriter, diagnostic, u, p, t)
 
 Save the resampled array produced by `diagnostic` as directed by the `writer`.
 
@@ -59,7 +55,7 @@ function write_field_in_pfull_coords!(writer::NetCDFWriter, diagnostic, u, p, t)
     # Only the root process has to write
     ClimaComms.iamroot(ClimaComms.context(pfull_field)) || return nothing
 
-    array = output_arrays[diagnostic]
+    field_as_array = output_arrays[diagnostic]
 
     var = diagnostic.variable
     space = axes(pfull_field)
@@ -96,9 +92,7 @@ function write_field_in_pfull_coords!(writer::NetCDFWriter, diagnostic, u, p, t)
         bounds = "time_bnds",
     )
 
-    # TODO: Add the attributes for pressure levels here
-    # Probably from diagnostics handler
-    dim_names = add_space_coordinates_maybe!(writer, nc, array)
+    dim_names = add_space_coordinates_maybe!(writer, nc, field_as_array)
 
     start_date = nothing
     if isnothing(writer.start_date)
@@ -133,7 +127,7 @@ function write_field_in_pfull_coords!(writer::NetCDFWriter, diagnostic, u, p, t)
         # We already have something in the file
         v = nc["$(var.short_name)"]
         temporal_size, spatial_size... = size(v)
-        interpolated_size = size(array)
+        interpolated_size = size(field_as_array)
         spatial_size == interpolated_size ||
             error("incompatible dimensions for $(var.short_name)")
     else
@@ -204,7 +198,7 @@ function write_field_in_pfull_coords!(writer::NetCDFWriter, diagnostic, u, p, t)
     end
 
     colons = ntuple(_ -> Colon(), length(dim_names))
-    v[time_index, colons...] = array
+    v[time_index, colons...] = field_as_array
 
     # Add file to list of files that might need manual sync
     push!(writer.unsynced_datasets, nc)
@@ -219,8 +213,6 @@ end
         array,
     )
 
-TODO: This does not work for a single column
-
 Add coordinates for pressure levels and horizontal indices.
 
 The horizontal index dimension is an enumeration of the columns for the
@@ -234,6 +226,7 @@ function add_space_coordinates_maybe!(
     nc,
     array, # TODO: Rename array to something else (also I am not sure if I need this?)
 )
+    # TODO: This does not work for a single column
     pfull_levels = writer.coordinates_style.pressure_levels
     pfull_field = writer.coordinates_style.pressure_field
     # TODO: Rename pressure_levels to pressure_level
