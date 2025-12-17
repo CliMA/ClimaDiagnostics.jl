@@ -2,6 +2,8 @@ import ClimaInterpolations
 
 import .Writers: move_array_to_output_arrays!, write_field_in_pfull_coords!
 
+import ClimaCore: Fields
+
 # Due to the design of DiagnosticsHandler and lack of support for pressure
 # coordinates in ClimaCore, it is difficult to implement a conversion to
 # pressure coordinates in DiagnosticsHandler. A more reasonable solution is to
@@ -61,7 +63,7 @@ struct PfullCoordsDiagnosticsHandler{
 
     """A permutation matrix, created by sortperm, for
     sorting the pressures for each column"""
-    perm_matrix::PERM_MATRIX # TODO: This is the same across all pressure_coords_style, so no need to remove
+    perm_matrix::PERM_MATRIX # TODO: This is the same across all pressure_coords_style by virtue of pfull_field
 end
 
 """
@@ -129,6 +131,7 @@ function PfullCoordsDiagnosticsHandler(
     # Or make it work with different PfullCoordsStyle objects (for different
     # netcdf writers), since only the pfull_field and compute functions need to
     # be the same or be okay with that inefficiency
+    # Might need to implement a cache for that then?
 
     # Check all scheduled_diagnostics have the right coordinates style
     all(
@@ -138,15 +141,13 @@ function PfullCoordsDiagnosticsHandler(
 
     # TODO: Can be simplified maybe (pfull field is already in coordinates_style, but only
     # one of them exist though)
-    pfull_field = first(
-            scheduled_diagnostics,
-        ).output_writer.coordinates_style.pressure_field
+    first_diag = first(scheduled_diagnostics)
+    pfull_field = first_diag.output_writer.coordinates_style.pressure_field
+    pfull_compute! = first_diag.output_writer.coordinates_style.pfull_compute!
+
     all(diag.output_writer.coordinates_style.pressure_field === pfull_field for
         diag in scheduled_diagnostics) || error("There are multiple copies of the pressure field. Only initialize one PfullCoordsStyle")
 
-    pfull_compute! = first(
-            scheduled_diagnostics,
-        ).output_writer.coordinates_style.pfull_compute!
 
     # For diagnostics that perform reductions, the storage is used for the values computed
     # at each call. Reductions also save the accumulated value in accumulators.
@@ -310,23 +311,17 @@ function orchestrate_diagnostics(
     if any(active_compute)
         pfull_array = sort_pressure_columns!(pfull_field, perm_matrix)
         for diag_index in 1:length(scheduled_diagnostics)
-        active_compute[diag_index] || continue
-        diag = scheduled_diagnostics[diag_index]
-        interpolate_field_to_pfull_coords!(
-                diagnostic_handler.storage[diag_index],
-                compute_fields[diag_index],
-                diag.output_writer.coordinates_style.pressure_coords,
-                perm_matrix,
-                pfull_array,
-            )
+            active_compute[diag_index] || continue
+            diag = scheduled_diagnostics[diag_index]
+            interpolate_field_to_pfull_coords!(
+                    diagnostic_handler.storage[diag_index],
+                    compute_fields[diag_index],
+                    diag.output_writer.coordinates_style.pressure_coords,
+                    perm_matrix,
+                    pfull_array,
+                )
     end
     end
-
-    # TODO: Because there can be different coords style
-    # I think the above need to be split into two different
-    # functions, one for setting up the pressure field (sorting and computing perm)
-    # and the other need to do the reshape and interpolate
-
 
     # Process possible time reductions (now we have evaluated storage[diag])
     for diag_index in 1:length(scheduled_diagnostics)
@@ -409,13 +404,20 @@ function orchestrate_diagnostics(
     end
 end
 
-function sort_pressure_columns!(pfull_field, sort_indices)
+"""
+    sort_pressure_columns!(pfull_field, permutation_matrix)
+
+Sort the columns of `pfull_field`, store in permutation matrix in
+`permutation_matrix`, and return `pfull_field` as an array of pressures to be
+used in interpolation.
+"""
+function sort_pressure_columns!(pfull_field::Fields.Field, permutation_matrix)
     # First axis is along the z dimension and the second axis is an enumeration of the
     # columns
     reshape_to_cols(f) =
         reshape(parent(f), Spaces.nlevels(axes(f)), Spaces.ncolumns(axes(f)))
     pfull_array = reshape_to_cols(pfull_field)
-    pressure_sortperm = sortperm!(sort_indices, pfull_array, dims = 1)
+    pressure_sortperm = sortperm!(permutation_matrix, pfull_array, dims = 1)
     pfull_array .= pfull_array[pressure_sortperm]
     return pfull_array
 end
@@ -426,7 +428,8 @@ end
         fields,
         pfull_field,
         pressure_coordinates,
-        sort_indices,
+        permutation_matrix,
+        pfull_array,
     )
 
 Interpolate ClimaCore `fields` to pressure coordinates.
@@ -438,13 +441,13 @@ function interpolate_field_to_pfull_coords!(
     array,
     field,
     pressure_coordinates,
-    sort_indices,
+    permutation_matrix,
     pfull_array,
 )
     reshape_to_cols(f) =
         reshape(parent(f), Spaces.nlevels(axes(f)), Spaces.ncolumns(axes(f)))
             field = reshape_to_cols(field)
-            field .= field[sort_indices]
+            field .= field[permutation_matrix]
             # TODO: Check what happen if not all the values are unique...
             ClimaInterpolations.Interpolation1D.interpolate1d!(
                 array,
@@ -458,12 +461,12 @@ function interpolate_field_to_pfull_coords!(
 end
 
 """
-    PfullIntegratorWithDiagnostics(integrator,
-                              scheduled_diagnostics,
-                              pfull_compute!;
-                              state_name = :u,
-                              cache_name = :p,
-                              pfull_kwargs...)
+    IntegratorWithPfullCoordsDiagnostics(
+        integrator,
+        scheduled_diagnostics;
+        state_name = :u,
+        cache_name = :p,
+    )
 
 Return a new `integrator` with diagnostics defined by `scheduled_diagnostics`.
 
