@@ -51,7 +51,7 @@ end
 
 """
     write_cc_grid_to_regular_grid(
-        netcdf_writer::NetCDFWriter,
+        writer::NetCDFWriter,
         remapper,
         output_dir,
         filepath::String,
@@ -61,7 +61,7 @@ Write a NetCDF file consisting of a ClimaCore grid to a regular grid of
 longitude, latitude, and pressure levels.
 """
 function write_cc_grid_to_regular_grid(
-    netcdf_writer::NetCDFWriter,
+    writer::NetCDFWriter,
     remapper,
     output_dir,
     filepath::String,
@@ -76,7 +76,7 @@ function write_cc_grid_to_regular_grid(
 
     times = Array(ds["time"])
     pfull_levels = Array(ds["pressure_level"])
-    target_lon, target_lat = netcdf_writer.hpts
+    target_lon, target_lat = writer.hpts
 
     # Find variable name by finding the variable with 3 dimensions (time x pressure level x horizontal_index)
     not_dim_names = setdiff!(keys(ds), NCDatasets.dimnames(ds))
@@ -88,12 +88,8 @@ function write_cc_grid_to_regular_grid(
     )
     varname = not_dim_names[varidx]
 
-    data = Array(ds[varname])
-
     # Do interpolation here!
     interpolated_data = interpolate(remapper, ds, varname)
-    # interpolated_data =
-    #     interpolate_to_regular_grid(ds, varname, remapper, netcdf_writer)
 
     # Make new dataset
     # Anything that is not varname, pressure_levels, horizontal_index, lon, and lat
@@ -119,8 +115,6 @@ function write_cc_grid_to_regular_grid(
 
     if "date" in keys(ds)
         dates = Array(ds["date"])
-        # date_attribs = attribs_to_nt(ds["date"].attrib)
-        # add_dimension!(nc_hcoords, "date", dates; date_attribs...)
 
         NCDatasets.defDim(nc_hcoords, "date", size(dates)[end])
 
@@ -171,7 +165,7 @@ function write_cc_grid_to_regular_grid(
         varname,
         eltype(interpolated_data),
         ("time", "pressure_level", "lon", "lat"),
-        # deflatelevel = writer.compression_level,
+        deflatelevel = writer.compression_level,
         attrib = ds[varname].attrib,
     )
     v[:, :, :, :] = interpolated_data
