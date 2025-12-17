@@ -244,11 +244,25 @@ function add_space_coordinates_maybe!(
     _, num_h_indices = size(array)
 
     # TODO: Add attributes for coordinates here!
-    # I guess this can be added to the NetCDFWriter in the form of a named
-    # tuple?
-    add_dimension!(nc, "pressure_level", pfull_levels)
+    # TODO: Add these attributes
+    # pressure_level:_FillValue = NaN ;
+    # pressure_level:units = "hPa" ;
+    # pressure_level:positive = "down" ;
+    # TODO: Add this to PressureCoordinatesStyle
+    add_dimension!(
+        nc,
+        "pressure_level",
+        pfull_levels,
+        long_name = "pressure",
+        units = "Pa",
+        stored_direction = "increasing",
+        standard_name = "air_pressure",
+    )
     add_dimension!(nc, "horizontal_index", collect(1:num_h_indices))
 
+
+    # TODO: I don't think this is necessary, since most user are going to use
+    # the preprocessed version anyway?
     lon = NCDatasets.defVar(
         nc,
         "lon",

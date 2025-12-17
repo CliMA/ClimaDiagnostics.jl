@@ -49,6 +49,10 @@ struct PfullCoordsDiagnosticsHandler{
     accumulate results. The element type is a two dimensional CuArray."""
     accumulators::ACC
 
+    """Container holding a counter that tracks how many times the given
+    diagnostics was computed from the last time it was output to disk."""
+    counters::COUNT
+
     # TODO: Can remove all of these fields and access from any one of the coordinates
     # style (problem is establishing a singleton then...)
     """Function to compute the pressure field"""
@@ -56,10 +60,6 @@ struct PfullCoordsDiagnosticsHandler{
 
     """ClimaCore field of pressure created by pfull_compute!"""
     pfull_field::PRESSURE # TODO: Add check that this is the same across all coords style
-
-    """Container holding a counter that tracks how many times the given
-    diagnostics was computed from the last time it was output to disk."""
-    counters::COUNT
 
     """A permutation matrix, created by sortperm, for
     sorting the pressures for each column"""
@@ -247,9 +247,9 @@ function PfullCoordsDiagnosticsHandler(
         compute_fields,
         storage,
         accumulators,
+        counters,
         pfull_compute!,
         pfull_field,
-        counters,
         perm_matrix,
     )
 end
@@ -354,6 +354,7 @@ function orchestrate_diagnostics(
         )
         # TODO: Check what a PointSpace is exactly and if I need to worry about it
         # TODO: This is serving the same function as interpolate_field!, but with no interpolation
+        # TODO: Maybe make this function into interpolate_field for unified interface?
         move_array_to_output_arrays!(
             diag.output_writer,
             diagnostic_handler.storage[diag_index],

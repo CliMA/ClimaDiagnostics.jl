@@ -9,43 +9,26 @@ import ClimaCore
 import ClimaCore: Remapping, Geometry
 
 """
-    write_cc_grid_to_regular_grid(
-        writer::NetCDFWriter{CS},
-    ) where {CS <: PfullCoordsStyle}
+    write_cc_grid_to_regular_grid(writer::NetCDFWriter)
 
 Given the NetCDF `writer` whose coordinate style is `PfullCoordsStyle`,
 convert the all NetCDF files to a regular grid of longitude, latitude, and
 pressure levels.
 """
 function write_cc_grid_to_regular_grid(writer::NetCDFWriter)
-    # TODO: I don't know why I can't put this in the type declaration
     writer.coordinates_style isa PfullCoordsStyle ||
         error("NetCDFWriter must have pressure coordinates style")
 
-    _pfull_dir = joinpath(writer.output_dir, "_pfull_coords")
     # TODO: I am not sure how this works with restarts
     pfull_dir = joinpath(writer.output_dir, "pfull_coords")
-    # If it already exists, then the pressure coordinates are converted already
-    # TODO: Deal with restarts...
-    # TODO: This can be relaxed a little bit by checking each file and seeing if
-    # it exists or not.
-    isdir(pfull_dir) && return nothing
-    mkdir(pfull_dir)
+    isdir(pfull_dir) || mkdir(pfull_dir)
 
     remapper = LevelRemapper(writer)
-    if isdir(_pfull_dir)
-        pfull_nc_filepaths = filter!(
-            filepath -> isfile(filepath) && endswith(filepath, ".nc"),
-            readdir(_pfull_dir, join = true),
-        )
-        for pfull_nc_filepath in pfull_nc_filepaths
-            write_cc_grid_to_regular_grid(
-                writer,
-                remapper,
-                pfull_dir,
-                pfull_nc_filepath,
-            )
-        end
+
+    # TODO: Open files is a misnomer here, since the files can be open or closed
+    nc_filepaths = keys(writer.open_files)
+    for nc_filepath in nc_filepaths
+        write_cc_grid_to_regular_grid(writer, remapper, pfull_dir, nc_filepath)
     end
 end
 
@@ -66,8 +49,13 @@ function write_cc_grid_to_regular_grid(
     output_dir,
     filepath::String,
 )
-    isdir(filepath) && return nothing
-    endswith(filepath, ".nc") || return nothing
+    filename = basename(filepath)
+    nc_hcoords_filepath = joinpath(output_dir, filename)
+    if isfile(nc_hcoords_filepath)
+        @warn "File $nc_hcoords_filepath already exists. Skipping conversion to regular grid"
+        return nothing
+    end
+
     ds = NCDatasets.NCDataset(filepath)
     if !haskey(ds, "horizontal_index")
         close(ds)
@@ -94,8 +82,6 @@ function write_cc_grid_to_regular_grid(
     # Make new dataset
     # Anything that is not varname, pressure_levels, horizontal_index, lon, and lat
     # add again (which means that the last quantity is time)
-    filename = basename(filepath)
-    nc_hcoords_filepath = joinpath(output_dir, filename)
     nc_hcoords = NCDatasets.NCDataset(nc_hcoords_filepath, "c")
 
     # Add dimensions (lon, lat, pressure_level) and its attributes
@@ -175,9 +161,19 @@ function write_cc_grid_to_regular_grid(
     return nothing
 end
 
-# Do not need to store times because times is not necessarily the same between
-# all of them
-# Can store horizontal points because it is the same across all NetCDFWriter
+"""
+    LevelRemapper
+
+A remapper for regridding each level of ClimaCore field.
+
+This remapper reinterprets slices of the data whose size is
+(number of vertical nodes, number of horizontal nodes) as a ClimaCore field
+and interpolate along the horizontal direction for each level.
+
+Note that this object does not store times, because the number of times is not
+necessarily the same between all of netcdf files. However, the horizontal points
+is stored, because the horizontal points is constant for each writer.
+"""
 struct LevelRemapper{R, FL <: ClimaCore.Fields.Field, HPTS}
     """ClimaCore remapper object defined on a level of the pressure field."""
     cc_remapper::R
@@ -189,6 +185,13 @@ struct LevelRemapper{R, FL <: ClimaCore.Fields.Field, HPTS}
     hpts::HPTS
 end
 
+"""
+    LevelRemapper(writer::NetCDFWriter)
+
+Create a `LevelRemapper` object from `writer`.
+
+The coordinates style of writter must be `PfullCoordsStyle`.
+"""
 function LevelRemapper(writer::NetCDFWriter)
     pfull_field = writer.coordinates_style.pressure_field
     pfull_field_level = ClimaCore.to_cpu(ClimaCore.level(pfull_field, 1))
@@ -202,6 +205,17 @@ function LevelRemapper(writer::NetCDFWriter)
     return LevelRemapper(remapper, pfull_field_level, writer.hpts)
 end
 
+"""
+    interpolate(
+        remapper::LevelRemapper,
+        ds::NCDatasets.NCDataset,
+        varname::String
+    )
+
+Given a NetCDF file created from a NetCDFWriter whose coordinate style is
+`PfullCoordsStyle`, interpolate the data with the name `varname` using the
+`remapper`.
+"""
 function interpolate(
     remapper::LevelRemapper,
     ds::NCDatasets.NCDataset,
@@ -212,6 +226,12 @@ function interpolate(
     return interpolate(remapper, data, dimnames)
 end
 
+"""
+    interpolate(remapper::LevelRemapper, data::Array, dimnames)
+
+Given a `data` and `dimnames`, a list of dimension names, interpolate the data
+using `remapper`.
+"""
 function interpolate(remapper::LevelRemapper, data::Array, dimnames)
     ndims(data) == length(dimnames) || error(
         "Number of dimensions of data is not the same as the length of dimnames",
