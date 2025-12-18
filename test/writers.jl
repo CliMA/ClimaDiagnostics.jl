@@ -1229,3 +1229,82 @@ end
     )
     @test start_date3 == Dates.DateTime(2012, 10, 11)
 end
+
+@testset "NetCDFWriter: append temporal values" begin
+    function make_fake_nc()
+        # These values will be overwritten
+        return Dict(
+            "time" => [-1.0, -1.0],
+            "date" => [Dates.DateTime(2009), Dates.DateTime(2009)],
+            "time_bnds" => [[-1.0, -1.0] [-2.0, -2.0]],
+            "date_bnds" => [[Dates.DateTime(2009), Dates.DateTime(2009)] [
+                Dates.DateTime(2009),
+                Dates.DateTime(2009),
+            ]],
+        )
+    end
+    nc = make_fake_nc()
+    start_date = Dates.DateTime(2010)
+    t = 0
+    t_idx = 1
+    isa_time_reduction = false
+    Writers.append_temporal_values!(
+        nc,
+        isa_time_reduction,
+        t,
+        start_date,
+        t_idx,
+    )
+    Writers.append_temporal_values!(
+        nc,
+        isa_time_reduction,
+        t + 1,
+        start_date,
+        t_idx + 1,
+    )
+
+    @test nc["time"] == [0.0, 1.0]
+    @test nc["date"] == [
+        Dates.DateTime("2010-01-01T00:00:00"),
+        Dates.DateTime("2010-01-01T00:00:01"),
+    ]
+    @test nc["time_bnds"] == [[0.0, 0.0] [0.0, 1.0]]
+    @test nc["date_bnds"] == [[
+        Dates.DateTime("2010-01-01T00:00:00"),
+        Dates.DateTime("2010-01-01T00:00:00"),
+    ] [
+        Dates.DateTime("2010-01-01T00:00:00"),
+        Dates.DateTime("2010-01-01T00:00:01"),
+    ]]
+
+    nc = make_fake_nc()
+    isa_time_reduction = true
+    Writers.append_temporal_values!(
+        nc,
+        isa_time_reduction,
+        t + 1,
+        start_date,
+        t_idx,
+    )
+    Writers.append_temporal_values!(
+        nc,
+        isa_time_reduction,
+        t + 2,
+        start_date,
+        t_idx + 1,
+    )
+
+    @test nc["time"] == [0.0, 1.0]
+    @test nc["date"] == [
+        Dates.DateTime("2010-01-01T00:00:00"),
+        Dates.DateTime("2010-01-01T00:00:01"),
+    ]
+    @test nc["time_bnds"] == [[0.0, 1.0] [1.0, 2.0]]
+    @test nc["date_bnds"] == [[
+        Dates.DateTime("2010-01-01T00:00:00"),
+        Dates.DateTime("2010-01-01T00:00:01"),
+    ] [
+        Dates.DateTime("2010-01-01T00:00:01"),
+        Dates.DateTime("2010-01-01T00:00:02"),
+    ]]
+end
