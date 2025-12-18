@@ -538,14 +538,7 @@ NVTX.@annotate function write_field!(
         writer.interpolated_physical_z,
     )
 
-    start_date = nothing
-    if isnothing(writer.start_date)
-        if hasproperty(p, :start_date)
-            start_date = getproperty(p, :start_date)
-        end
-    else
-        start_date = writer.start_date
-    end
+    start_date = get_start_date(writer, p)
 
     add_time_bounds_maybe!(
         nc,
@@ -648,6 +641,18 @@ NVTX.@annotate function write_field!(
     push!(writer.unsynced_datasets, nc)
 
     return nothing
+end
+
+"""
+    get_start_date(writer::NetCDFWriter, p)
+
+Get the start date for the simulation.
+"""
+function get_start_date(writer::NetCDFWriter, p)
+    if isnothing(writer.start_date) && hasproperty(p, :start_date)
+        return getproperty(p, :start_date)
+    end
+    return writer.start_date
 end
 
 """

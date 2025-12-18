@@ -1206,3 +1206,26 @@ end
         @test nc.attrib["global"] == "attribs"
     end
 end
+
+@testset "NetCDFWriter: get start date" begin
+    space = BoxSpace()
+    writer1 = Writers.NetCDFWriter(
+        space,
+        output_dir,
+        start_date = Dates.DateTime(2010, 11, 12),
+    )
+    start_date1 = Writers.get_start_date(writer1, nothing)
+    @test start_date1 == Dates.DateTime(2010, 11, 12)
+    start_date2 = Writers.get_start_date(
+        writer1,
+        (; start_date = Dates.DateTime(2012, 10, 11)),
+    )
+    @test start_date2 == Dates.DateTime(2010, 11, 12)
+
+    writer2 = Writers.NetCDFWriter(space, output_dir)
+    start_date3 = Writers.get_start_date(
+        writer2,
+        (; start_date = Dates.DateTime(2012, 10, 11)),
+    )
+    @test start_date3 == Dates.DateTime(2012, 10, 11)
+end
