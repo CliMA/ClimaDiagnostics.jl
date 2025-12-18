@@ -37,9 +37,6 @@ struct PfullCoordsDiagnosticsHandler{
     """A Vector containing keys to index into `scheduled_diagnostics`."""
     scheduled_diagnostics_keys::V
 
-    """Container storing the fields from the compute functions."""
-    compute_fields::FIELDS
-
     """Container holding a potentially pre-allocated area of memory where to
     save the newly computed results. The element type is a two dimensional
     CuArray."""
@@ -52,6 +49,9 @@ struct PfullCoordsDiagnosticsHandler{
     """Container holding a counter that tracks how many times the given
     diagnostics was computed from the last time it was output to disk."""
     counters::COUNT
+
+    """Container storing the fields from the compute functions."""
+    compute_fields::FIELDS
 
     # TODO: Can remove all of these fields and access from any one of the coordinates
     # style (problem is establishing a singleton then...)
@@ -244,10 +244,10 @@ function PfullCoordsDiagnosticsHandler(
     return PfullCoordsDiagnosticsHandler(
         unique_scheduled_diagnostics,
         scheduled_diagnostics_keys,
-        compute_fields,
         storage,
         accumulators,
         counters,
+        compute_fields,
         pfull_compute!,
         pfull_field,
         perm_matrix,
