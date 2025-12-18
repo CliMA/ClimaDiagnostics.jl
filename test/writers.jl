@@ -1230,6 +1230,62 @@ end
     @test start_date3 == Dates.DateTime(2012, 10, 11)
 end
 
+@testset "NetCDFWriter: initialize variable" begin
+    space = BoxSpace()
+    writer = Writers.NetCDFWriter(space, output_dir)
+    diagnostic = ClimaDiagnostics.ScheduledDiagnostic(;
+        variable = ClimaDiagnostics.DiagnosticVariable(;
+            compute! = identity,
+            short_name = "ABC",
+        ),
+        output_short_name = "my_short_name",
+        output_long_name = "My Long Name",
+        output_writer = writer,
+    )
+    NCDatasets.Dataset(joinpath(output_dir, "init_test.nc"), "c") do nc
+        NCDatasets.defDim(nc, "time", Inf)
+        NCDatasets.defDim(nc, "latitude", 1)
+        v, temporal_size = Writers.get_var_and_t_index!(
+            nc,
+            Float32,
+            writer,
+            [1],
+            diagnostic,
+            ("latitude",),
+            Dates.DateTime(2010),
+        )
+        var = diagnostic.variable
+        @test temporal_size == 0
+        @test v.attrib["short_name"] == var.short_name
+        @test v.attrib["long_name"] == "My Long Name"
+        @test v.attrib["units"] == var.units
+        @test v.attrib["comments"] == var.comments
+        @test v.attrib["start_date"] == string(Dates.DateTime(2010))
+
+        var, temporal_size = Writers.get_var_and_t_index!(
+            nc,
+            Float32,
+            writer,
+            [2],
+            diagnostic,
+            ("latitude",),
+            Dates.DateTime(2010),
+        )
+        # No time values are added, since last call to get_var_and_t_index!
+        @test temporal_size == 0
+
+        @test_throws ErrorException Writers.get_var_and_t_index!(
+            nc,
+            Float32,
+            writer,
+            [1, 2],
+            diagnostic,
+            ("latitude",),
+            Dates.DateTime(2010),
+        )
+    end
+end
+
 @testset "NetCDFWriter: append temporal values" begin
     function make_fake_nc()
         # These values will be overwritten

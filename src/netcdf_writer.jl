@@ -480,7 +480,6 @@ NVTX.@annotate function write_field!(
     # Only the root process has to write
     ClimaComms.iamroot(ClimaComms.context(field)) || return nothing
 
-    var = diagnostic.variable
     space = axes(field)
 
     maybe_move_to_cpu =
@@ -560,30 +559,15 @@ NVTX.@annotate function write_field!(
         )
     end
 
-    if haskey(nc, "$(var.short_name)")
-        # We already have something in the file
-        v = nc["$(var.short_name)"]
-        temporal_size, spatial_size... = size(v)
-        interpolated_size = size(interpolated_field)
-        spatial_size == interpolated_size ||
-            error("incompatible dimensions for $(var.short_name)")
-    else
-        v = NCDatasets.defVar(
-            nc,
-            "$(var.short_name)",
-            FT,
-            ("time", dim_names...),
-            deflatelevel = writer.compression_level,
-        )
-        v.attrib["short_name"] = var.short_name::String
-        v.attrib["long_name"] = output_long_name(diagnostic)::String
-        v.attrib["units"] = var.units::String
-        v.attrib["comments"] = var.comments::String
-        if !isnothing(start_date) && !haskey(v.attrib, "start_date")
-            v.attrib["start_date"] = string(start_date)::String
-        end
-        temporal_size = 0
-    end
+    (v, temporal_size) = get_var_and_t_index!(
+        nc,
+        FT,
+        writer,
+        interpolated_field,
+        diagnostic,
+        dim_names,
+        start_date,
+    )
 
     # We need to write to the next position after what we read from the data (or the first
     # position ever if we are writing the file for the first time)
@@ -616,6 +600,59 @@ function get_start_date(writer::NetCDFWriter, p)
         return getproperty(p, :start_date)
     end
     return writer.start_date
+end
+
+"""
+    get_var_and_t_index!(
+        nc,
+        FT,
+        writer::NetCDFWriter,
+        interpolated_field,
+        diagnostic,
+        dim_names,
+        start_date,
+    )
+
+Return the `var`iable stored in `nc` and the current temporal size, or if the
+`var`iable does not exist, then initialize and store the variable in `nc` with
+attributes about the `var`iable, and return the new NetCDF variable and 0 as the
+temporal size.
+"""
+function get_var_and_t_index!(
+    nc,
+    FT,
+    writer::NetCDFWriter,
+    interpolated_field,
+    diagnostic,
+    dim_names,
+    start_date,
+)
+    var = diagnostic.variable
+    if haskey(nc, "$(var.short_name)")
+        # We already have something in the file
+        v = nc["$(var.short_name)"]
+        temporal_size, spatial_size... = size(v)
+        interpolated_size = size(interpolated_field)
+        spatial_size == interpolated_size ||
+            error("incompatible dimensions for $(var.short_name)")
+    else
+        v = NCDatasets.defVar(
+            nc,
+            "$(var.short_name)",
+            FT,
+            ("time", dim_names...),
+            deflatelevel = writer.compression_level,
+        )
+        v.attrib["short_name"] = var.short_name::String
+        v.attrib["long_name"] = output_long_name(diagnostic)::String
+        v.attrib["units"] = var.units::String
+        v.attrib["comments"] = var.comments::String
+        if !isnothing(start_date) && !haskey(v.attrib, "start_date")
+            v.attrib["start_date"] = string(start_date)::String
+        end
+        temporal_size = 0
+    end
+    return (v, temporal_size)
 end
 
 """
