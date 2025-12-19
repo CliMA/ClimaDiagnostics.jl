@@ -2,6 +2,27 @@ import ClimaInterpolations
 
 import ClimaCore: Fields
 
+import ..Writers: get_coords_style, PfullCoordsStyle
+
+"""
+    split_scheduled_diagnostics(scheduled_diagnostics)
+
+Split the scheduled diagnostics into diagnostics without pressure coordinates
+and diagnostics with presssure coordinates.
+"""
+function split_scheduled_diagnostics(scheduled_diagnostics)
+    diags = []
+    pfull_diags = []
+    for diag in scheduled_diagnostics
+        get_coords_style(diag.output_writer) isa PfullCoordsStyle ?
+        push!(pfull_diags, diag) : push!(diags, diag)
+    end
+    return (;
+        scheduled_diagnostics = diags,
+        pfull_scheduled_diagnostics = pfull_diags,
+    )
+end
+
 # Due to the design of DiagnosticsHandler and lack of support for pressure
 # coordinates in ClimaCore, it is difficult to implement a conversion to
 # pressure coordinates in DiagnosticsHandler. A more reasonable solution is to
@@ -9,47 +30,9 @@ import ClimaCore: Fields
 # ClimaCore, but this requires a hand written kernel or an interface to simplify
 # writing the kernel. As of now, these are not realistic options, so we write
 # a diagnostics handler that specifically handle writing in pressure coordinates.
-"""
-    PfullCoordsDiagnosticsHandler
-
-A struct that contains the scheduled diagnostics, ancillary data, and areas of
-memory needed to store and accumulate results.
-
-This struct differs from [`DiagnosticsHandler`](@ref) as it write the
-diagnostics in pressure coordinates.
-"""
-struct PfullCoordsDiagnosticsHandler{
-    SD,
-    V <: Vector{Int},
-    STORAGE,
-    ACC <: Dict,
-    COUNT,
-    MIXIN <: AbstractHandlerMixin,
-} <: AbstractDiagnosticsHandler
-    """An iterable with the `ScheduledDiagnostic`s that are scheduled."""
-    scheduled_diagnostics::SD
-
-    """A Vector containing keys to index into `scheduled_diagnostics`."""
-    scheduled_diagnostics_keys::V
-
-    """Container holding a potentially pre-allocated area of memory where to
-    save the newly computed results. The element type is a two dimensional
-    CuArray."""
-    storage::STORAGE
-
-    """Container holding a potentially pre-allocated area of memory where to
-    accumulate results. The element type is a two dimensional CuArray."""
-    accumulators::ACC
-
-    """Container holding a counter that tracks how many times the given
-    diagnostics was computed from the last time it was output to disk."""
-    counters::COUNT
-
-    mixin::MIXIN
-end
 
 """
-    PfullCoordsDiagnosticsHandler(
+    make_pfull_diagnostics_handler(
         scheduled_diagnostics,
         Y,
         p,
@@ -57,36 +40,17 @@ end
         dt = nothing,
     )
 
-An object to instantiate and manage storage spaces for `ScheduledDiagnostics`.
-Unlike [`DiagnosticsHandler`](@ref), the diagnostics will be written in pressure
-coordinates.
+Construct a `DiagnosticsHandler` to instantiate and manage storage spaces for `ScheduledDiagnostics`.
+All the `scheduled_diagnostics` must contain output writers that are
+`NetCDFWriter`s and contain the `PfullCoordsStyle` as the coordinates style.
 
-Similar to `DiagnosticsHandler`, the `PfullCoordsDiagnosticsHandler` calls
-`compute!(nothing, Y, p, t)` for each diagnostic, or `compute(Y, p, t)`,
-whichever is available. The result is used to allocate the areas of memory for
-storage and accumulation. For diagnostics without reduction,
-`write_field!(output_writer, result, diagnostic, Y, p, t)` is called too.
-
-Unlike `DiagnosticsHandler`, `pfull_compute!` is needed to compute the pressure
-field at every necessary step for saving the diagnostics in pressure
-coordinates.
-
-Note: initializing a `PfullCoordsDiagnosticsHandler` can be expensive.
-
-Keyword arguments
-===================
-
-`dt`, if passed, is used for error checking, to ensure that the diagnostics
-defined as given a given period are integer multiples of the timestep.
-
-`pfull_levels`, if passed, are the pressure levels to interpolate to. The
-pressure levels must be sorted with either forward or reverse ordering.
+See [`DiagnosticsHandler`](@ref) for more documentation.
 
 !!! warning "File size" # TODO: Verify if this is the case
     Due to the current implementation of `PfullCoordsDiagnosticsHandler`, the
     file size of the resulting NetCDF files can be very large.
 """
-function PfullCoordsDiagnosticsHandler(
+function make_pfull_diagnostics_handler(
     scheduled_diagnostics,
     Y,
     p,
@@ -105,7 +69,7 @@ function PfullCoordsDiagnosticsHandler(
     all(
         diag.output_writer isa NetCDFWriter for diag in scheduled_diagnostics
     ) || error(
-        "PfullCoordsDiagnosticsHandler only supports diagnostics using NetCDFWriter",
+        "Writing diagnostics in pressure coordinates is only supported by NetCDFWriter",
     )
 
 
@@ -230,7 +194,7 @@ function PfullCoordsDiagnosticsHandler(
     pfull_mixin =
         PfullMixin(compute_fields, pfull_compute!, pfull_field, perm_matrix)
 
-    return PfullCoordsDiagnosticsHandler(
+    return DiagnosticsHandler(
         unique_scheduled_diagnostics,
         scheduled_diagnostics_keys,
         storage,
@@ -347,56 +311,6 @@ function compute_fields!(
         end
     end
     return nothing
-end
-
-"""
-    IntegratorWithPfullCoordsDiagnostics(
-        integrator,
-        scheduled_diagnostics;
-        state_name = :u,
-        cache_name = :p,
-    )
-
-Return a new `integrator` with diagnostics defined by `scheduled_diagnostics`.
-
-`IntegratorWithDiagnostics` is conceptually similar to defining a `DiagnosticsHandler`,
-constructing its associated `DiagnosticsCallback`, and adding such callback to a given
-integrator.
-
-The new integrator is identical to the previous one with the only difference that it has a
-new callback called after all the other callbacks to accumulate/output diagnostics.
-
-`IntegratorWithDiagnostics` ensures that the diagnostic callbacks are initialized and called
-after everything else is initialized and computed.
-
-`IntegratorWithDiagnostics` assumes that the state is `integrator.u` and the cache is
-`integrator.p`. This behavior can be customized by passing the `state_name` and `cache_name`
-keyword arguments.
-"""
-function IntegratorWithPfullCoordsDiagnostics(
-    integrator,
-    scheduled_diagnostics;
-    state_name = :u,
-    cache_name = :p,
-)
-    diagnostics_handler = PfullCoordsDiagnosticsHandler(
-        scheduled_diagnostics,
-        getproperty(integrator, state_name),
-        getproperty(integrator, cache_name),
-        integrator.t;
-        integrator.dt,
-    )
-
-    diagnostics_callback = DiagnosticsCallback(diagnostics_handler)
-
-    continuous_callbacks = integrator.callback.continuous_callbacks
-    discrete_callbacks =
-        (integrator.callback.discrete_callbacks..., diagnostics_callback)
-    callback = SciMLBase.CallbackSet(continuous_callbacks, discrete_callbacks)
-
-    Accessors.@reset integrator.callback = callback
-
-    return integrator
 end
 
 #! format: off

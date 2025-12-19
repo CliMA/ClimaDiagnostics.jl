@@ -1,8 +1,6 @@
 module Postprocessing
 
 import NCDatasets
-# import ClimaDiagnostics.Writers as Writers
-# import ..Writers: NetCDFWriter
 import ..Writers
 import ..Writers: NetCDFWriter, PfullCoordsStyle
 import ClimaCore
@@ -19,7 +17,8 @@ function write_cc_grid_to_regular_grid(writer::NetCDFWriter)
     writer.coordinates_style isa PfullCoordsStyle ||
         error("NetCDFWriter must have pressure coordinates style")
 
-    # TODO: I am not sure how this works with restarts
+    # Directory to store the NetCDF files after interpolation in the horizontal
+    # direction
     pfull_dir = joinpath(writer.output_dir, "pfull_coords")
     isdir(pfull_dir) || mkdir(pfull_dir)
 
@@ -89,7 +88,6 @@ function write_cc_grid_to_regular_grid(
     attribs_to_nt = attrib -> NamedTuple(Symbol(k) => v for (k, v) in attrib)
     time_attribs = attribs_to_nt(ds["time"].attrib)
 
-    # TODO: Import these...
     Writers.add_dimension!(nc_hcoords, "time", times; time_attribs...)
     time_bnds_attribs = attribs_to_nt(ds["time_bnds"].attrib)
     Writers.add_time_bounds_maybe!(

@@ -445,6 +445,8 @@ function IntegratorWithDiagnostics(
     state_name = :u,
     cache_name = :p,
 )
+    scheduled_diagnostics, pfull_scheduled_diagnostics =
+        split_scheduled_diagnostics(scheduled_diagnostics)
     diagnostics_handler = DiagnosticsHandler(
         scheduled_diagnostics,
         getproperty(integrator, state_name),
@@ -452,13 +454,29 @@ function IntegratorWithDiagnostics(
         integrator.t;
         integrator.dt,
     )
-    diagnostics_callback = DiagnosticsCallback(diagnostics_handler)
-
     continuous_callbacks = integrator.callback.continuous_callbacks
-    discrete_callbacks =
-        (integrator.callback.discrete_callbacks..., diagnostics_callback)
-    callback = SciMLBase.CallbackSet(continuous_callbacks, discrete_callbacks)
+    diagnostics_callback = DiagnosticsCallback(diagnostics_handler)
+    if isempty(pfull_scheduled_diagnostics)
+        discrete_callbacks =
+            (integrator.callback.discrete_callbacks..., diagnostics_callback)
+    else
+        pfull_diagnostics_handler = make_pfull_diagnostics_handler(
+            pfull_scheduled_diagnostics,
+            getproperty(integrator, state_name),
+            getproperty(integrator, cache_name),
+            integrator.t;
+            integrator.dt,
+        )
+        pfull_diagnostics_callback =
+            DiagnosticsCallback(pfull_diagnostics_handler)
 
+        discrete_callbacks = (
+            integrator.callback.discrete_callbacks...,
+            diagnostics_callback,
+            pfull_diagnostics_callback,
+        )
+    end
+    callback = SciMLBase.CallbackSet(continuous_callbacks, discrete_callbacks)
     Accessors.@reset integrator.callback = callback
 
     return integrator

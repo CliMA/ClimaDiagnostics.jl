@@ -112,7 +112,7 @@ output_dir = mktempdir(pwd())
     )
 
     # pfull_levels = ClimaDiagnostics.era5_pressure_levels()
-    pfull_diagnostic_handler = ClimaDiagnostics.PfullCoordsDiagnosticsHandler(
+    pfull_diagnostic_handler = ClimaDiagnostics.make_pfull_diagnostics_handler(
         [
             pfull_time_reduction_diagnostic_every_step,
             pfull_inst_diagnostic_every_step,
@@ -141,8 +141,6 @@ output_dir = mktempdir(pwd())
         callback = SciMLBase.CallbackSet((), (diag_cb, pfull_diag_cb)),
     )
 
-    # TODO: SUPER IMPORTANT
-    # TODO: SUPER IMPORTANT
     # TODO: SUPER IMPORTANT
     # TODO: Test that pressure levels are actually being computed the way that I think it is
     #       I don't know how to do this

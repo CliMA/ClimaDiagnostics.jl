@@ -9,8 +9,12 @@
         ::PfullCoordsStyle
     )
 
-TODO: Update this docstring
-Move `array` on GPU/CPU to CPU array in `preallocated_output_arrays`.
+Move `array` on GPU/CPU to the CPU array in `preallocated_output_arrays` in
+`writer.coordinates_style`.
+
+This function does not interpolation as vertical interpolation is done during the
+`compute_fields!` and horizontal interpolation is done offline after the
+simulation ends.
 """
 function interpolate_field!(
     writer::NetCDFWriter,
@@ -21,10 +25,6 @@ function interpolate_field!(
     t,
     ::PfullCoordsStyle,
 )
-    # TODO: Rename this...
-    # TODO: Maybe this function can be renamed to interpolate_field! (even though
-    # it doesn't do that, since I need to mimic it if I want to use all of
-    # orchestrate_diagnostics)
     preallocated_output_arrays =
         writer.coordinates_style.preallocated_output_arrays
     if !haskey(preallocated_output_arrays, diagnostic)
@@ -36,7 +36,15 @@ function interpolate_field!(
 end
 
 """
-    write_field!(writer::NetCDFWriter, diagnostic, u, p, t)
+    write_field!(
+        writer::NetCDFWriter,
+        _,
+        diagnostic,
+        u,
+        p,
+        t,
+        ::PfullCoordsStyle,
+    )
 
 Save the resampled array produced by `diagnostic` as directed by the `writer`.
 
@@ -70,8 +78,6 @@ function write_field!(
     ::PfullCoordsStyle,
 )
     output_arrays = writer.coordinates_style.preallocated_output_arrays
-    # TODO: Not sure about this, but this could be stored as the field itself
-    # if I passed pfull_compute! to it
     pfull_field = writer.coordinates_style.pressure_field
     # Only the root process has to write
     ClimaComms.iamroot(ClimaComms.context(pfull_field)) || return nothing
