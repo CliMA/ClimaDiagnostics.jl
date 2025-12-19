@@ -20,7 +20,7 @@ import ClimaCore
 import ..AbstractWriter, ..ScheduledDiagnostic
 import ..ScheduledDiagnostics: output_short_name, output_long_name
 
-function write_field!(writer::AbstractWriter, field, diagnostic, u, p, t)
+@inline function write_field!(writer::AbstractWriter, field, diagnostic, u, p, t)
     return write_field!(
         writer,
         field,
@@ -50,7 +50,7 @@ function Base.close(writer::AbstractWriter)
     return nothing
 end
 
-function interpolate_field!(writer::AbstractWriter, field, diagnostic, u, p, t)
+@inline function interpolate_field!(writer::AbstractWriter, field, diagnostic, u, p, t)
     return interpolate_field!(
         writer,
         field,
