@@ -26,10 +26,7 @@ struct PfullCoordsDiagnosticsHandler{
     STORAGE,
     ACC <: Dict,
     COUNT,
-    F <: Function,
-    PRESSURE,
-    FIELDS,
-    PERM_MATRIX <: AbstractMatrix,
+    MIXIN <: AbstractHandlerMixin,
 } <: AbstractDiagnosticsHandler
     """An iterable with the `ScheduledDiagnostic`s that are scheduled."""
     scheduled_diagnostics::SD
@@ -50,20 +47,7 @@ struct PfullCoordsDiagnosticsHandler{
     diagnostics was computed from the last time it was output to disk."""
     counters::COUNT
 
-    """Container storing the fields from the compute functions."""
-    compute_fields::FIELDS
-
-    # TODO: Can remove all of these fields and access from any one of the coordinates
-    # style (problem is establishing a singleton then...)
-    """Function to compute the pressure field"""
-    pfull_compute!::F # TODO: Add check that this is the same across all coords style
-
-    """ClimaCore field of pressure created by pfull_compute!"""
-    pfull_field::PRESSURE # TODO: Add check that this is the same across all coords style
-
-    """A permutation matrix, created by sortperm, for
-    sorting the pressures for each column"""
-    perm_matrix::PERM_MATRIX # TODO: This is the same across all pressure_coords_style by virtue of pfull_field
+    mixin::MIXIN
 end
 
 """
@@ -117,6 +101,8 @@ function PfullCoordsDiagnosticsHandler(
     # This is going to involve refactoring the reshape function
 
 
+    # TODO: I would like all these checks to be moved to PfullCoordsMixin...
+
     # Check output_writers are NetCDFWriter
     all(
         diag.output_writer isa NetCDFWriter for diag in scheduled_diagnostics
@@ -161,6 +147,7 @@ function PfullCoordsDiagnosticsHandler(
     accumulators = Dict{Int, Any}()
     counters = Int[]
     scheduled_diagnostics_keys = Int[]
+    # TODO: If I want to make this uniform, then this can be a dict instead of a vector or store nothing in the vector to make sure the indices work out
     compute_fields = []
 
     # NOTE: unique requires isequal and hash to both be implemented. We don't really want to
@@ -241,16 +228,17 @@ function PfullCoordsDiagnosticsHandler(
     compute_fields = value_types(compute_fields)[compute_fields...]
     storage = value_types(storage)[storage...]
     accumulators = Dict{Int, value_types(accumulators)}(accumulators...)
+
+    pfull_mixin =
+        PfullMixin(compute_fields, pfull_compute!, pfull_field, perm_matrix)
+
     return PfullCoordsDiagnosticsHandler(
         unique_scheduled_diagnostics,
         scheduled_diagnostics_keys,
         storage,
         accumulators,
         counters,
-        compute_fields,
-        pfull_compute!,
-        pfull_field,
-        perm_matrix,
+        pfull_mixin,
     )
 end
 
@@ -264,14 +252,9 @@ function orchestrate_diagnostics(
     integrator,
     diagnostic_handler::PfullCoordsDiagnosticsHandler,
 )
-    (;
-        scheduled_diagnostics,
-        scheduled_diagnostics_keys,
-        compute_fields,
-        pfull_compute!,
-        pfull_field,
-        perm_matrix,
-    ) = diagnostic_handler
+    (; scheduled_diagnostics, scheduled_diagnostics_keys, mixin) =
+        diagnostic_handler
+    (; compute_fields, pfull_compute!, pfull_field, perm_matrix) = mixin
     active_compute = Bool[]
     active_output = Bool[]
     active_sync = Bool[]
@@ -282,6 +265,7 @@ function orchestrate_diagnostics(
         push!(active_sync, _needs_sync(diag, integrator))
     end
 
+    # TODO: Can be written as precompute_step!(diagnostics_handler, integrator, active_compute)
     # Compute pressure field
     any(active_compute) &&
         pfull_compute!(pfull_field, integrator.u, integrator.p, integrator.t)
@@ -293,7 +277,7 @@ function orchestrate_diagnostics(
 
         diagnostic_handler.counters[diag_index] += 1
         compute_field!(
-            diagnostic_handler.compute_fields[diag_index],
+            compute_fields[diag_index],
             diag,
             integrator.u,
             integrator.p,
@@ -301,6 +285,8 @@ function orchestrate_diagnostics(
         )
     end
 
+    # TODO: This can probably be written as
+    # prereduction_step(diagnostics_handler, integrator, active_compute)
     # Move all the relevant fields to pressure coordinates and store in storage
     if any(active_compute)
         pfull_array = sort_pressure_columns!(pfull_field, perm_matrix)

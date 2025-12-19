@@ -11,6 +11,8 @@ import .Writers:
 # We define all the known identities in reduction_identities.jl
 include("reduction_identities.jl")
 
+include("handler_mixins.jl")
+
 abstract type AbstractDiagnosticsHandler end
 
 """
@@ -19,8 +21,14 @@ abstract type AbstractDiagnosticsHandler end
 A struct that contains the scheduled diagnostics, ancillary data and areas of memory needed
 to store and accumulate results.
 """
-struct DiagnosticsHandler{SD, V <: Vector{Int}, STORAGE, ACC <: Dict, COUNT} <:
-       AbstractDiagnosticsHandler
+struct DiagnosticsHandler{
+    SD,
+    V <: Vector{Int},
+    STORAGE,
+    ACC <: Dict,
+    COUNT,
+    MIXIN <: AbstractHandlerMixin,
+} <: AbstractDiagnosticsHandler
     """An iterable with the `ScheduledDiagnostic`s that are scheduled."""
     scheduled_diagnostics::SD
 
@@ -38,6 +46,8 @@ struct DiagnosticsHandler{SD, V <: Vector{Int}, STORAGE, ACC <: Dict, COUNT} <:
     """Container holding a counter that tracks how many times the given
     diagnostics was computed from the last time it was output to disk."""
     counters::COUNT
+
+    mixin::MIXIN
 end
 
 """
@@ -156,6 +166,7 @@ function DiagnosticsHandler(scheduled_diagnostics, Y, p, t; dt = nothing)
         storage,
         accumulators,
         counters,
+        NoMixin(),
     )
 end
 
