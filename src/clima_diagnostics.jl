@@ -299,19 +299,7 @@ NVTX.@annotate function orchestrate_diagnostics(
     end
 
     # Compute
-    for diag_index in scheduled_diagnostics_keys
-        active_compute[diag_index] || continue
-        diag = scheduled_diagnostics[diag_index]
-
-        diagnostic_handler.counters[diag_index] += 1
-        compute_field!(
-            diagnostic_handler.storage[diag_index],
-            diag,
-            integrator.u,
-            integrator.p,
-            integrator.t,
-        )
-    end
+    compute_fields!(diagnostic_handler, integrator, active_compute)
 
     # Process possible time reductions (now we have evaluated storage[diag])
     for diag_index in 1:length(scheduled_diagnostics)
@@ -473,6 +461,45 @@ function IntegratorWithDiagnostics(
     Accessors.@reset integrator.callback = callback
 
     return integrator
+end
+
+
+# TODO: Using this function means that I need two different diagnostics handlers, since to use one diagnostics handler for everything, I need to dispatch one level lower for the compute_fields!, but I couldn't find
+# a clean way of handling this
+function compute_fields!(
+    diagnostic_handler::AbstractDiagnosticsHandler,
+    integrator,
+    active_compute,
+)
+    return compute_fields!(
+        diagnostic_handler,
+        integrator,
+        active_compute,
+        diagnostic_handler.mixin,
+    )
+end
+
+function compute_fields!(
+    diagnostic_handler::AbstractDiagnosticsHandler,
+    integrator,
+    active_compute,
+    ::NoMixin,
+)
+    (; scheduled_diagnostics, scheduled_diagnostics_keys) = diagnostic_handler
+    for diag_index in scheduled_diagnostics_keys
+        active_compute[diag_index] || continue
+        diag = scheduled_diagnostics[diag_index]
+
+        diagnostic_handler.counters[diag_index] += 1
+        compute_field!(
+            diagnostic_handler.storage[diag_index],
+            diag,
+            integrator.u,
+            integrator.p,
+            integrator.t,
+        )
+    end
+    return nothing
 end
 
 include("pfull_clima_diagnostics.jl")

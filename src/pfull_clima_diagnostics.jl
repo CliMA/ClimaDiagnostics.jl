@@ -250,9 +250,7 @@ function orchestrate_diagnostics(
     integrator,
     diagnostic_handler::PfullCoordsDiagnosticsHandler,
 )
-    (; scheduled_diagnostics, scheduled_diagnostics_keys, mixin) =
-        diagnostic_handler
-    (; compute_fields, pfull_compute!, pfull_field, perm_matrix) = mixin
+    (; scheduled_diagnostics, scheduled_diagnostics_keys) = diagnostic_handler
     active_compute = Bool[]
     active_output = Bool[]
     active_sync = Bool[]
@@ -263,49 +261,8 @@ function orchestrate_diagnostics(
         push!(active_sync, _needs_sync(diag, integrator))
     end
 
-    # Compute fields
-    for diag_index in scheduled_diagnostics_keys
-        active_compute[diag_index] || continue
-        diag = scheduled_diagnostics[diag_index]
-
-        diagnostic_handler.counters[diag_index] += 1
-        # TODO: To make this the same as the other one in clima_diagnostics, I can dispatch off of the coordinate style in diag
-        # TODO: Might be worth it to create a getter for
-        # coordinates_style that returns no coordinates style for most of them
-        # TODO: Dispatch for compute_field
-        compute_field!(
-            compute_fields[diag_index],
-            diag,
-            integrator.u,
-            integrator.p,
-            integrator.t,
-        )
-    end
-
-    # TODO: This need to be a new function...
-    #########################
-    # TODO: This can probably be written as
-    # prereduction_step(diagnostics_handler, integrator, active_compute)
-    # Move all the relevant fields to pressure coordinates and store in storage
-    if any(active_compute)
-        ### Depend on the design this can be done here or before the compute_field
-        pfull_compute!(pfull_field, integrator.u, integrator.p, integrator.t)
-        pfull_array = sort_pressure_columns!(pfull_field, perm_matrix)
-        ###
-        # TODO: I think this need to be done per diagnostic if I want to reuse the exactly same code
-        for diag_index in 1:length(scheduled_diagnostics)
-            active_compute[diag_index] || continue
-            diag = scheduled_diagnostics[diag_index]
-            interpolate_field_to_pfull_coords!(
-                diagnostic_handler.storage[diag_index],
-                compute_fields[diag_index],
-                diag.output_writer.coordinates_style.pressure_coords,
-                perm_matrix,
-                pfull_array,
-            )
-        end
-    end
-    ###################3
+    # Compute
+    compute_fields!(diagnostic_handler, integrator, active_compute)
 
     # Process possible time reductions (now we have evaluated storage[diag])
     for diag_index in 1:length(scheduled_diagnostics)
@@ -360,6 +317,7 @@ function orchestrate_diagnostics(
     for diag_index in scheduled_diagnostics_keys
         active_output[diag_index] || continue
         diag = scheduled_diagnostics[diag_index]
+
         write_field!(
             diag.output_writer,
             diagnostic_handler.storage[diag_index],
@@ -449,6 +407,59 @@ function interpolate_field_to_pfull_coords!(
         ClimaInterpolations.Interpolation1D.Linear(),
         ClimaInterpolations.Interpolation1D.Flat(),
     )
+    return nothing
+end
+
+function compute_fields!(
+    diagnostic_handler::AbstractDiagnosticsHandler,
+    integrator,
+    active_compute,
+    ::PfullMixin,
+)
+    (; scheduled_diagnostics, scheduled_diagnostics_keys, mixin) =
+        diagnostic_handler
+    (; compute_fields, pfull_compute!, pfull_field, perm_matrix) = mixin
+    for diag_index in scheduled_diagnostics_keys
+        active_compute[diag_index] || continue
+        diag = scheduled_diagnostics[diag_index]
+
+        diagnostic_handler.counters[diag_index] += 1
+        # TODO: To make this the same as the other one in clima_diagnostics, I can dispatch off of the coordinate style in diag
+        # TODO: Might be worth it to create a getter for
+        # coordinates_style that returns no coordinates style for most of them
+        # TODO: Dispatch for compute_field
+        compute_field!(
+            compute_fields[diag_index],
+            diag,
+            integrator.u,
+            integrator.p,
+            integrator.t,
+        )
+    end
+
+    # TODO: This need to be a new function...
+    #########################
+    # TODO: This can probably be written as
+    # prereduction_step(diagnostics_handler, integrator, active_compute)
+    # Move all the relevant fields to pressure coordinates and store in storage
+    if any(active_compute)
+        ### Depend on the design this can be done here or before the compute_field
+        pfull_compute!(pfull_field, integrator.u, integrator.p, integrator.t)
+        pfull_array = sort_pressure_columns!(pfull_field, perm_matrix)
+        ###
+        # TODO: I think this need to be done per diagnostic if I want to reuse the exactly same code
+        for diag_index in 1:length(scheduled_diagnostics)
+            active_compute[diag_index] || continue
+            diag = scheduled_diagnostics[diag_index]
+            interpolate_field_to_pfull_coords!(
+                diagnostic_handler.storage[diag_index],
+                compute_fields[diag_index],
+                diag.output_writer.coordinates_style.pressure_coords,
+                perm_matrix,
+                pfull_array,
+            )
+        end
+    end
     return nothing
 end
 
