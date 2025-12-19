@@ -1,6 +1,6 @@
 import ClimaInterpolations
 
-import .Writers: write_field_in_pfull_coords!, get_coords_style
+import .Writers: write_field_in_pfull_coords!
 
 import ClimaCore: Fields
 
@@ -274,6 +274,7 @@ function orchestrate_diagnostics(
         # TODO: To make this the same as the other one in clima_diagnostics, I can dispatch off of the coordinate style in diag
         # TODO: Might be worth it to create a getter for
         # coordinates_style that returns no coordinates style for most of them
+        # TODO: Dispatch for compute_field
         compute_field!(
             compute_fields[diag_index],
             diag,
@@ -283,6 +284,8 @@ function orchestrate_diagnostics(
         )
     end
 
+    # TODO: This need to be a new function...
+    #########################
     # TODO: This can probably be written as
     # prereduction_step(diagnostics_handler, integrator, active_compute)
     # Move all the relevant fields to pressure coordinates and store in storage
@@ -304,6 +307,7 @@ function orchestrate_diagnostics(
             )
         end
     end
+    ###################3
 
     # Process possible time reductions (now we have evaluated storage[diag])
     for diag_index in 1:length(scheduled_diagnostics)
@@ -358,6 +362,7 @@ function orchestrate_diagnostics(
     for diag_index in scheduled_diagnostics_keys
         active_output[diag_index] || continue
         diag = scheduled_diagnostics[diag_index]
+        # TODO: Replace this with write_field!
         write_field_in_pfull_coords!(
             diag.output_writer,
             diag,
@@ -389,6 +394,8 @@ function orchestrate_diagnostics(
         # Reset counter
         diagnostic_handler.counters[diag_index] = 0
     end
+
+    return nothing
 end
 
 """

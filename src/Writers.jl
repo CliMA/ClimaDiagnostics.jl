@@ -31,6 +31,26 @@ function Base.close(writer::AbstractWriter)
 end
 
 function interpolate_field!(writer::AbstractWriter, field, diagnostic, u, p, t)
+    return interpolate_field!(
+        writer,
+        field,
+        diagnostic,
+        u,
+        p,
+        t,
+        get_coords_style(writer),
+    )
+end
+
+function interpolate_field!(
+    writer::AbstractWriter,
+    field,
+    diagnostic,
+    u,
+    p,
+    t,
+    mixin,
+)
     # Nothing to be done here :)
     return nothing
 end
