@@ -8,7 +8,15 @@
 
 Move `array` on GPU/CPU to CPU array in `preallocated_output_arrays`.
 """
-function move_array_to_output_arrays!(writer::NetCDFWriter, array, diagnostic)
+function move_array_to_output_arrays!(
+    writer::NetCDFWriter,
+    array,
+    diagnostic,
+    u,
+    p,
+    t,
+    coords_style,
+)
     # TODO: Rename this...
     # TODO: Maybe this function can be renamed to interpolate_field! (even though
     # it doesn't do that, since I need to mimic it if I want to use all of
@@ -20,6 +28,7 @@ function move_array_to_output_arrays!(writer::NetCDFWriter, array, diagnostic)
     else
         copyto!(preallocated_output_arrays[diagnostic], array)
     end
+    return nothing
 end
 
 """

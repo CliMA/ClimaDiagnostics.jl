@@ -40,6 +40,8 @@ function sync(writer::AbstractWriter)
     return nothing
 end
 
+# Define styles for converting to another coordinates system or not
+include("coordinates_style.jl")
 include("dummy_writer.jl")
 include("dict_writer.jl")
 include("hdf5_writer.jl")

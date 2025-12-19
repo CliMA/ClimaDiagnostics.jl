@@ -1,6 +1,6 @@
 import ClimaInterpolations
 
-import .Writers: move_array_to_output_arrays!, write_field_in_pfull_coords!
+import .Writers: move_array_to_output_arrays!, write_field_in_pfull_coords!, get_coords_style
 
 import ClimaCore: Fields
 
@@ -211,7 +211,15 @@ function PfullCoordsDiagnosticsHandler(
         isa_time_reduction = !isnothing(diag.reduction_time_func)
         # If it is not a reduction, call the output writer as well
         if !isa_time_reduction
-            move_array_to_output_arrays!(diag.output_writer, storage[i], diag)
+            move_array_to_output_arrays!(
+                diag.output_writer,
+                storage[i],
+                diag,
+                Y,
+                p,
+                t,
+                get_coords_style(diag.output_writer),
+            )
             write_field_in_pfull_coords!(diag.output_writer, diag, Y, p, t)
         else
             # Add to the accumulator
@@ -265,17 +273,15 @@ function orchestrate_diagnostics(
         push!(active_sync, _needs_sync(diag, integrator))
     end
 
-    # TODO: Can be written as precompute_step!(diagnostics_handler, integrator, active_compute)
-    # Compute pressure field
-    any(active_compute) &&
-        pfull_compute!(pfull_field, integrator.u, integrator.p, integrator.t)
-
     # Compute fields
     for diag_index in scheduled_diagnostics_keys
         active_compute[diag_index] || continue
         diag = scheduled_diagnostics[diag_index]
 
         diagnostic_handler.counters[diag_index] += 1
+        # TODO: To make this the same as the other one in clima_diagnostics, I can dispatch off of the coordinate style in diag
+        # TODO: Might be worth it to create a getter for
+        # coordinates_style that returns no coordinates style for most of them
         compute_field!(
             compute_fields[diag_index],
             diag,
@@ -289,7 +295,11 @@ function orchestrate_diagnostics(
     # prereduction_step(diagnostics_handler, integrator, active_compute)
     # Move all the relevant fields to pressure coordinates and store in storage
     if any(active_compute)
+        ### Depend on the design this can be done here or before the compute_field
+        pfull_compute!(pfull_field, integrator.u, integrator.p, integrator.t)
         pfull_array = sort_pressure_columns!(pfull_field, perm_matrix)
+        ###
+        # TODO: I think this need to be done per diagnostic if I want to reuse the exactly same code
         for diag_index in 1:length(scheduled_diagnostics)
             active_compute[diag_index] || continue
             diag = scheduled_diagnostics[diag_index]
@@ -340,11 +350,16 @@ function orchestrate_diagnostics(
         )
         # TODO: Check what a PointSpace is exactly and if I need to worry about it
         # TODO: This is serving the same function as interpolate_field!, but with no interpolation
-        # TODO: Maybe make this function into interpolate_field for unified interface?
+        # TODO: Make this function into interpolate_field! for unified interface?
+        # TODO: Need to dispatch on the type of coordinate style (so need to include it for all writer)
         move_array_to_output_arrays!(
             diag.output_writer,
             diagnostic_handler.storage[diag_index],
             diag,
+            integrator.u,
+            integrator.p,
+            integrator.t,
+            get_coords_style(diag.output_writer),
         )
     end
 

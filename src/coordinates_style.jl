@@ -117,3 +117,7 @@ era5_pressure_levels() = return 100.0 .* [
     925, 950, 975, 1000,
 ]
 #! format: on
+
+function get_coords_style(::AbstractWriter)
+    return NoConversionStyle()
+end

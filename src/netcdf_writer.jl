@@ -12,9 +12,6 @@ import NVTX
 # Spaces
 include("netcdf_writer_coordinates.jl")
 
-# Define styles for converting to another coordinates system or not
-include("coordinates_style.jl")
-
 """
     NetCDFWriter
 
@@ -687,6 +684,10 @@ function Base.show(io::IO, writer::NetCDFWriter)
         io,
         "NetCDFWriter, writing to $(writer.output_dir) ($num_open_files files open)",
     )
+end
+
+function get_coords_style(writer::NetCDFWriter)
+    return writer.coordinates_style
 end
 
 include("pfull_netcdf_writer.jl")
