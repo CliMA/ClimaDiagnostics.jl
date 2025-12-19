@@ -1,7 +1,4 @@
-# TODO: Will be used for the output writers
-# Structually and logically, the output writers is being told to output the
-# data in lon lat or x-y (no conversion style) or pressure style
-# (pfullcoordsstyle)
+import ClimaCore: Fields
 
 """
     abstract type AbstractCoordsStyle end
@@ -40,7 +37,7 @@ interpolated onto the specified pressure levels.
 struct PfullCoordsStyle{
     F,
     FT <: AbstractFloat,
-    PFULL_FIELD <: ClimaCore.Fields.Field,
+    PFULL_FIELD <: Fields.Field,
     DI,
     PRESSURE_COORDS <: AbstractMatrix,
 } <: AbstractCoordsStyle
@@ -48,12 +45,14 @@ struct PfullCoordsStyle{
        outputted"""
     pressure_levels::Vector{FT}
 
+    # TODO: Use a cache to ensure only the one of each the fields below exist
+
     """Compute function for pressure"""
     pfull_compute!::F # This should be the same across all PfullCoordsStyle
 
     """A ClimaCore.Field representing pressure. This is used at
     the end of the simulation to interpolate offline along the horizontal
-    direction. However, this pay the price of allocating a pressure field""" # TODO: This could be made more efficient by singleton design pattern?
+    direction."""
     pressure_field::PFULL_FIELD # This should be the same across all PfullCoordsStyle
 
     """A dictionary mapping diagnostics to arrays on CPU."""
@@ -63,10 +62,9 @@ struct PfullCoordsStyle{
     pressure_coords::PRESSURE_COORDS
 end
 
-# TODO: Might be worth it to stuff things like units, attributes for the netcdf
-# writer here too
-# TODO: Not sure if I should include pfull_compute! here, since if I can then
-# it is easy to compute!
+# TODO: Think about how to include information about the dimension and
+# outputting that
+
 """
     PfullCoordsStyle(pressure_levels)
 
@@ -118,6 +116,14 @@ era5_pressure_levels() = return 100.0 .* [
 ]
 #! format: on
 
+"""
+    get_coords_style(::AbstractWriter)
+
+Get the coordinates style from the writer.
+
+If `get_coords_style` is not defined for the writer, the default is
+`NoConversionStyle()`.
+"""
 function get_coords_style(::AbstractWriter)
     return NoConversionStyle()
 end

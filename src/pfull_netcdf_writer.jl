@@ -12,8 +12,8 @@
 Move `array` on GPU/CPU to the CPU array in `preallocated_output_arrays` in
 `writer.coordinates_style`.
 
-This function does not interpolation as vertical interpolation is done during the
-`compute_fields!` and horizontal interpolation is done offline after the
+This function does not interpolation as vertical interpolation is done during
+the `compute_fields!` and horizontal interpolation is done offline after the
 simulation ends.
 """
 function interpolate_field!(
@@ -91,7 +91,7 @@ function write_field!(
 
     # TODO: Rename this, since we want avoid conflicts with names with DiagnosticsHandler
     # (e.g. saving both diagnostics with z and pressure coordinates)
-    # I guess the variable name could also be stashed here too...
+    # I need to determine if this is an use case (saving in both z and pressure coordinates)
     _pfull_coords_dir = joinpath(writer.output_dir, "_pfull_coords")
     isdir(_pfull_coords_dir) || mkdir(_pfull_coords_dir)
     output_path =

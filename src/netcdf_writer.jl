@@ -689,6 +689,11 @@ function Base.show(io::IO, writer::NetCDFWriter)
     )
 end
 
+"""
+    get_coords_style(writer::NetCDFWriter)
+
+Get the coordinates style from the writer.
+"""
 function get_coords_style(writer::NetCDFWriter)
     return writer.coordinates_style
 end
