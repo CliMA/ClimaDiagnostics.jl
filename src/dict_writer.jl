@@ -46,7 +46,15 @@ that value.
 `DictWriter` implements a basic read-only dictionary interface to access the
 times and values.
 """
-function write_field!(writer::DictWriter, field, diagnostic, u, p, t)
+function write_field!(
+    writer::DictWriter,
+    field,
+    diagnostic,
+    u,
+    p,
+    t,
+    ::AbstractCoordsStyle,
+)
     key_name =
         diagnostic isa ScheduledDiagnostic ? output_short_name(diagnostic) :
         diagnostic

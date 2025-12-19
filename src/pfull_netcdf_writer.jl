@@ -36,7 +36,7 @@ function interpolate_field!(
 end
 
 """
-    write_field_in_pfull_coords!(writer::NetCDFWriter, diagnostic, u, p, t)
+    write_field!(writer::NetCDFWriter, diagnostic, u, p, t)
 
 Save the resampled array produced by `diagnostic` as directed by the `writer`.
 
@@ -60,7 +60,15 @@ Attributes are appended to the dataset:
 - `comments`
 - `start_date`
 """
-function write_field_in_pfull_coords!(writer::NetCDFWriter, diagnostic, u, p, t)
+function write_field!(
+    writer::NetCDFWriter,
+    _,
+    diagnostic,
+    u,
+    p,
+    t,
+    ::PfullCoordsStyle,
+)
     output_arrays = writer.coordinates_style.preallocated_output_arrays
     # TODO: Not sure about this, but this could be stored as the field itself
     # if I passed pfull_compute! to it

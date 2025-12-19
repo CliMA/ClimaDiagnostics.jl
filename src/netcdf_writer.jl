@@ -494,6 +494,7 @@ NVTX.@annotate function write_field!(
     u,
     p,
     t,
+    ::NoConversionStyle,
 )
     # Only the root process has to write
     ClimaComms.iamroot(ClimaComms.context(field)) || return nothing

@@ -45,6 +45,7 @@ NVTX.@annotate function write_field!(
     u,
     p,
     t,
+    ::AbstractCoordsStyle,
 )
     axes(field) isa Spaces.PointSpace &&
         pkgversion(InputOutput) < v"0.14.27" &&

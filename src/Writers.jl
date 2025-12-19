@@ -21,6 +21,26 @@ import ..AbstractWriter, ..ScheduledDiagnostic
 import ..ScheduledDiagnostics: output_short_name, output_long_name
 
 function write_field!(writer::AbstractWriter, field, diagnostic, u, p, t)
+    return write_field!(
+        writer,
+        field,
+        diagnostic,
+        u,
+        p,
+        t,
+        get_coords_style(writer),
+    )
+end
+
+function write_field!(
+    writer::AbstractWriter,
+    field,
+    diagnostic,
+    u,
+    p,
+    t,
+    coords_style,
+)
     # Nothing to be done here :)
     return nothing
 end
@@ -49,7 +69,7 @@ function interpolate_field!(
     u,
     p,
     t,
-    mixin,
+    coords_style,
 )
     # Nothing to be done here :)
     return nothing

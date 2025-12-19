@@ -1,7 +1,5 @@
 import ClimaInterpolations
 
-import .Writers: write_field_in_pfull_coords!
-
 import ClimaCore: Fields
 
 # Due to the design of DiagnosticsHandler and lack of support for pressure
@@ -212,7 +210,7 @@ function PfullCoordsDiagnosticsHandler(
         # If it is not a reduction, call the output writer as well
         if !isa_time_reduction
             interpolate_field!(diag.output_writer, storage[i], diag, Y, p, t)
-            write_field_in_pfull_coords!(diag.output_writer, diag, Y, p, t)
+            write_field!(diag.output_writer, storage[i], diag, Y, p, t)
         else
             # Add to the accumulator
 
@@ -362,9 +360,9 @@ function orchestrate_diagnostics(
     for diag_index in scheduled_diagnostics_keys
         active_output[diag_index] || continue
         diag = scheduled_diagnostics[diag_index]
-        # TODO: Replace this with write_field!
-        write_field_in_pfull_coords!(
+        write_field!(
             diag.output_writer,
+            diagnostic_handler.storage[diag_index],
             diag,
             integrator.u,
             integrator.p,
