@@ -1,6 +1,6 @@
 import ClimaInterpolations
 
-import .Writers: move_array_to_output_arrays!, write_field_in_pfull_coords!, get_coords_style
+import .Writers: write_field_in_pfull_coords!, get_coords_style
 
 import ClimaCore: Fields
 
@@ -211,15 +211,7 @@ function PfullCoordsDiagnosticsHandler(
         isa_time_reduction = !isnothing(diag.reduction_time_func)
         # If it is not a reduction, call the output writer as well
         if !isa_time_reduction
-            move_array_to_output_arrays!(
-                diag.output_writer,
-                storage[i],
-                diag,
-                Y,
-                p,
-                t,
-                get_coords_style(diag.output_writer),
-            )
+            interpolate_field!(diag.output_writer, storage[i], diag, Y, p, t)
             write_field_in_pfull_coords!(diag.output_writer, diag, Y, p, t)
         else
             # Add to the accumulator
@@ -352,14 +344,13 @@ function orchestrate_diagnostics(
         # TODO: This is serving the same function as interpolate_field!, but with no interpolation
         # TODO: Make this function into interpolate_field! for unified interface?
         # TODO: Need to dispatch on the type of coordinate style (so need to include it for all writer)
-        move_array_to_output_arrays!(
+        interpolate_field!(
             diag.output_writer,
             diagnostic_handler.storage[diag_index],
             diag,
             integrator.u,
             integrator.p,
             integrator.t,
-            get_coords_style(diag.output_writer),
         )
     end
 

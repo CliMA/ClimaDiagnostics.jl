@@ -370,6 +370,19 @@ function NetCDFWriter(
         NoConversionStyle(),
     )
 end
+
+function interpolate_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
+    return interpolate_field!(
+        writer,
+        field,
+        diagnostic,
+        u,
+        p,
+        t,
+        get_coords_style(writer),
+    )
+end
+
 """
     interpolate_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
 
@@ -382,6 +395,7 @@ NVTX.@annotate function interpolate_field!(
     u,
     p,
     t,
+    ::AbstractCoordsStyle,
 )
 
     var = diagnostic.variable

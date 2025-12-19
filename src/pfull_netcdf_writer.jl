@@ -1,21 +1,25 @@
 """
-    move_array_to_output_arrays!(
-        ::NetCDFWriter,
-        preallocated_output_arrays,
+    interpolate_field!(
+        writer::NetCDFWriter,
         array,
         diagnostic,
+        u,
+        p,
+        t,
+        ::PfullCoordsStyle
     )
 
+TODO: Update this docstring
 Move `array` on GPU/CPU to CPU array in `preallocated_output_arrays`.
 """
-function move_array_to_output_arrays!(
+function interpolate_field!(
     writer::NetCDFWriter,
     array,
     diagnostic,
     u,
     p,
     t,
-    coords_style,
+    ::PfullCoordsStyle
 )
     # TODO: Rename this...
     # TODO: Maybe this function can be renamed to interpolate_field! (even though
