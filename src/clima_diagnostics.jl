@@ -285,7 +285,7 @@ and output according to their schedule functions.
 """
 NVTX.@annotate function orchestrate_diagnostics(
     integrator,
-    diagnostic_handler::DiagnosticsHandler,
+    diagnostic_handler::AbstractDiagnosticsHandler,
 )
     (; scheduled_diagnostics, scheduled_diagnostics_keys) = diagnostic_handler
     active_compute = Bool[]
@@ -337,7 +337,8 @@ NVTX.@annotate function orchestrate_diagnostics(
             diagnostic_handler.counters[diag_index],
         )
         # dont interpolate for point spaces
-        if axes(diagnostic_handler.storage[diag_index]) isa Spaces.PointSpace
+        if (diagnostic_handler.mixin) isa NoMixin &&
+           axes(diagnostic_handler.storage[diag_index]) isa Spaces.PointSpace
             # netCDFWriter expects diagnostic to be in preallocated_output_arrays
             if diag.output_writer isa NetCDFWriter && ClimaComms.iamroot(
                 ClimaComms.context(diagnostic_handler.storage[diag_index]),
