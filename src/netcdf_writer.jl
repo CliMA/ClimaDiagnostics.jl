@@ -480,7 +480,6 @@ NVTX.@annotate function write_field!(
     # Only the root process has to write
     ClimaComms.iamroot(ClimaComms.context(field)) || return nothing
 
-    var = diagnostic.variable
     space = axes(field)
 
     maybe_move_to_cpu =
@@ -538,14 +537,7 @@ NVTX.@annotate function write_field!(
         writer.interpolated_physical_z,
     )
 
-    start_date = nothing
-    if isnothing(writer.start_date)
-        if hasproperty(p, :start_date)
-            start_date = getproperty(p, :start_date)
-        end
-    else
-        start_date = writer.start_date
-    end
+    start_date = get_start_date(writer, p)
 
     add_time_bounds_maybe!(
         nc,
@@ -567,6 +559,74 @@ NVTX.@annotate function write_field!(
         )
     end
 
+    (v, temporal_size) = init_var_maybe!(
+        nc,
+        FT,
+        writer,
+        interpolated_field,
+        diagnostic,
+        dim_names,
+        start_date,
+    )
+
+    # We need to write to the next position after what we read from the data (or the first
+    # position ever if we are writing the file for the first time)
+    time_index = temporal_size + 1
+
+    # Time handling for reduced vs instantaneous diagnostics:
+    # - For reduced diagnostics: store time as the START of the reduction
+    #   period, with time_bnds showing [start, end] of the period.
+    # - For instantaneous diagnostics: store time as the current time, with
+    #   time_bnds showing [previous_time, current_time].
+    isa_time_reduction = !isnothing(diagnostic.reduction_time_func)
+    append_temporal_values!(nc, isa_time_reduction, t, start_date, time_index)
+
+    colons = ntuple(_ -> Colon(), length(dim_names))
+    v[time_index, colons...] = interpolated_field
+
+    # Add file to list of files that might need manual sync
+    push!(writer.unsynced_datasets, nc)
+
+    return nothing
+end
+
+"""
+    get_start_date(writer::NetCDFWriter, p)
+
+Get the start date for the simulation.
+"""
+function get_start_date(writer::NetCDFWriter, p)
+    if isnothing(writer.start_date) && hasproperty(p, :start_date)
+        return getproperty(p, :start_date)
+    end
+    return writer.start_date
+end
+
+"""
+    init_var_maybe!(
+        nc,
+        FT,
+        writer::NetCDFWriter,
+        interpolated_field,
+        diagnostic,
+        dim_names,
+        start_date,
+    )
+
+Initialize the variable in `nc` with attributes about the `var`iable if the
+`var`iable does not exist and return the NetCDF variable and the current time
+index.
+"""
+function init_var_maybe!(
+    nc,
+    FT,
+    writer::NetCDFWriter,
+    interpolated_field,
+    diagnostic,
+    dim_names,
+    start_date,
+)
+    var = diagnostic.variable
     if haskey(nc, "$(var.short_name)")
         # We already have something in the file
         v = nc["$(var.short_name)"]
@@ -591,35 +651,46 @@ NVTX.@annotate function write_field!(
         end
         temporal_size = 0
     end
+    return (v, temporal_size)
+end
 
-    # We need to write to the next position after what we read from the data (or the first
-    # position ever if we are writing the file for the first time)
-    time_index = temporal_size + 1
+"""
+    append_temporal_values!(
+        nc,
+        isa_time_reduction,
+        t,
+        start_date,
+        time_index,
+    )
 
-    # Time handling for reduced vs instantaneous diagnostics:
-    # - For reduced diagnostics: store time as the START of the reduction
-    #   period, with time_bnds showing [start, end] of the period.
-    # - For instantaneous diagnostics: store time as the current time, with
-    #   time_bnds showing [previous_time, current_time].
-    isa_time_reduction = !isnothing(diagnostic.reduction_time_func)
+Append temporal data to the temporal dimensions of `nc`.
 
-    # TODO: Use ITime here
-    if isa_time_reduction
-        # For reductions, timestamp at the start of the reduction period.
-        # Assume t=0 for the first write or use the end of the previous period.
-        time_to_save =
-            time_index == 1 ? zero(float(t)) :
-            nc["time_bnds"][2, time_index - 1]
-    else
-        # For instantaneous diagnostics, use current time
-        time_to_save = float(t)
-    end
+The temporal dimensions are `time`, `time_bnds`, `date`, and `date_bnds`.
 
-    nc["time"][time_index] = time_to_save
-    nc["time_bnds"][:, time_index] =
-        time_index == 1 ? [zero(float(t)); float(t)] :
-        [nc["time_bnds"][2, time_index - 1]; float(t)]
+Time handling for reduced vs instantaneous diagnostics:
+- For reduced diagnostics: store time as the START of the reduction period, with
+  time_bnds showing [start, end] of the period.
+- For instantaneous diagnostics: store time as the current time, with time_bnds
+  showing [previous_time, current_time].
+"""
+function append_temporal_values!(
+    nc,
+    isa_time_reduction,
+    t,
+    start_date,
+    time_index,
+)
+    append_time_values!(nc, isa_time_reduction, time_index, t)
+    append_date_values!(nc, isa_time_reduction, time_index, t, start_date)
+    return nothing
+end
 
+"""
+    append_date_values!(nc, isa_time_reduction, t, time_index, start_date)
+
+Append date values to the `date` and `date_bnds` dimension in `nc`.
+"""
+function append_date_values!(nc, isa_time_reduction, time_index, t, start_date)
     # FIXME: We are hardcoding p.start_date !
     # FIXME: We are rounding t
     if !isnothing(start_date)
@@ -640,13 +711,29 @@ NVTX.@annotate function write_field!(
             time_index == 1 ? [start_date; curr_date] :
             [date_type(nc["date_bnds"][2, time_index - 1]); curr_date]
     end
+end
 
-    colons = ntuple(_ -> Colon(), length(dim_names))
-    v[time_index, colons...] = interpolated_field
+"""
+    append_time_values!(nc, isa_time_reduction, time_index, t)
 
-    # Add file to list of files that might need manual sync
-    push!(writer.unsynced_datasets, nc)
-
+Append time values to the `time` and `time_bnds` dimension in `nc`.
+"""
+function append_time_values!(nc, isa_time_reduction, time_index, t)
+    # TODO: Use ITime here
+    if isa_time_reduction
+        # For reductions, timestamp at the start of the reduction period.
+        # Assume t=0 for the first write or use the end of the previous period.
+        time_to_save =
+            time_index == 1 ? zero(float(t)) :
+            nc["time_bnds"][2, time_index - 1]
+    else
+        # For instantaneous diagnostics, use current time
+        time_to_save = float(t)
+    end
+    nc["time"][time_index] = time_to_save
+    nc["time_bnds"][:, time_index] =
+        time_index == 1 ? [zero(float(t)); float(t)] :
+        [nc["time_bnds"][2, time_index - 1]; float(t)]
     return nothing
 end
 
