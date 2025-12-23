@@ -123,6 +123,15 @@ end
 True every time the current time is larger than the previous time this schedule was true + Dt.
 
 Note, this function performs no checks on whether the step is aligned with `dt` or not.
+
+!!! note "Statefulness"
+    This struct is stateful. Do not reuse the same instance for multiple
+    callbacks.
+
+!!! note "Initialization"
+    If the current time is not zero at initialization (e.g., when resuming from
+    a restart), set the keyword argument `t_last` to the current time of the
+    simulation.
 """
 struct EveryDtSchedule{T} <: AbstractSchedule
     """The integrator time the last time this function returned true."""
@@ -210,6 +219,15 @@ end
 
 Returns true if `dt` has passed since the last time this schedule was true. `dt`
 here is a `Dates.Period` (e.g., `Dates.Month(1)`).
+
+!!! note "Statefulness"
+    This struct is stateful. Do not reuse the same instance for multiple
+    callbacks.
+
+!!! note "Initialization"
+    If the current date differs from the start date at initialization (e.g.,
+    when resuming from a restart), set the keyword argument `date_last` to the
+    current date of the simulation.
 
 !!! compat "ClimaDiagnostics 0.2.4"
     This schedule was introduced in version `0.2.4`.
