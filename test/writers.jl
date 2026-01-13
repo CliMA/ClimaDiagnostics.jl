@@ -1299,68 +1299,172 @@ end
             ]],
         )
     end
-    nc = make_fake_nc()
+
     start_date = Dates.DateTime(2010)
-    t = 0
-    t_idx = 1
-    isa_time_reduction = false
-    Writers.append_temporal_values!(
-        nc,
-        isa_time_reduction,
-        t,
-        start_date,
-        t_idx,
+    t_and_init_time_pairs = (
+        (0.0, 0.0),
+        (ITime(0.0, epoch = start_date), ITime(0.0, epoch = start_date)),
     )
-    Writers.append_temporal_values!(
-        nc,
-        isa_time_reduction,
-        t + 1,
-        start_date,
-        t_idx + 1,
+    for (t, init_time) in t_and_init_time_pairs
+        nc = make_fake_nc()
+        t_idx = 1
+        isa_time_reduction = false
+        Writers.append_temporal_values!(
+            nc,
+            isa_time_reduction,
+            t,
+            start_date,
+            init_time,
+            t_idx,
+        )
+        Writers.append_temporal_values!(
+            nc,
+            isa_time_reduction,
+            t + oneunit(t),
+            start_date,
+            init_time,
+            t_idx + 1,
+        )
+
+        @test nc["time"] == [0.0, 1.0]
+        @test nc["date"] == [
+            Dates.DateTime("2010-01-01T00:00:00"),
+            Dates.DateTime("2010-01-01T00:00:01"),
+        ]
+        @test nc["time_bnds"] == [[0.0, 0.0] [0.0, 1.0]]
+        @test nc["date_bnds"] == [[
+            Dates.DateTime("2010-01-01T00:00:00"),
+            Dates.DateTime("2010-01-01T00:00:00"),
+        ] [
+            Dates.DateTime("2010-01-01T00:00:00"),
+            Dates.DateTime("2010-01-01T00:00:01"),
+        ]]
+    end
+
+    start_date = Dates.DateTime(2010)
+    t_and_init_time_pairs = (
+        (0.0, 0.0),
+        (ITime(0.0, epoch = start_date), ITime(0.0, epoch = start_date)),
+    )
+    for (t, init_time) in t_and_init_time_pairs
+        nc = make_fake_nc()
+        t_idx = 1
+        isa_time_reduction = true
+        Writers.append_temporal_values!(
+            nc,
+            isa_time_reduction,
+            t + oneunit(t),
+            start_date,
+            0.0,
+            t_idx,
+        )
+        Writers.append_temporal_values!(
+            nc,
+            isa_time_reduction,
+            t + 2 * oneunit(t),
+            start_date,
+            0.0,
+            t_idx + 1,
+        )
+
+        @test nc["time"] == [0.0, 1.0]
+        @test nc["date"] == [
+            Dates.DateTime("2010-01-01T00:00:00"),
+            Dates.DateTime("2010-01-01T00:00:01"),
+        ]
+        @test nc["time_bnds"] == [[0.0, 1.0] [1.0, 2.0]]
+        @test nc["date_bnds"] == [[
+            Dates.DateTime("2010-01-01T00:00:00"),
+            Dates.DateTime("2010-01-01T00:00:01"),
+        ] [
+            Dates.DateTime("2010-01-01T00:00:01"),
+            Dates.DateTime("2010-01-01T00:00:02"),
+        ]]
+    end
+
+    # Test with init_time not equal to 0
+    start_date = Dates.DateTime(2010)
+    t_and_init_time_pairs = (
+        (1.0, 1.0),
+        (ITime(1.0, epoch = start_date), ITime(1.0, epoch = start_date)),
+        (1.0, ITime(1.0, epoch = start_date)),
+        (ITime(1.0, epoch = start_date), 1.0),
+    )
+    for (t, init_time) in t_and_init_time_pairs
+        nc = make_fake_nc()
+        t_idx = 1
+        isa_time_reduction = false
+        Writers.append_temporal_values!(
+            nc,
+            isa_time_reduction,
+            t,
+            start_date,
+            init_time,
+            t_idx,
+        )
+        Writers.append_temporal_values!(
+            nc,
+            isa_time_reduction,
+            t + oneunit(t),
+            start_date,
+            init_time,
+            t_idx + 1,
+        )
+        @test nc["time"] == [1.0, 2.0]
+        @test nc["date"] == [
+            Dates.DateTime("2010-01-01T00:00:01"),
+            Dates.DateTime("2010-01-01T00:00:02"),
+        ]
+        @test nc["time_bnds"] == [[1.0, 1.0] [1.0, 2.0]]
+        @test nc["date_bnds"] == [[
+            Dates.DateTime("2010-01-01T00:00:01"),
+            Dates.DateTime("2010-01-01T00:00:01"),
+        ] [
+            Dates.DateTime("2010-01-01T00:00:01"),
+            Dates.DateTime("2010-01-01T00:00:02"),
+        ]]
+    end
+
+    start_date = Dates.DateTime(2010)
+    t_and_init_time_pairs = (
+        (2.0, 1.0),
+        (ITime(2.0, epoch = start_date), ITime(1.0, epoch = start_date)),
+        (ITime(2.0, epoch = start_date), 1, 0),
+        (2.0, ITime(1.0, epoch = start_date)),
     )
 
-    @test nc["time"] == [0.0, 1.0]
-    @test nc["date"] == [
-        Dates.DateTime("2010-01-01T00:00:00"),
-        Dates.DateTime("2010-01-01T00:00:01"),
-    ]
-    @test nc["time_bnds"] == [[0.0, 0.0] [0.0, 1.0]]
-    @test nc["date_bnds"] == [[
-        Dates.DateTime("2010-01-01T00:00:00"),
-        Dates.DateTime("2010-01-01T00:00:00"),
-    ] [
-        Dates.DateTime("2010-01-01T00:00:00"),
-        Dates.DateTime("2010-01-01T00:00:01"),
-    ]]
-
-    nc = make_fake_nc()
-    isa_time_reduction = true
-    Writers.append_temporal_values!(
-        nc,
-        isa_time_reduction,
-        t + 1,
-        start_date,
-        t_idx,
-    )
-    Writers.append_temporal_values!(
-        nc,
-        isa_time_reduction,
-        t + 2,
-        start_date,
-        t_idx + 1,
-    )
-
-    @test nc["time"] == [0.0, 1.0]
-    @test nc["date"] == [
-        Dates.DateTime("2010-01-01T00:00:00"),
-        Dates.DateTime("2010-01-01T00:00:01"),
-    ]
-    @test nc["time_bnds"] == [[0.0, 1.0] [1.0, 2.0]]
-    @test nc["date_bnds"] == [[
-        Dates.DateTime("2010-01-01T00:00:00"),
-        Dates.DateTime("2010-01-01T00:00:01"),
-    ] [
-        Dates.DateTime("2010-01-01T00:00:01"),
-        Dates.DateTime("2010-01-01T00:00:02"),
-    ]]
+    for (t, init_time) in t_and_init_time_pairs
+        nc = make_fake_nc()
+        t_idx = 1
+        isa_time_reduction = true
+        Writers.append_temporal_values!(
+            nc,
+            isa_time_reduction,
+            t,
+            start_date,
+            init_time,
+            t_idx,
+        )
+        Writers.append_temporal_values!(
+            nc,
+            isa_time_reduction,
+            t + oneunit(t),
+            start_date,
+            init_time,
+            t_idx + 1,
+        )
+        @test nc["time"] == [1.0, 2.0]
+        @test nc["date"] == [
+            Dates.DateTime("2010-01-01T00:00:01"),
+            Dates.DateTime("2010-01-01T00:00:02"),
+        ]
+        @test nc["time_bnds"] == [[1.0, 2.0] [2.0, 3.0]]
+        @test nc["date_bnds"] == [[
+            Dates.DateTime("2010-01-01T00:00:01"),
+            Dates.DateTime("2010-01-01T00:00:02"),
+        ] [
+            Dates.DateTime("2010-01-01T00:00:02"),
+            Dates.DateTime("2010-01-01T00:00:03"),
+        ]]
+    end
 end
