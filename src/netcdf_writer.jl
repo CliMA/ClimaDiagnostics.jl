@@ -133,8 +133,8 @@ Keyword arguments
                    `sync_schedule` can also be set as `nothing`, in which case we let
                    handling buffered writes to disk.
 - `start_date`: Date of the beginning of the simulation.
-- `horizontal_pts`: A tuple of vectors of floats meaning Long-Lat or X-Y (the
-  details depend on the configuration being simulated).
+- `horizontal_pts`: A tuple of vectors of floats meaning Long-Lat or X-Y (the details depend
+                    on the configuration being simulated).
 - `global_attribs`: Optional dictionary of global attributes to include in all NetCDF files
                     produced by this `NetCDFWriter`. These attributes are useful for storing
                     metadata such as `source`, `creation_date`, or `frequency`. Must be
