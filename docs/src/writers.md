@@ -109,6 +109,53 @@ ClimaDiagnostics.Writers.LevelsMethod
 ClimaDiagnostics.Writers.FakePressureLevelsMethod
 ```
 
+### Output diagnostics in pressure coordinates
+
+To write diagnostics in pressure coordinates, you must pass a
+`RealPressureLevelsMethod` to the `NetCDFWriter` which specifies that
+diagnostics should be interpolated to pressure levels for the vertical
+direction.
+
+To create a `RealPressureLevelsMethod`, you must pass a pressure field and the
+current simulation time. The `RealPressureLevelsMethod` instance is then passed
+to `NetCDFWriter` via the `z_sampling_method` keyword argument, which causes all
+diagnostics to be output in pressure coordinates.
+
+```julia
+z_sampling_method = ClimaDiagnostics.Writers.RealPressureLevelsMethod(
+            pressure_field,
+            t,
+            pressure_attribs = (; units = "Pa"),
+            pressure_levels = [0.0, 10000.0]
+        )
+netcdf_writer = NetCDFWriter(
+        ClimaDiagnostics.Writers.pressure_space(z_sampling_method),
+        output_dir,
+        num_points = (360, 180, 10); # the number of vertical points (10) is ignored
+        sync_schedule = CAD.EveryStepSchedule(),
+        z_sampling_method,
+    )
+```
+
+In the example above, a `RealPressureLevelsMethod` instance is constructed. The
+keyword argument `pressure_attribs` is a `NamedTuple` that populates the
+attributes of the `pressure_level` dimension in the NetCDF file. The keyword
+argument `pressure_levels` is a vector of sorted pressure levels that are being
+interpolated to. When using `RealPressureLevelsMethod`, the space passed to the
+`NetCDFWriter` must be a space with pressure as the vertical coordinate. You can
+obtain this space by calling `pressure_space` on a `RealPressureLevelsMethod`
+instance.
+
+When using `RealPressureLevelsMethod`, the `NetCDFWriter` appends `_pressure` to
+the output filename.
+
+For more detail about how pressure interpolation is done, see the ClimaCore
+[documentation](https://clima.github.io/ClimaCore.jl/dev/remapping/#Interpolating-to-pressure-coordinates).
+
+```@docs; canonical = false
+ClimaDiagnostics.Writers.RealPressureLevelsMethod
+ClimaDiagnostics.Writers.RealPressureLevelsMethod(pfull_field, t)
+```
 
 ## `DictWriter`
 

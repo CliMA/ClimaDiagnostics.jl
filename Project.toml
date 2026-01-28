@@ -20,6 +20,7 @@ Aqua = "0.8"
 BenchmarkTools = "1"
 ClimaComms = "0.6.2"
 ClimaCore = "0.14.49"
+ClimaInterpolations = "0.1.1"
 ClimaTimeSteppers = "0.7.21, 0.8"
 ClimaUtilities = "0.1.22"
 Dates = "1"
@@ -40,6 +41,7 @@ julia = "1.10"
 [extras]
 Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+ClimaInterpolations = "dd0f122e-fa3b-47f3-bcf0-93bbc60d885e"
 ClimaTimeSteppers = "595c0a79-7f3d-439a-bc5a-b232dc3bde79"
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 ExplicitImports = "7d51a73a-1435-4ff3-83d9-f097790105c7"
@@ -51,4 +53,4 @@ SafeTestsets = "1bc83da4-3b8d-516f-aca4-4fe02f6d838f"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Aqua", "BenchmarkTools", "ClimaTimeSteppers", "Documenter", "ExplicitImports", "JuliaFormatter", "LazyBroadcast", "Profile", "ProfileCanvas", "SafeTestsets", "Test"]
+test = ["Aqua", "BenchmarkTools", "ClimaInterpolations", "ClimaTimeSteppers", "Documenter", "ExplicitImports", "JuliaFormatter", "LazyBroadcast", "Profile", "ProfileCanvas", "SafeTestsets", "Test"]
