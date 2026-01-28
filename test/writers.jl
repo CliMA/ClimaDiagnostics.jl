@@ -12,12 +12,16 @@ import ClimaCore.Spaces
 import ClimaCore.Geometry
 import ClimaCore.CommonSpaces
 import ClimaCore.Meshes
+import ClimaCore.Operators
 import ClimaComms
 
 import ClimaDiagnostics
 import ClimaDiagnostics.Writers
 
 import ClimaUtilities.TimeManager: ITime
+
+# Needed to load ClimaCore extension
+import ClimaInterpolations
 
 include("TestTools.jl")
 
@@ -1466,5 +1470,117 @@ end
             Dates.DateTime("2010-01-01T00:00:02"),
             Dates.DateTime("2010-01-01T00:00:03"),
         ]]
+    end
+end
+
+@testset "Pressure coordinates" begin
+    space = SphericalShellSpace(FT = Float32)
+
+    # Number of interpolation points
+    NUM = 50
+
+    start_date = Dates.DateTime(2010, 1, 1)
+
+    function compute_field!(out, u, p, t)
+        if isnothing(out)
+            return u.field
+        else
+            out .= u.field
+            return nothing
+        end
+    end
+
+    # Test with face space
+    function compute_field_face!(out, u, p, t)
+        intp_c2f = Operators.InterpolateC2F(
+            bottom = Operators.Extrapolate(),
+            top = Operators.Extrapolate(),
+        )
+        if isnothing(out)
+            return intp_c2f.(u.field)
+        else
+            @. out = intp_c2f(u.field)
+            return nothing
+        end
+    end
+
+    u = ClimaCore.Fields.FieldVector(; field = ones(space))
+    p = (; start_date = start_date)
+    t = 0
+    field = compute_field!(nothing, u, p, t)
+    z_sampling_method = ClimaDiagnostics.Writers.RealPressureLevelsMethod(
+        compute_field!,
+        u,
+        p,
+        t,
+        pfull_attribs = (; YO = "HI"),
+    )
+
+    @test_throws ErrorException Writers.NetCDFWriter(
+        space,
+        output_dir;
+        num_points = (NUM, 2NUM, 3NUM),
+        sync_schedule = ClimaDiagnostics.Schedules.DivisorSchedule(2),
+        z_sampling_method,
+    )
+    writer = Writers.NetCDFWriter(
+        Writers.pressure_space(z_sampling_method),
+        output_dir;
+        num_points = (NUM, 2NUM, 3NUM),
+        sync_schedule = ClimaDiagnostics.Schedules.DivisorSchedule(2),
+        z_sampling_method,
+    )
+
+    center_var = ClimaDiagnostics.DiagnosticVariable(;
+        compute! = compute_field!,
+        short_name = "center",
+        long_name = "CENTER",
+    )
+    center_diag = ClimaDiagnostics.ScheduledDiagnostic(
+        variable = center_var,
+        output_writer = writer,
+        output_short_name = "center_inst",
+    )
+
+    face_var = ClimaDiagnostics.DiagnosticVariable(;
+        compute! = compute_field_face!,
+        short_name = "face",
+        long_name = "FACE",
+    )
+    face_diag = ClimaDiagnostics.ScheduledDiagnostic(
+        variable = face_var,
+        output_writer = writer,
+        output_short_name = "face_inst",
+    )
+
+    t1 = 10.0
+    t2 = 20.0
+    t3 = 30.0
+    for t in [t1, t2, t3]
+        for diag in (center_diag, face_diag)
+            intp_field =
+                ClimaDiagnostics.compute_field(diag, u, p, t, z_sampling_method)
+            Writers.interpolate_field!(writer, intp_field, diag, u, p, t)
+            Writers.write_field!(writer, intp_field, diag, u, p, t)
+        end
+    end
+
+    for filename in ("center_inst_pressure.nc", "face_inst_pressure.nc")
+        NCDatasets.Dataset(joinpath(output_dir, filename)) do nc
+            @test NCDatasets.dimnames(nc) ==
+                  ["time", "lon", "lat", "pressure_level", "nv"]
+            @test nc["time"] == [10.0, 20.0, 30.0]
+            @test issorted(nc["pressure_level"])
+            @test nc["pressure_level"] ==
+                  ClimaDiagnostics.Interpolators.era5_pressure_levels()
+            @test nc["pressure_level"].attrib["units"] == "Pa"
+            @test nc["pressure_level"].attrib["stored_direction"] ==
+                  "increasing"
+            @test nc["pressure_level"].attrib["long_name"] == "pressure"
+            @test nc["pressure_level"].attrib["standard_name"] == "air_pressure"
+            @test nc["pressure_level"].attrib["YO"] == "HI"
+            # Order is time, lon, lat, and pressure_level
+            @test size(nc[first(split(filename, "_"))]) == (3, 50, 100, 37)
+        end
     end
 end

@@ -332,6 +332,17 @@ function target_coordinates(
     return Array(parent(Fields.coordinate_field(cspace).z))[:, 1]
 end
 
+function target_coordinates(
+    space::S,
+    num_points,
+    ::RealPressureLevelsMethod,
+) where {
+    S <:
+    Union{Spaces.CenterFiniteDifferenceSpace, Spaces.FaceFiniteDifferenceSpace},
+}
+    return Array(parent(Fields.coordinate_field(space).p))[:, 1]
+end
+
 # Column
 function add_space_coordinates_maybe!(
     nc::NCDatasets.NCDataset,
@@ -344,6 +355,24 @@ function add_space_coordinates_maybe!(
     interpolated_physical_z = nothing, # Not needed here, but needed for consistency of
     # interface and dispatch
 ) where {FT <: AbstractFloat}
+    if z_sampling_method isa RealPressureLevelsMethod
+        name = "pressure_level"
+        pfull_dimension_exists = dimension_exists(nc, name, num_points_z)
+
+        if !pfull_dimension_exists
+            add_dimension!(
+                nc,
+                name,
+                zpts;
+                long_name = "pressure",
+                units = "Pa",
+                stored_direction = "increasing",
+                standard_name = "air_pressure",
+                z_sampling_method.pfull_attribs...,
+            )
+        end
+        return [name]
+    end
     name, _... = names
     z_dimension_exists = dimension_exists(nc, name, num_points_z)
 

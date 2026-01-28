@@ -109,6 +109,51 @@ ClimaDiagnostics.Writers.LevelsMethod
 ClimaDiagnostics.Writers.FakePressureLevelsMethod
 ```
 
+### Output diagnostics in pressure coordinates
+
+To write diagnostics in pressure coordinates, you must pass a
+`RealPressureLevelsMethod` to the `NetCDFWriter` which specifies that
+diagnostics should be interpolated to pressure levels for the vertical
+direction.
+
+To create a `RealPressureLevelsMethod`, you must pass a `compute_pfull!`
+function with the signature `compute!(out, state, cache, time)` which compute a
+pressure field, state, cache, and time. This is passed to the `NetCDFWriter`
+which output all the diagnostics with the given writer in pressure coordinates.
+
+```julia
+z_sampling_method = ClimaDiagnostics.Writers.RealPressureLevelsMethod(
+            compute_pfull!,
+            Y,
+            p,
+            t,
+            pfull_attribs = (; units = "Pa"),
+            pfull_levels = [0.0, 10000.0]
+        )
+netcdf_writer = NetCDFWriter(
+        ClimaDiagnostics.Writers.pressure_space(z_sampling_method),
+        output_dir,
+        num_points = (360, 180, 10); # the number of vertical points (10) is ignored
+        sync_schedule = CAD.EveryStepSchedule(),
+        z_sampling_method,
+    )
+```
+
+In the example above, a `RealPressureLevelsMethod` instance is constructed. The
+keyword argument `pfull_attribs` is a `NamedTuple` that populates the attributes
+of the `pressure_level` dimension. The keyword argument `pfull_levels` is a
+vector of sorted pressure levels that are being interpolated to.
+
+The suffix of the file name of a NetCDF file whose diagnostic is in pressure
+coordinates is `pfull`.
+
+For more detail about how pressure interpolation is done, see the ClimaCore
+[documentation](https://clima.github.io/ClimaCore.jl/dev/APIs/remapping_api/#ClimaCore.Remapping.PressureInterpolator).
+
+```@docs; canonical = false
+ClimaDiagnostics.Writers.RealPressureLevelsMethod
+ClimaDiagnostics.Writers.RealPressureLevelsMethod(compute_pfull!, Y, p, t)
+```
 
 ## `DictWriter`
 

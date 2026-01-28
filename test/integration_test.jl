@@ -16,6 +16,9 @@ end
 
 import LazyBroadcast: lazy
 
+# For ClimaCore extension
+import ClimaInterpolations
+
 const context = ClimaComms.context()
 ClimaComms.init(context)
 
@@ -297,5 +300,116 @@ end
             (allocs = ProfileCanvas.view_allocs(results))
         ClimaComms.iamroot(context) &&
             ProfileCanvas.html_file("allocs.html", allocs)
+    end
+end
+
+@testset "Diagnostics in pressure coordinates" begin
+    spherical_shell_space = SphericalShellSpace()
+    col_space = ColumnCenterFiniteDifferenceSpace()
+    for (space, name) in ((spherical_shell_space, "shell"), (col_space, "col"))
+        mktempdir() do output_dir
+            output_dir = ClimaComms.bcast(context, output_dir)
+            @info "Writing output to $output_dir"
+            NUM = 10
+            t0 = 0.0
+            tf = 1.0
+            dt = 0.1
+            u = ClimaCore.Fields.FieldVector(; my_var = ones(space))
+            p = (; tau = -0.1)
+
+            function exp_tendency!(du, u, p, t)
+                @. du.my_var = p.tau * u.my_var
+            end
+
+            prob = SciMLBase.ODEProblem(
+                ClimaTimeSteppers.ClimaODEFunction(T_exp! = exp_tendency!),
+                u,
+                (t0, tf),
+                p,
+            )
+            algo = ClimaTimeSteppers.ExplicitAlgorithm(ClimaTimeSteppers.RK4())
+
+            function compute_field!(out, u, p, t)
+                if isnothing(out)
+                    return u.my_var
+                else
+                    out .= u.my_var
+                    return nothing
+                end
+            end
+
+            z_sampling_method =
+                ClimaDiagnostics.Writers.RealPressureLevelsMethod(
+                    compute_field!,
+                    u,
+                    p,
+                    t0,
+                    pfull_attribs = (; YO = "HI"),
+                )
+
+            writer = ClimaDiagnostics.Writers.NetCDFWriter(
+                ClimaDiagnostics.Writers.pressure_space(z_sampling_method),
+                output_dir;
+                num_points = (NUM, 2NUM, 3NUM),
+                sync_schedule = ClimaDiagnostics.Schedules.DivisorSchedule(2),
+                z_sampling_method,
+            )
+
+            simple_var = ClimaDiagnostics.DiagnosticVariable(;
+                compute! = compute_field!,
+                short_name = "YO",
+                long_name = "YO YO",
+            )
+            inst_diag = ClimaDiagnostics.ScheduledDiagnostic(
+                variable = simple_var,
+                output_writer = writer,
+                output_short_name = "yo_inst",
+            )
+            max_diag = ClimaDiagnostics.ScheduledDiagnostic(
+                variable = simple_var,
+                output_writer = writer,
+                reduction_time_func = max,
+                output_short_name = "yo_max",
+            )
+
+            diagnostic_handler = ClimaDiagnostics.DiagnosticsHandler(
+                [inst_diag, max_diag],
+                u,
+                p,
+                t0;
+                dt,
+            )
+
+            diag_cb = ClimaDiagnostics.DiagnosticsCallback(diagnostic_handler)
+
+            SciMLBase.solve(
+                prob,
+                algo,
+                dt = dt,
+                callback = SciMLBase.CallbackSet((), (diag_cb,)),
+            )
+
+            close(writer)
+
+            filenames = ["yo_inst_pressure.nc", "yo_max_pressure.nc"]
+            for filename in filenames
+                if ClimaComms.iamroot(context)
+                    NCDatasets.NCDataset(joinpath(output_dir, filename)) do ds
+                        num_time = length(ds["time"])
+                        num_pfull_levels = length(ds["pressure_level"])
+                        if name == "shell"
+                            num_lon = length(ds["lon"])
+                            num_lat = length(ds["lat"])
+                            @test size(ds["YO"]) ==
+                                  (num_time, num_lon, num_lat, num_pfull_levels)
+                        else
+                            @test size(ds["YO"]) == (num_time, num_pfull_levels)
+                        end
+                        @test ds["pressure_level"][:] ==
+                              ClimaDiagnostics.Interpolators.era5_pressure_levels()
+                    end
+                end
+            end
+        end
     end
 end
