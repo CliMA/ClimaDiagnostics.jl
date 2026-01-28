@@ -53,3 +53,11 @@ ClimaDiagnostics.Writers.write_field!
 ClimaDiagnostics.Writers.default_num_points
 Base.close
 ```
+
+## `Interpolators`
+
+```@docs; canonical = false
+ClimaDiagnostics.Interpolators.PressureInterpolator
+ClimaDiagnostics.Interpolators.PressureInterpolator(pfull_field, t)
+ClimaDiagnostics.Interpolators.era5_pressure_levels
+```
