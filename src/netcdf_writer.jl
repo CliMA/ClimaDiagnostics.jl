@@ -159,6 +159,14 @@ function NetCDFWriter(
     global_attribs = nothing,
     init_time = 0.0,
 )
+    if z_sampling_method isa RealPressureLevelsMethod &&
+       space != pressure_space(z_sampling_method)
+        error(
+            "Space for NetCDFWriter does not match space in pressure interpolator. " *
+            "When using RealPressureLevelsMethod, you must pass the space from " *
+            "`pressure_space(z_sampling_method)` to the NetCDFWriter constructor.",
+        )
+    end
     horizontal_space = Spaces.horizontal_space(space)
     is_horizontal_space = horizontal_space == space
 
@@ -166,7 +174,8 @@ function NetCDFWriter(
         hpts = target_coordinates(space, num_points)
         vpts = []
     else
-        if z_sampling_method isa LevelsMethod
+        if z_sampling_method isa LevelsMethod ||
+           z_sampling_method isa RealPressureLevelsMethod
             # It is a little tricky to override the number of vertical points because we don't
             # know if the vertical direction is the 2nd (as in a plane) or 3rd index (as in a
             # box or sphere). To set this value, we check if we are on a plane or not
@@ -206,11 +215,17 @@ function NetCDFWriter(
         Meshes.domain(Spaces.topology(horizontal_space)),
         hpts,
     )
-    zcoords = Geometry.ZPoint.(vpts)
+    if z_sampling_method isa RealPressureLevelsMethod
+        zcoords = Geometry.PPoint.(vpts)
+    else
+        zcoords = Geometry.ZPoint.(vpts)
+    end
     remapper = Remapper(space, hcoords, zcoords)
     comms_ctx = ClimaComms.context(space)
 
-    if is_horizontal_space
+    # If RealPressureLevelsMethod is used, then the space does not have any
+    # information about z, since the vertical consists of `PPoint`s
+    if is_horizontal_space || z_sampling_method isa RealPressureLevelsMethod
         interpolated_physical_z = []
     else
         coords_z = Fields.coordinate_field(space).z
@@ -271,24 +286,45 @@ function NetCDFWriter(
     global_attribs = nothing,
     init_time = 0.0,
 )
+    if z_sampling_method isa RealPressureLevelsMethod &&
+       space != pressure_space(z_sampling_method)
+        error(
+            "Space for NetCDFWriter does not match space in pressure interpolator. " *
+            "When using RealPressureLevelsMethod, you must pass the space from " *
+            "`pressure_space(z_sampling_method)` to the NetCDFWriter constructor.",
+        )
+    end
     if z_sampling_method isa LevelsMethod
         num_vpts = Spaces.nlevels(ClimaCore.Spaces.center_space(space))
         num_vpts == last(num_points) ||
             @warn "Disabling vertical interpolation, the provided number of points is ignored (using $num_vpts)"
         num_points = (num_vpts,)
+    elseif z_sampling_method isa RealPressureLevelsMethod
+        num_vpts = Spaces.nlevels(space)
+        num_vpts == last(num_points) ||
+            @warn "Disabling vertical interpolation, the provided number of points is ignored (using $num_vpts)"
+        num_points = (num_vpts,)
     end
     vpts = target_coordinates(space, num_points, z_sampling_method)
-    target_zcoords = Geometry.ZPoint.(vpts)
+    if z_sampling_method isa RealPressureLevelsMethod
+        target_zcoords = Geometry.PPoint.(vpts)
+    else
+        target_zcoords = Geometry.ZPoint.(vpts)
+    end
     remapper = Remapper(space; target_zcoords)
 
     comms_ctx = ClimaComms.context(space)
 
-    coords_z = Fields.coordinate_field(space).z
-    maybe_move_to_cpu =
-        ClimaComms.device(coords_z) isa ClimaComms.CUDADevice &&
-        ClimaComms.iamroot(comms_ctx) ? Array : identity
+    interpolated_physical_z = []
+    if !(z_sampling_method isa RealPressureLevelsMethod)
+        coords_z = Fields.coordinate_field(space).z
+        maybe_move_to_cpu =
+            ClimaComms.device(coords_z) isa ClimaComms.CUDADevice &&
+            ClimaComms.iamroot(comms_ctx) ? Array : identity
 
-    interpolated_physical_z = maybe_move_to_cpu(interpolate(remapper, coords_z))
+        interpolated_physical_z =
+            maybe_move_to_cpu(interpolate(remapper, coords_z))
+    end
 
     preallocated_arrays =
         ClimaComms.iamroot(comms_ctx) ?
@@ -296,7 +332,6 @@ function NetCDFWriter(
         Dict{ScheduledDiagnostic, Nothing}()
 
     unsynced_datasets = Set{NCDatasets.NCDataset}()
-
     return NetCDFWriter{
         typeof(num_points),
         typeof(interpolated_physical_z),
@@ -373,6 +408,7 @@ function NetCDFWriter(
         init_time,
     )
 end
+
 """
     interpolate_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
 
@@ -417,7 +453,6 @@ NVTX.@annotate function interpolate_field!(
 
         target_zcoords = nothing
         target_hcoords = nothing
-
         if has_horizontal_space
             if is_horizontal_space
                 hpts = writer.hpts
@@ -435,7 +470,11 @@ NVTX.@annotate function interpolate_field!(
             vpts = writer.vpts
         end
 
-        target_zcoords = Geometry.ZPoint.(vpts)
+        if writer.z_sampling_method isa RealPressureLevelsMethod
+            target_zcoords = Geometry.PPoint.(vpts)
+        else
+            target_zcoords = Geometry.ZPoint.(vpts)
+        end
 
         writer.remappers[var.short_name] =
             Remapper(space, target_hcoords, target_zcoords)
@@ -513,9 +552,15 @@ NVTX.@annotate function write_field!(
 
     FT = Spaces.undertype(space)
 
-    output_path =
-        joinpath(writer.output_dir, "$(output_short_name(diagnostic)).nc")
-
+    if writer.z_sampling_method isa RealPressureLevelsMethod
+        output_path = joinpath(
+            writer.output_dir,
+            "$(output_short_name(diagnostic))_pressure.nc",
+        )
+    else
+        output_path =
+            joinpath(writer.output_dir, "$(output_short_name(diagnostic)).nc")
+    end
     if !haskey(writer.open_files, output_path)
         # Append or write a new file
         open_mode = isfile(output_path) ? "a" : "c"

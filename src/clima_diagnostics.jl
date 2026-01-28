@@ -2,11 +2,15 @@ import Accessors
 import NVTX
 import SciMLBase
 import ClimaComms
-import ClimaCore: Spaces
+import ClimaCore: Grids, Spaces
 
+import ..Interpolators:
+    interpolate_to_pressure_coords, interpolate_to_pressure_coords!, update!
 import .Schedules: DivisorSchedule, EveryDtSchedule
 import .Writers:
     interpolate_field!, write_field!, sync, AbstractWriter, NetCDFWriter
+
+import ..Writers: AbstractZSamplingMethod, RealPressureLevelsMethod
 
 # We define all the known identities in reduction_identities.jl
 include("reduction_identities.jl")
@@ -191,8 +195,29 @@ end
 
 Compute the field from `compute!` or `compute` from the diagnostic variable
 `diag.variable`.
+
+This specializes on `z_sampling_method` if the writer in `diag` is a
+`NetCDFWriter`.
 """
-function compute_field(diag::ScheduledDiagnostic, Y, p, t)
+compute_field(diag::ScheduledDiagnostic, Y, p, t) =
+    compute_field(diag, Y, p, t, nothing)
+
+function compute_field(
+    diag::ScheduledDiagnostic{T1, T2, OW},
+    Y,
+    p,
+    t,
+) where {T1, T2, OW <: NetCDFWriter}
+    compute_field(diag, Y, p, t, diag.output_writer.z_sampling_method)
+end
+
+function compute_field(
+    diag::ScheduledDiagnostic,
+    Y,
+    p,
+    t,
+    ::Union{AbstractZSamplingMethod, Nothing},
+)
     # We have three cases:
 
     # 1. The diagnostic has `compute!`. In this case, the first time we call
@@ -225,12 +250,67 @@ function compute_field(diag::ScheduledDiagnostic, Y, p, t)
 end
 
 """
+    compute_field(
+        diag::ScheduledDiagnostic,
+        Y,
+        p,
+        t,
+        z_sampling_method::RealPressureLevelsMethod,
+    )
+
+Compute the field from `compute!` or `compute` from the diagnostic variable
+`diag.variable` and interpolate to pressure coordinates.
+"""
+function compute_field(
+    diag::ScheduledDiagnostic,
+    Y,
+    p,
+    t,
+    z_sampling_method::RealPressureLevelsMethod,
+)
+    field = compute_field(diag, Y, p, t, nothing)
+    if axes(field).staggering isa Grids.CellCenter
+        z_sampling_method.diag_to_scratch[diag] =
+            z_sampling_method.pfull_intp.center_scratch_field
+    else
+        z_sampling_method.diag_to_scratch[diag] =
+            z_sampling_method.pfull_intp.face_scratch_field
+    end
+    update!(z_sampling_method.pfull_intp, t)
+    dest = interpolate_to_pressure_coords(field, z_sampling_method.pfull_intp)
+    return dest
+end
+
+"""
     compute_field!(dest, diag::ScheduledDiagnostic, Y, p, t)
 
 Compute a field using `compute!` or `compute` from the diagnostic variable
 `diag.variable` and store the field in `dest`.
+
+This specializes on `z_sampling_method` if the writer in `diag` is a
+`NetCDFWriter`.
 """
-function compute_field!(dest, diag::ScheduledDiagnostic, Y, p, t)
+compute_field!(dest, diag::ScheduledDiagnostic, Y, p, t) =
+    compute_field!(dest, diag, Y, p, t, nothing)
+
+function compute_field!(
+    dest,
+    diag::ScheduledDiagnostic{T1, T2, OW},
+    Y,
+    p,
+    t,
+) where {T1, T2, OW <: NetCDFWriter}
+    compute_field!(dest, diag, Y, p, t, diag.output_writer.z_sampling_method)
+end
+
+function compute_field!(
+    dest,
+    diag::ScheduledDiagnostic,
+    Y,
+    p,
+    t,
+    ::Union{AbstractZSamplingMethod, Nothing},
+)
     # We have two cases:
     #
     # 1. The variable has an in-place `compute!` function. In this case, we
@@ -251,6 +331,36 @@ function compute_field!(dest, diag::ScheduledDiagnostic, Y, p, t)
 
         dest .= out_or_broadcasted
     end
+    return nothing
+end
+
+"""
+    compute_field!(
+        dest,
+        diag::ScheduledDiagnostic,
+        Y,
+        p,
+        t,
+        z_sampling_method::RealPressureLevelsMethod,
+    )
+
+Compute a field using `compute!` or `compute` from the diagnostic variable
+`diag.variable` and store the field in `dest` and interpolate to pressure
+coordinates.
+"""
+function compute_field!(
+    dest,
+    diag::ScheduledDiagnostic,
+    Y,
+    p,
+    t,
+    z_sampling_method::RealPressureLevelsMethod,
+)
+    field = z_sampling_method.diag_to_scratch[diag]
+    compute_field!(field, diag, Y, p, t, nothing)
+    (; pfull_intp) = z_sampling_method
+    update!(pfull_intp, t)
+    interpolate_to_pressure_coords!(dest, field, pfull_intp)
     return nothing
 end
 

@@ -299,3 +299,103 @@ end
             ProfileCanvas.html_file("allocs.html", allocs)
     end
 end
+
+"""
+Set up a full test problem that use pressure diagnostics.
+"""
+function setup_integrator_with_pressure_diags(output_dir, space)
+    t0 = 0.0
+    tf = 10.0
+    dt = 1.0
+    args, kwargs = create_problem(space; t0, tf, dt)
+    u = args[1].u0
+    p = args[1].p
+
+    @info "Writing output to $output_dir"
+
+    z_sampling_method = ClimaDiagnostics.Writers.RealPressureLevelsMethod(
+        u.my_var,
+        t0,
+        pressure_attribs = (; YO = "HI"),
+    )
+
+    NUM = 10
+    writer = ClimaDiagnostics.Writers.NetCDFWriter(
+        ClimaDiagnostics.Writers.pressure_space(z_sampling_method),
+        output_dir;
+        num_points = (NUM, 2NUM, 3NUM),
+        sync_schedule = ClimaDiagnostics.Schedules.DivisorSchedule(2),
+        z_sampling_method,
+    )
+
+    function compute_field!(out, u, p, t)
+        if isnothing(out)
+            return u.my_var
+        else
+            out .= u.my_var
+            return nothing
+        end
+    end
+
+    simple_var = ClimaDiagnostics.DiagnosticVariable(;
+        compute! = compute_field!,
+        short_name = "YO",
+        long_name = "YO YO",
+    )
+    inst_diag = ClimaDiagnostics.ScheduledDiagnostic(
+        variable = simple_var,
+        output_writer = writer,
+        output_short_name = "yo_inst",
+    )
+    max_diag = ClimaDiagnostics.ScheduledDiagnostic(
+        variable = simple_var,
+        output_writer = writer,
+        reduction_time_func = max,
+        output_short_name = "yo_max",
+    )
+
+    scheduled_diagnostics = [inst_diag, max_diag]
+    close(writer)
+
+    return ClimaDiagnostics.IntegratorWithDiagnostics(
+        SciMLBase.init(args...; kwargs...),
+        scheduled_diagnostics,
+    )
+end
+
+spherical_shell_space = SphericalShellSpace()
+col_space = ColumnCenterFiniteDifferenceSpace()
+spaces_test_list = [(spherical_shell_space, "shell")]
+if context isa ClimaComms.SingletonCommsContext
+    spaces_test_list = [spaces_test_list..., (col_space, "col")]
+end
+for (space, space_name) in spaces_test_list
+    mktempdir() do output_dir
+        @testset "A full problem with pressure diagnostics using a $space_name" begin
+            output_dir = ClimaComms.bcast(context, output_dir)
+
+            integrator = setup_integrator_with_pressure_diags(output_dir, space)
+            SciMLBase.solve!(integrator)
+
+            filenames = ["yo_inst_pressure.nc", "yo_max_pressure.nc"]
+            for filename in filenames
+                if ClimaComms.iamroot(context)
+                    NCDatasets.NCDataset(joinpath(output_dir, filename)) do ds
+                        num_time = length(ds["time"])
+                        num_pfull_levels = length(ds["pressure_level"])
+                        if space_name == "shell"
+                            num_lon = length(ds["lon"])
+                            num_lat = length(ds["lat"])
+                            @test size(ds["YO"]) ==
+                                  (num_time, num_lon, num_lat, num_pfull_levels)
+                        else
+                            @test size(ds["YO"]) == (num_time, num_pfull_levels)
+                        end
+                        @test ds["pressure_level"][:] ==
+                              ClimaDiagnostics.Interpolators.era5_pressure_levels()
+                    end
+                end
+            end
+        end
+    end
+end
