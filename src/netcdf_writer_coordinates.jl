@@ -1,3 +1,6 @@
+import ..Interpolators: PfullInterpolator, era5_pressure_levels
+import ClimaCore: Remapping
+
 """
     AbstractZSamplingMethod
 
@@ -32,6 +35,77 @@ p ~ p₀ exp(-z/H)
 H is assumed to be 7000 m, which is a good scale height for the Earth atmosphere.
 """
 struct FakePressureLevelsMethod <: AbstractZSamplingMethod end
+
+"""
+    RealPressureLevelsMethod
+
+Interpolate exactly to the points of the space whose vertical direction consists
+of `PPoint`s.
+
+This should be reused across all diagnostics that will be written in pressure
+coordinates.
+
+!!! note "Compatible writers"
+    This is only compatible with the `NetCDFWriter`.
+
+!!! note "Same space as pressure field"
+    The pressure field computed by `compute_pfull!` must be on the same space
+    as interpolated field. If this is not the case, you may need to interpolate
+    the field defined on a face space to a field defined on a center space or
+    vice versa.
+"""
+struct RealPressureLevelsMethod{PFULL_INTP, MAPPING} <: AbstractZSamplingMethod
+    pfull_intp::PFULL_INTP
+    diag_to_scratch::MAPPING
+    pfull_attribs::NamedTuple
+end
+
+"""
+    RealPressureLevelsMethod(
+        compute_pfull!,
+        Y,
+        p,
+        t;
+        pfull_attribs = (;),
+        pfull_levels = era5_pressure_levels(),
+    )
+
+Sample points defined on the vertical direction of a space that contains
+`PPoint`s.
+
+The keyword arguments passed to `RealPressureLevelsMethod` is passed to the
+constructor of `PfullInterpolator`.
+
+The default attributes are
+- long_name: "pressure",
+- units = "Pa",
+- stored_direction: "increasing",
+- standard_name: "air_pressure".
+"""
+function RealPressureLevelsMethod(
+    compute_pfull!,
+    Y,
+    p,
+    t;
+    pfull_attribs = (;),
+    pfull_levels = era5_pressure_levels(),
+)
+    pfull_intp = PfullInterpolator(compute_pfull!, Y, p, t; pfull_levels)
+    return RealPressureLevelsMethod(
+        pfull_intp,
+        Dict{ScheduledDiagnostic, Fields.Field}(),
+        pfull_attribs,
+    )
+end
+
+"""
+    pressure_space(pfull_intp::PfullInterpolator)
+
+Return the space where the points along the vertical are `PPoint`s.
+"""
+function pressure_space(pressure_sampling_method::RealPressureLevelsMethod)
+    Remapping.pressure_space(pressure_sampling_method.pfull_intp.pressure_intp)
+end
 
 """
     add_dimension!(nc::NCDatasets.NCDataset,
