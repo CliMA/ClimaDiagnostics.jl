@@ -22,6 +22,24 @@ writer = NetCDFWriter(
 )
 ```
 
+## Output diagnostics in pressure coordinates
+
+You can now output diagnostics in pressure coordinates. To do this, create an
+instance of a `RealPressureLevelsMethod` with a function to compute the pressure
+field, state, cache, and time. Then, pass the `RealPressureLevelsMethod` to the
+`z_sampling_method` keyword argument to the `NetCDFWriter`.
+
+```julia
+z_sampling_method = RealPressureLevelsMethod(compute_pfull!, Y, p, t)
+netcdf_writer = CAD.NetCDFWriter(
+        ClimaDiagnostics.Writers.pressure_space(z_sampling_method),
+        output_dir,
+        num_points = (360, 180, 10); # the number of vertical points (10) is ignored
+        sync_schedule = CAD.EveryStepSchedule(),
+        z_sampling_method,
+    )
+```
+
 v0.3.0
 -------
 

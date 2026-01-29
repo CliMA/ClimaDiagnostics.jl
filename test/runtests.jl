@@ -6,6 +6,8 @@ using Test
 @safetestset "Format" begin @time include("format.jl") end
 @safetestset "Doctest" begin @time include("doctest.jl") end
 
+@safetestset "Interpolators" begin @time include("interpolators.jl") end
+
 @safetestset "Writers" begin @time include("writers.jl") end
 
 @safetestset "Schedules" begin @time include("schedules.jl") end

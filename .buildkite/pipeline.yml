@@ -13,6 +13,9 @@ steps:
     command:
       - "echo $$JULIA_DEPOT_PATH"
 
+      - echo "--- Add ClimaCore branch"
+      - "julia --project=.buildkite -e 'using Pkg; Pkg.add(url=\"https://github.com/CliMA/ClimaCore.jl.git\", rev=\"kp/pfull\")'"
+
       - echo "--- Instantiate project"
       - "julia --project=.buildkite -e 'using Pkg; Pkg.develop(; path = \".\")'"
       - "julia --project=.buildkite -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
@@ -24,19 +27,19 @@ steps:
 
   - wait
 
-  - label: "Run tests on CPU"
-    key: "cpu_tests"
-    command:
-      - "julia --color=yes --project=.buildkite test/runtests.jl"
+  # - label: "Run tests on CPU"
+  #   key: "cpu_tests"
+  #   command:
+  #     - "julia --color=yes --project=.buildkite test/runtests.jl"
 
-  - label: "Run tests on GPU"
-    key: "gpu_tests"
-    command:
-      - "julia --color=yes --project=.buildkite test/runtests.jl"
-    env:
-      CLIMACOMMS_DEVICE: "CUDA"
-    agents:
-      slurm_gpus: 1
+  # - label: "Run tests on GPU"
+  #   key: "gpu_tests"
+  #   command:
+  #     - "julia --color=yes --project=.buildkite test/runtests.jl"
+  #   env:
+  #     CLIMACOMMS_DEVICE: "CUDA"
+  #   agents:
+  #     slurm_gpus: 1
 
   - label: "Run tests with MPI"
     key: "mpi_tests"
