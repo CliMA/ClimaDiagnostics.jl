@@ -92,6 +92,9 @@ struct NetCDFWriter{
     """Initial time of the simulation"""
     init_time::TIME
 
+    """Horizontal interpolation method for remapping: `:bilinear` (default) or `:spectral`."""
+    horizontal_method::Symbol
+
     # TODO: Add option to write dates as time
 end
 
@@ -145,6 +148,10 @@ Keyword arguments
                restarting a simulation, the initial time of the simulation is non-zero. If
                the simulation does not begin at `t = 0` and nothing is passed in, then the
                result could be wrong.
+- `horizontal_method`: Horizontal interpolation for remapping to the output grid. `:bilinear`
+  (default) uses bilinear interpolation from the four corners of each element (2D horizontal
+  only, via ClimaInterpolations); `:spectral` uses Lagrange polynomial interpolation at
+  spectral element quadrature points. Passed to `ClimaCore.Remapping.Remapper`.
 """
 function NetCDFWriter(
     space::Spaces.AbstractSpace,
@@ -158,6 +165,7 @@ function NetCDFWriter(
     horizontal_pts = nothing,
     global_attribs = nothing,
     init_time = 0.0,
+    horizontal_method = :bilinear,
 )
     horizontal_space = Spaces.horizontal_space(space)
     is_horizontal_space = horizontal_space == space
@@ -207,7 +215,7 @@ function NetCDFWriter(
         hpts,
     )
     zcoords = Geometry.ZPoint.(vpts)
-    remapper = Remapper(space, hcoords, zcoords)
+    remapper = Remapper(space, hcoords, zcoords; horizontal_method)
     comms_ctx = ClimaComms.context(space)
 
     if is_horizontal_space
@@ -256,6 +264,7 @@ function NetCDFWriter(
         vpts,
         global_attribs,
         init_time,
+        horizontal_method,
     )
 end
 
@@ -324,6 +333,7 @@ function NetCDFWriter(
         vpts,
         global_attribs,
         init_time,
+        :spectral, # no horizontal remapping for vertical-only space
     )
 end
 
@@ -371,6 +381,7 @@ function NetCDFWriter(
         nothing,
         global_attribs,
         init_time,
+        :spectral, # no horizontal remapping for point space
     )
 end
 """
@@ -438,7 +449,7 @@ NVTX.@annotate function interpolate_field!(
         target_zcoords = Geometry.ZPoint.(vpts)
 
         writer.remappers[var.short_name] =
-            Remapper(space, target_hcoords, target_zcoords)
+            Remapper(space, target_hcoords, target_zcoords; horizontal_method = writer.horizontal_method)
     end
 
     remapper = writer.remappers[var.short_name]
