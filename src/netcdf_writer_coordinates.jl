@@ -262,7 +262,7 @@ end
 function add_space_coordinates_maybe!(
     nc::NCDatasets.NCDataset,
     ::Spaces.FiniteDifferenceSpace,
-    num_points_z,
+    num_points,
     hpts,
     zpts::Vector{FT};
     z_sampling_method,
@@ -271,6 +271,10 @@ function add_space_coordinates_maybe!(
     # interface and dispatch
 ) where {FT <: AbstractFloat}
     name, _... = names
+    # When the writer is initialized from a 3D space but we're writing a 1D column field,
+    # num_points will be a multi-element tuple (e.g., (num_lon, num_lat, num_z)).
+    # We need to extract only the vertical dimension (the last element).
+    num_points_z = length(num_points) > 1 ? (last(num_points),) : num_points
     z_dimension_exists = dimension_exists(nc, name, num_points_z)
 
     if !z_dimension_exists
