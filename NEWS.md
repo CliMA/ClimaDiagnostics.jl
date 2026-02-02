@@ -3,7 +3,17 @@
 main
 -------
 
-## Add global attributes to NetCDF files
+v0.3.1
+-------
+
+## Features
+
+### Support 1D column diagnostics
+
+Added support for outputting the 1-dimensional FiniteDifferenceSpace diagnostics
+when writer is initialized from 3D space.
+
+### Add global attributes to NetCDF files
 
 With this release, you can now add global attributes that are the same across
 all NetCDF files for a given `NetCDFWriter`. For example, you may be interested
