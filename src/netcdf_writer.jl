@@ -92,7 +92,7 @@ struct NetCDFWriter{
     """Initial time of the simulation"""
     init_time::TIME
 
-    """Horizontal interpolation method for remapping: `:bilinear` (default) or `:spectral`."""
+    """Horizontal interpolation method for remapping: `:spectral` (default) or `:bilinear`."""
     horizontal_method::Symbol
 
     # TODO: Add option to write dates as time
@@ -148,10 +148,10 @@ Keyword arguments
                restarting a simulation, the initial time of the simulation is non-zero. If
                the simulation does not begin at `t = 0` and nothing is passed in, then the
                result could be wrong.
-- `horizontal_method`: Horizontal interpolation for remapping to the output grid. `:bilinear`
-  (default) uses bilinear interpolation from the four corners of each element (2D horizontal
-  only, via ClimaInterpolations); `:spectral` uses Lagrange polynomial interpolation at
-  spectral element quadrature points. Passed to `ClimaCore.Remapping.Remapper`.
+- `horizontal_method`: Horizontal interpolation for remapping to the output grid. `:spectral`
+  (default) uses Lagrange polynomial interpolation at spectral element quadrature points;
+  `:bilinear` uses bilinear interpolation from the four corners of each element (2D horizontal
+  only, via ClimaInterpolations). Passed to `ClimaCore.Remapping.Remapper`.
 """
 function NetCDFWriter(
     space::Spaces.AbstractSpace,
@@ -165,7 +165,7 @@ function NetCDFWriter(
     horizontal_pts = nothing,
     global_attribs = nothing,
     init_time = 0.0,
-    horizontal_method = :bilinear,
+    horizontal_method = :spectral,
 )
     horizontal_space = Spaces.horizontal_space(space)
     is_horizontal_space = horizontal_space == space
