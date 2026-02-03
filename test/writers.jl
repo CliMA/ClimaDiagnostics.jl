@@ -558,6 +558,60 @@ end
         end
     end
 
+    # Test 1D column field with 3D-initialized writer
+    # This tests the fix for "Incompatible z dimension already exists" error
+    colspace_for_3d_writer = ColumnCenterFiniteDifferenceSpace()
+    colfield_for_3d_writer = Fields.coordinate_field(colspace_for_3d_writer).z
+    colu_for_3d_writer = (; colfield_for_3d_writer)
+
+    # Reuse the existing 3D writer
+    col_from_3d_diagnostic = ClimaDiagnostics.ScheduledDiagnostic(;
+        variable = ClimaDiagnostics.DiagnosticVariable(;
+            compute! = (out, u, p, t) -> begin
+                if isnothing(out)
+                    return u.colfield_for_3d_writer
+                else
+                    out .= u.colfield_for_3d_writer
+                end
+            end,
+            short_name = "ABC_col_from_3d",
+        ),
+        output_short_name = "my_short_name_col_from_3d",
+        output_long_name = "Column from 3D writer",
+        output_writer = writer,
+    )
+    Writers.interpolate_field!(
+        writer,
+        colfield_for_3d_writer,
+        col_from_3d_diagnostic,
+        colu_for_3d_writer,
+        p,
+        t,
+    )
+    Writers.write_field!(
+        writer,
+        colfield_for_3d_writer,
+        col_from_3d_diagnostic,
+        colu_for_3d_writer,
+        p,
+        t,
+    )
+    # Write a second time to check consistency
+    Writers.write_field!(
+        writer,
+        colfield_for_3d_writer,
+        col_from_3d_diagnostic,
+        colu_for_3d_writer,
+        p,
+        t,
+    )
+    NCDatasets.NCDataset(
+        joinpath(output_dir, "my_short_name_col_from_3d.nc"),
+    ) do nc
+        # The z dimension should match the writer's vertical interpolation grid (3*NUM = 150)
+        @test size(nc["ABC_col_from_3d"]) == (2, 3NUM)
+    end
+
     ###############
     # Point Space #
     ###############
