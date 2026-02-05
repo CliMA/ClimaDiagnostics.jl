@@ -1486,7 +1486,7 @@ end
     t_and_init_time_pairs = (
         (2.0, 1.0),
         (ITime(2.0, epoch = start_date), ITime(1.0, epoch = start_date)),
-        (ITime(2.0, epoch = start_date), 1, 0),
+        (ITime(2.0, epoch = start_date), 1.0),
         (2.0, ITime(1.0, epoch = start_date)),
     )
 
