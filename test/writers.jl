@@ -12,10 +12,13 @@ import ClimaCore.Spaces
 import ClimaCore.Geometry
 import ClimaCore.CommonSpaces
 import ClimaCore.Meshes
+import ClimaCore.Operators
 import ClimaComms
 
 import ClimaDiagnostics
 import ClimaDiagnostics.Writers
+
+import ClimaInterpolations
 
 import ClimaUtilities.TimeManager: ITime
 
@@ -556,6 +559,60 @@ end
                 @test nc["z"][:] == vpts
             end
         end
+    end
+
+    # Test 1D column field with 3D-initialized writer
+    # This tests the fix for "Incompatible z dimension already exists" error
+    colspace_for_3d_writer = ColumnCenterFiniteDifferenceSpace()
+    colfield_for_3d_writer = Fields.coordinate_field(colspace_for_3d_writer).z
+    colu_for_3d_writer = (; colfield_for_3d_writer)
+
+    # Reuse the existing 3D writer
+    col_from_3d_diagnostic = ClimaDiagnostics.ScheduledDiagnostic(;
+        variable = ClimaDiagnostics.DiagnosticVariable(;
+            compute! = (out, u, p, t) -> begin
+                if isnothing(out)
+                    return u.colfield_for_3d_writer
+                else
+                    out .= u.colfield_for_3d_writer
+                end
+            end,
+            short_name = "ABC_col_from_3d",
+        ),
+        output_short_name = "my_short_name_col_from_3d",
+        output_long_name = "Column from 3D writer",
+        output_writer = writer,
+    )
+    Writers.interpolate_field!(
+        writer,
+        colfield_for_3d_writer,
+        col_from_3d_diagnostic,
+        colu_for_3d_writer,
+        p,
+        t,
+    )
+    Writers.write_field!(
+        writer,
+        colfield_for_3d_writer,
+        col_from_3d_diagnostic,
+        colu_for_3d_writer,
+        p,
+        t,
+    )
+    # Write a second time to check consistency
+    Writers.write_field!(
+        writer,
+        colfield_for_3d_writer,
+        col_from_3d_diagnostic,
+        colu_for_3d_writer,
+        p,
+        t,
+    )
+    NCDatasets.NCDataset(
+        joinpath(output_dir, "my_short_name_col_from_3d.nc"),
+    ) do nc
+        # The z dimension should match the writer's vertical interpolation grid (3*NUM = 150)
+        @test size(nc["ABC_col_from_3d"]) == (2, 3NUM)
     end
 
     ###############
@@ -1429,7 +1486,7 @@ end
     t_and_init_time_pairs = (
         (2.0, 1.0),
         (ITime(2.0, epoch = start_date), ITime(1.0, epoch = start_date)),
-        (ITime(2.0, epoch = start_date), 1, 0),
+        (ITime(2.0, epoch = start_date), 1.0),
         (2.0, ITime(1.0, epoch = start_date)),
     )
 
@@ -1466,5 +1523,138 @@ end
             Dates.DateTime("2010-01-01T00:00:02"),
             Dates.DateTime("2010-01-01T00:00:03"),
         ]]
+    end
+end
+
+@testset "Pressure coordinates" begin
+    spherical_shell_space = SphericalShellSpace(FT = Float32)
+    col_space = ColumnCenterFiniteDifferenceSpace(FT = Float32)
+    spaces_test_list = [(spherical_shell_space, "shell"), (col_space, "col")]
+
+    # Number of interpolation points
+    for (space, space_name) in spaces_test_list
+        NUM = 50
+
+        start_date = Dates.DateTime(2010, 1, 1)
+
+        function compute_field!(out, u, p, t)
+            if isnothing(out)
+                return u.field
+            else
+                out .= u.field
+                return nothing
+            end
+        end
+
+        # Test with face space
+        function compute_field_face!(out, u, p, t)
+            intp_c2f = Operators.InterpolateC2F(
+                bottom = Operators.Extrapolate(),
+                top = Operators.Extrapolate(),
+            )
+            if isnothing(out)
+                return intp_c2f.(u.field)
+            else
+                @. out = intp_c2f(u.field)
+                return nothing
+            end
+        end
+
+        u = ClimaCore.Fields.FieldVector(; field = ones(space))
+        p = (; start_date = start_date)
+        t = 0
+        z_sampling_method = ClimaDiagnostics.Writers.RealPressureLevelsMethod(
+            u.field,
+            t,
+            pressure_attribs = (; YO = "HI"),
+            pressure_intp_kwargs = (;
+                extrapolate = ClimaInterpolations.Interpolation1D.LinearExtrapolation()
+            ),
+        )
+
+        @test_throws ErrorException Writers.NetCDFWriter(
+            space,
+            output_dir;
+            num_points = (NUM, 2NUM, 3NUM),
+            sync_schedule = ClimaDiagnostics.Schedules.DivisorSchedule(2),
+            z_sampling_method,
+        )
+        writer = Writers.NetCDFWriter(
+            Writers.pressure_space(z_sampling_method),
+            output_dir;
+            num_points = (NUM, 2NUM, 3NUM),
+            sync_schedule = ClimaDiagnostics.Schedules.DivisorSchedule(2),
+            z_sampling_method,
+        )
+
+        center_var = ClimaDiagnostics.DiagnosticVariable(;
+            compute! = compute_field!,
+            short_name = "center",
+            long_name = "CENTER",
+        )
+        center_diag = ClimaDiagnostics.ScheduledDiagnostic(
+            variable = center_var,
+            output_writer = writer,
+            output_short_name = "center_$(space_name)_inst",
+        )
+
+        face_var = ClimaDiagnostics.DiagnosticVariable(;
+            compute! = compute_field_face!,
+            short_name = "face",
+            long_name = "FACE",
+        )
+        face_diag = ClimaDiagnostics.ScheduledDiagnostic(
+            variable = face_var,
+            output_writer = writer,
+            output_short_name = "face_$(space_name)_inst",
+        )
+
+        t1 = 10.0
+        t2 = 20.0
+        t3 = 30.0
+        for t in [t1, t2, t3]
+            for diag in (center_diag, face_diag)
+                intp_field = ClimaDiagnostics.compute_field(
+                    diag,
+                    u,
+                    p,
+                    t,
+                    z_sampling_method,
+                )
+                Writers.interpolate_field!(writer, intp_field, diag, u, p, t)
+                Writers.write_field!(writer, intp_field, diag, u, p, t)
+            end
+        end
+
+        for filename in (
+            "center_$(space_name)_inst_pressure.nc",
+            "face_$(space_name)_inst_pressure.nc",
+        )
+            varname = first(split(filename, "_"))
+            NCDatasets.Dataset(joinpath(output_dir, filename)) do nc
+                if space_name == "shell"
+                    @test NCDatasets.dimnames(nc) ==
+                          ["time", "lon", "lat", "pressure_level", "nv"]
+                    # Order is time, lon, lat, and pressure_level
+                    @test size(nc[varname]) == (3, 50, 100, 37)
+                else
+                    @test NCDatasets.dimnames(nc) ==
+                          ["time", "pressure_level", "nv"]
+                    # Order is time and pressure_level
+                    @test size(nc[varname]) == (3, 37)
+                end
+                @test nc["time"] == [10.0, 20.0, 30.0]
+                @test issorted(nc["pressure_level"])
+                @test nc["pressure_level"] ==
+                      ClimaDiagnostics.Interpolators.era5_pressure_levels()
+                @test nc["pressure_level"].attrib["units"] == "Pa"
+                @test nc["pressure_level"].attrib["stored_direction"] ==
+                      "increasing"
+                @test nc["pressure_level"].attrib["long_name"] == "pressure"
+                @test nc["pressure_level"].attrib["standard_name"] ==
+                      "air_pressure"
+                @test nc["pressure_level"].attrib["YO"] == "HI"
+            end
+        end
     end
 end

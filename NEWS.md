@@ -3,7 +3,17 @@
 main
 -------
 
-## Add global attributes to NetCDF files
+v0.3.1
+-------
+
+## Features
+
+### Support 1D column diagnostics
+
+Added support for outputting the 1-dimensional FiniteDifferenceSpace diagnostics
+when writer is initialized from 3D space.
+
+### Add global attributes to NetCDF files
 
 With this release, you can now add global attributes that are the same across
 all NetCDF files for a given `NetCDFWriter`. For example, you may be interested
@@ -20,6 +30,27 @@ writer = NetCDFWriter(
     output_dir;
     global_attribs = Dict("source" => "CliMA Coupler Simulation", "experiment" => "AMIP"),
 )
+```
+
+## Output diagnostics in pressure coordinates
+
+You can now output diagnostics in pressure coordinates. To do this, create an
+instance of a `RealPressureLevelsMethod` with the pressure field and the current
+simulation time. Then, pass the `RealPressureLevelsMethod` to the
+`z_sampling_method` keyword argument to the `NetCDFWriter`.
+
+```julia
+z_sampling_method = ClimaDiagnostics.Writers.RealPressureLevelsMethod(
+            pressure_field,
+            t,
+        )
+netcdf_writer = CAD.NetCDFWriter(
+        ClimaDiagnostics.Writers.pressure_space(z_sampling_method),
+        output_dir,
+        num_points = (360, 180, 10); # the number of vertical points (10) is ignored
+        sync_schedule = CAD.EveryStepSchedule(),
+        z_sampling_method,
+    )
 ```
 
 v0.3.0
