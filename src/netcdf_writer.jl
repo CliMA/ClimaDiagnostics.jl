@@ -228,7 +228,7 @@ function NetCDFWriter(
     else
         zcoords = Geometry.ZPoint.(vpts)
     end
-    remapper = Remapper(space, hcoords, zcoords, horizontal_method)
+    remapper = Remapper(space, hcoords, zcoords; horizontal_method)
     comms_ctx = ClimaComms.context(space)
 
     # If RealPressureLevelsMethod is used, then the space does not have any
