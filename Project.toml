@@ -16,7 +16,7 @@ SciMLBase = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
 
 [compat]
 Accessors = "0.1.32"
-Aqua = "0.8"
+Aqua = "0.8.14"
 BenchmarkTools = "1"
 ClimaComms = "0.6.2"
 ClimaCore = "0.14.49"
