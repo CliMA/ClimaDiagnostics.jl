@@ -23,6 +23,7 @@ jobs:
         version:
           - '1.10'
           - '1.11'
+          - '1.12'
     timeout-minutes: 30
     steps:
       - name: Checkout
@@ -35,13 +36,13 @@ jobs:
       - uses: julia-actions/julia-runtest@latest
       - uses: julia-actions/julia-processcoverage@latest
       - uses: codecov/codecov-action@v5
-        if: ${{ matrix.version == '1.10' }}
+        if: ${{ matrix.version == '1.12' }}
         with:
           files: lcov.info
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
       - name: Archive production artifacts
-        if: ${{ matrix.version == '1.10' }}
+        if: ${{ matrix.version == '1.12' }}
         uses: actions/upload-artifact@v4
         with:
           name: flamegraphs
