@@ -2,6 +2,7 @@ import Dates
 
 import ClimaCore: Domains, Geometry, Grids, Fields, Meshes, Spaces
 import ClimaCore.Remapping: Remapper, interpolate, interpolate!
+import ClimaCore.Remapping: AbstractRemappingMethod, SpectralElementRemapping, BilinearRemapping
 import ..Schedules: EveryStepSchedule
 import ClimaUtilities.TimeManager: ITime, date
 
@@ -92,6 +93,9 @@ struct NetCDFWriter{
     """Initial time of the simulation"""
     init_time::TIME
 
+    """Horizontal interpolation method for remapping. Passed to `ClimaCore.Remapping.Remapper`."""
+    horizontal_method::AbstractRemappingMethod
+
     # TODO: Add option to write dates as time
 end
 
@@ -145,6 +149,10 @@ Keyword arguments
                restarting a simulation, the initial time of the simulation is non-zero. If
                the simulation does not begin at `t = 0` and nothing is passed in, then the
                result could be wrong.
+- `horizontal_method`: Horizontal interpolation for remapping to the output grid.
+  `BilinearRemapping()` (default) uses bilinear on the 2-point cell (1D/2D horizontal);
+  `SpectralElementRemapping()` uses Lagrange polynomial at spectral element quadrature points.
+  Passed to `ClimaCore.Remapping.Remapper`.
 """
 function NetCDFWriter(
     space::Spaces.AbstractSpace,
@@ -158,6 +166,7 @@ function NetCDFWriter(
     horizontal_pts = nothing,
     global_attribs = nothing,
     init_time = 0.0,
+    horizontal_method::AbstractRemappingMethod = BilinearRemapping(),
 )
     if z_sampling_method isa RealPressureLevelsMethod &&
        space != pressure_space(z_sampling_method)
@@ -220,7 +229,7 @@ function NetCDFWriter(
     else
         zcoords = Geometry.ZPoint.(vpts)
     end
-    remapper = Remapper(space, hcoords, zcoords)
+    remapper = Remapper(space, hcoords, zcoords; horizontal_method)
     comms_ctx = ClimaComms.context(space)
 
     # If RealPressureLevelsMethod is used, then the space does not have any
@@ -271,6 +280,7 @@ function NetCDFWriter(
         vpts,
         global_attribs,
         init_time,
+        horizontal_method,
     )
 end
 
@@ -311,7 +321,7 @@ function NetCDFWriter(
     else
         target_zcoords = Geometry.ZPoint.(vpts)
     end
-    remapper = Remapper(space; target_zcoords)
+    remapper = Remapper(space; target_zcoords, horizontal_method = SpectralElementRemapping())
 
     comms_ctx = ClimaComms.context(space)
 
@@ -359,6 +369,7 @@ function NetCDFWriter(
         vpts,
         global_attribs,
         init_time,
+        SpectralElementRemapping(), # no horizontal remapping for vertical-only space
     )
 end
 
@@ -406,6 +417,7 @@ function NetCDFWriter(
         nothing,
         global_attribs,
         init_time,
+        SpectralElementRemapping(), # no horizontal remapping for point space
     )
 end
 
@@ -477,7 +489,7 @@ NVTX.@annotate function interpolate_field!(
         end
 
         writer.remappers[var.short_name] =
-            Remapper(space, target_hcoords, target_zcoords)
+            Remapper(space, target_hcoords, target_zcoords; horizontal_method = writer.horizontal_method)
     end
 
     remapper = writer.remappers[var.short_name]
