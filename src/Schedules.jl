@@ -358,4 +358,53 @@ function long_name(schedule::EveryCalendarDtSchedule)
     return period_to_str_long(schedule.dt)
 end
 
+# TODO: This doesn't work how I want it to
+# I want to do something like Delay(EveryCalendarDtSchedule, Dates.Month(1)) to
+# remove the write for Jan 1 and keep Feb 1
+# One thought is that this solution might be okay since I can keep track of the
+# count if the count is 0, then there is nothing to write and maybe that is
+# okay?
+
+# For the problem of scheduling with 1 week spinup and 1 month of accumulation
+# you would need to do
+# compute_schedule = DelaySchedule(every_step_schedule, Dates.Week(1))
+# output_schedule = DelaySchedule(calendar_dt_schedule, Dates.Month(1) + Dates.Week(1))
+
+# But I think the solution above is annoying to do though...
+
+# TODO: This need to support a different start date, but it is probably okay to
+# hard code it for delay for now
+"""
+    DelaySchedule
+"""
+struct DelaySchedule{SCHEDULE <: AbstractSchedule, T <: Union{AbstractFloat, ITime}}
+    schedule::SCHEDULE
+    delay::T
+end
+
+function DelaySchedule(schedule::AbstractSchedule, delay; val_at_delay = false)
+    # TODO: Finish this!
+end
+
+function (schedule::DelaySchedule)(integrator)::Bool
+    # TODO: Finish this!
+end
+
+function short_name(schedule::DelaySchedule)
+    # TODO: Finish this!
+end
+
+function long_name(schedule::DelaySchedule)
+    # TODO: Finish this!
+end
+
+# Another solution is to add a spinup keyword argument to
+# EveryCalendarDtSchedule and maybe combine the two solutions?
+
+# TODO: Think about more compute and output schedules since there is a
+# consistency issue that should be fixed in the future
+    # I think there needs to be some coordination from the compute and output schedules
+    # The compute schedule determine what the first time bound should be, but the output schedule
+    # determine the second time bound
+
 end
