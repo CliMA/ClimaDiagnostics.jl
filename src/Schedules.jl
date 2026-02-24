@@ -358,53 +358,104 @@ function long_name(schedule::EveryCalendarDtSchedule)
     return period_to_str_long(schedule.dt)
 end
 
-# TODO: This doesn't work how I want it to
-# I want to do something like Delay(EveryCalendarDtSchedule, Dates.Month(1)) to
-# remove the write for Jan 1 and keep Feb 1
-# One thought is that this solution might be okay since I can keep track of the
-# count if the count is 0, then there is nothing to write and maybe that is
-# okay?
-
-# For the problem of scheduling with 1 week spinup and 1 month of accumulation
-# you would need to do
-# compute_schedule = DelaySchedule(every_step_schedule, Dates.Week(1))
-# output_schedule = DelaySchedule(calendar_dt_schedule, Dates.Month(1) + Dates.Week(1))
-
-# But I think the solution above is annoying to do though...
-
-# TODO: This need to support a different start date, but it is probably okay to
-# hard code it for delay for now
 """
     DelaySchedule
+
+Delays the base schedule that DelaySchedule wraps for a specified amount of
+time. After the delay period has passed, it falls back to the behavior of the
+base schedule.
 """
-struct DelaySchedule{SCHEDULE <: AbstractSchedule, T <: Union{AbstractFloat, ITime}}
-    schedule::SCHEDULE
-    delay::T
+struct DelaySchedule{
+    SCHEDULE <: AbstractSchedule,
+    T <: Union{AbstractFloat, ITime},
+}
+    base_schedule::SCHEDULE
+    delayed_time::T
+    is_active_at_delay::Bool
 end
 
-function DelaySchedule(schedule::AbstractSchedule, delay; val_at_delay = false)
-    # TODO: Finish this!
+"""
+    DelaySchedule(
+        base_schedule::AbstractSchedule,
+        delayed_time::Union{AbstractFloat, ITime},
+        is_active_at_delay::Bool = false,
+    )
+
+Construct an `DelaySchedule` from a `base_schedule` and `delayed_time`. The type
+of `delayed_time` must be the same as the type of `integrator.t` or the time of
+the simulation.
+
+The keyword argument `is_active_at_delay` determines if the schedule returns
+`true` or `false` when `init_t + delay ≈ integrator.t`.
+"""
+function DelaySchedule(
+    base_schedule::AbstractSchedule,
+    delayed_time::Union{AbstractFloat, ITime},
+    is_active_at_delay::Bool = true,
+)
+    DelaySchedule(base_schedule, delayed_time, is_active_at_delay)
 end
 
+"""
+    DelaySchedule(integrator)
+
+Returns `false` if `integrator.t < init_t + delay`, `is_active_at_delay` if
+`integrator.t ≈ init_t + delay`, and the result of `base_schedule` if
+`integrator.t > init_t + delay`.
+
+# Examples
+
+One use of DelaySchedule is to implement a spinup period. For example, in a
+simulation that lasts for 1 month and 1 week, you might not want diagnostics to
+be generated at the very beginning of the simulation. Instead, you may want
+diagnostics to start after a spinup period of 1 week.
+
+In the example below, the simulation uses ITime, and a spinup period of 1 week
+is added:
+
+```julia
+init_t = ITime(0)
+delay =  ITime(1, period = Dates.Week(1))
+compute_schedule_func = DelaySchedule(compute_schedule, init_t + delay)
+output_schedule_func = DelaySchedule(output_schedule, init_t + delay)
+```
+
+"""
 function (schedule::DelaySchedule)(integrator)::Bool
-    # TODO: Finish this!
+    (; base_schedule, delayed_time, is_active_at_delay) = schedule
+    # Always call base_schedule since some schedules (e.g.
+    # EveryCalendarDtSchedule) are stateful
+    is_active = base_schedule(integrator)
+    if integrator.t > delayed_time
+        return is_active
+    elseif integrator.t ≈ delayed_time
+        return is_active_at_delay
+    else
+        integrator.t < delayed_time
+        return false
+    end
 end
 
+"""
+    short_name(schedule::EveryDtSchedule)
+
+Short of name of the given `schedule`. Typically used in names of files/datasets.
+
+This uses the `short_name` method of the base schedule.
+"""
 function short_name(schedule::DelaySchedule)
-    # TODO: Finish this!
+    short_name(schedule.base_schedule)
 end
 
+"""
+    long_name(schedule::DelaySchedule)
+
+Long of name of the given `schedule`. Typically used in attributes.
+
+This uses the `long_name` method of the base schedule.
+"""
 function long_name(schedule::DelaySchedule)
-    # TODO: Finish this!
+    long_name(schedule.base_schedule)
 end
-
-# Another solution is to add a spinup keyword argument to
-# EveryCalendarDtSchedule and maybe combine the two solutions?
-
-# TODO: Think about more compute and output schedules since there is a
-# consistency issue that should be fixed in the future
-    # I think there needs to be some coordination from the compute and output schedules
-    # The compute schedule determine what the first time bound should be, but the output schedule
-    # determine the second time bound
 
 end
