@@ -3,7 +3,14 @@
 main
 -------
 
+
+v0.3.3
+------
+
+## Features
+
 ### Support bilinear horizontal remapping
+
 Adds support for a `horizontal_method` kwarg in the NetCDFWriter, to permit
 bilinear remapping using ClimaCore's AbstractRemappingMethod.
 
