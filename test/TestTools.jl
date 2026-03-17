@@ -1,6 +1,6 @@
 import Dates
 
-import SciMLBase
+import ClimaTimeSteppers
 
 import ClimaCore
 import ClimaComms
@@ -173,7 +173,7 @@ function create_problem(space; t0 = 0.0, tf = 1.0, dt = 1e-3)
         @. dY.my_var = p.tau * Y.my_var
     end
 
-    prob = SciMLBase.ODEProblem(
+    prob = ClimaTimeSteppers.ODEProblem(
         ClimaTimeSteppers.ClimaODEFunction(T_exp! = exp_tendency!),
         Y,
         (t0, tf),

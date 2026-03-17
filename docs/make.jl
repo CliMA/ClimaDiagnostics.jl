@@ -38,7 +38,7 @@ DocMeta.setdocmeta!(
 
 makedocs(
     sitename = "ClimaDiagnostics.jl",
-    authors = "Gabriele Bozzola",
+    authors = "CliMA Contributors",
     format = format,
     pages = pages,
     checkdocs = :exports,

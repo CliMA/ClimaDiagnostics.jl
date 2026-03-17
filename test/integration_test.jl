@@ -2,7 +2,7 @@ using Test
 using Profile
 using ProfileCanvas
 
-import SciMLBase
+import ClimaTimeSteppers
 import NCDatasets
 
 import ClimaDiagnostics
@@ -180,7 +180,7 @@ function setup_integrator(
     ]
 
     return ClimaDiagnostics.IntegratorWithDiagnostics(
-        SciMLBase.init(args...; kwargs...),
+        ClimaTimeSteppers.init(args...; kwargs...),
         scheduled_diagnostics,
     )
 end
@@ -224,7 +224,7 @@ for (space, space_name, written_space_dims) in spaces_test_list
                 integrator =
                     setup_integrator(output_dir; context, space, dict_writer)
 
-                SciMLBase.solve!(integrator)
+                ClimaTimeSteppers.solve!(integrator)
 
                 if ClimaComms.iamroot(context)
                     NCDatasets.NCDataset(
@@ -284,14 +284,14 @@ end
 
         # Flame
         integrator = setup_integrator(output_dir; context)
-        prof = Profile.@profile SciMLBase.solve!(integrator)
+        prof = Profile.@profile ClimaTimeSteppers.solve!(integrator)
         ClimaComms.iamroot(context) && (results = Profile.fetch())
         ClimaComms.iamroot(context) &&
             ProfileCanvas.html_file("flame.html", results)
 
         # Allocations
         integrator = setup_integrator(output_dir; context)
-        prof = Profile.Allocs.@profile SciMLBase.solve!(integrator)
+        prof = Profile.Allocs.@profile ClimaTimeSteppers.solve!(integrator)
         ClimaComms.iamroot(context) && (results = Profile.Allocs.fetch())
         ClimaComms.iamroot(context) &&
             (allocs = ProfileCanvas.view_allocs(results))
@@ -358,7 +358,7 @@ function setup_integrator_with_pressure_diags(output_dir, space)
     close(writer)
 
     return ClimaDiagnostics.IntegratorWithDiagnostics(
-        SciMLBase.init(args...; kwargs...),
+        ClimaTimeSteppers.init(args...; kwargs...),
         scheduled_diagnostics,
     )
 end
@@ -375,7 +375,7 @@ for (space, space_name) in spaces_test_list
             output_dir = ClimaComms.bcast(context, output_dir)
 
             integrator = setup_integrator_with_pressure_diags(output_dir, space)
-            SciMLBase.solve!(integrator)
+            ClimaTimeSteppers.solve!(integrator)
 
             filenames = ["yo_inst_pressure.nc", "yo_max_pressure.nc"]
             for filename in filenames
