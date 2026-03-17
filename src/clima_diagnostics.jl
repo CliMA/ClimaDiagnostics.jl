@@ -1,6 +1,6 @@
 import Accessors
 import NVTX
-import SciMLBase
+import ClimaTimeSteppers
 import ClimaComms
 import ClimaCore: Grids, Spaces
 
@@ -515,13 +515,13 @@ function DiagnosticsCallback(diagnostics_handler::DiagnosticsHandler)
     sciml_callback(integrator) =
         orchestrate_diagnostics(integrator, diagnostics_handler)
 
-    # SciMLBase.DiscreteCallback checks if the given condition is true at the end of each
+    # ClimaTimeSteppers.DiscreteCallback checks if the given condition is true at the end of each
     # step. So, we set a condition that is always true, the callback is called at the end of
     # every step. This callback runs `orchestrate_callbacks`, which manages which
     # diagnostics functions to call
     condition = (_, _, _) -> true
 
-    return SciMLBase.DiscreteCallback(condition, sciml_callback)
+    return ClimaTimeSteppers.DiscreteCallback(condition, sciml_callback)
 end
 
 """
@@ -564,7 +564,8 @@ function IntegratorWithDiagnostics(
     continuous_callbacks = integrator.callback.continuous_callbacks
     discrete_callbacks =
         (integrator.callback.discrete_callbacks..., diagnostics_callback)
-    callback = SciMLBase.CallbackSet(continuous_callbacks, discrete_callbacks)
+    callback =
+        ClimaTimeSteppers.CallbackSet(continuous_callbacks, discrete_callbacks)
 
     Accessors.@reset integrator.callback = callback
 

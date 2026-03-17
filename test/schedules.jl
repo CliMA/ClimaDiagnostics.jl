@@ -1,5 +1,5 @@
 using Test
-import SciMLBase
+import ClimaTimeSteppers
 
 import Dates
 
@@ -24,7 +24,7 @@ include("TestTools.jl")
     scheduled_func = DivisorSchedule(divisor)
     @test "$scheduled_func" == "2it"
 
-    callback_everystep = SciMLBase.DiscreteCallback(
+    callback_everystep = ClimaTimeSteppers.DiscreteCallback(
         (_, _, integrator) -> scheduled_func(integrator),
         callback_func0,
     )
@@ -38,7 +38,7 @@ include("TestTools.jl")
 
     expected_called = convert(Int, (tf - t0) / (divisor * dt))
 
-    SciMLBase.solve(args...; kwargs..., callback = callback_everystep)
+    ClimaTimeSteppers.solve(args...; kwargs..., callback = callback_everystep)
 
     @test called[] == expected_called
 
@@ -67,11 +67,11 @@ include("TestTools.jl")
     t_last2 = 0.1
     scheduled_func2 = EveryDtSchedule(dt_callback2; t_last = t_last2)
 
-    callback_dt = SciMLBase.DiscreteCallback(
+    callback_dt = ClimaTimeSteppers.DiscreteCallback(
         (_, _, integrator) -> scheduled_func(integrator),
         callback_func,
     )
-    callback_dt2 = SciMLBase.DiscreteCallback(
+    callback_dt2 = ClimaTimeSteppers.DiscreteCallback(
         (_, _, integrator) -> scheduled_func2(integrator),
         callback_func2,
     )
@@ -81,10 +81,10 @@ include("TestTools.jl")
     expected_called = convert(Int, (tf - t0) / dt_callback)
     expected_called2 = convert(Int, floor((tf - t0 - t_last2) / dt_callback2))
 
-    SciMLBase.solve(
+    ClimaTimeSteppers.solve(
         args...;
         kwargs...,
-        callback = SciMLBase.CallbackSet(callback_dt, callback_dt2),
+        callback = ClimaTimeSteppers.CallbackSet(callback_dt, callback_dt2),
     )
 
     @test called[] == expected_called
@@ -180,7 +180,7 @@ include("TestTools.jl")
     )
     @test "$scheduled_func_month" == "1M"
 
-    callback_dt_month = SciMLBase.DiscreteCallback(
+    callback_dt_month = ClimaTimeSteppers.DiscreteCallback(
         (_, _, integrator) -> scheduled_func_month(integrator),
         callback_func_month,
     )
@@ -194,10 +194,10 @@ include("TestTools.jl")
     expected_called_month =
         convert(Int, floor((tf - t0) / dt_callback_month_in_s))
 
-    SciMLBase.solve(
+    ClimaTimeSteppers.solve(
         args...;
         kwargs...,
-        callback = SciMLBase.CallbackSet(callback_dt_month),
+        callback = ClimaTimeSteppers.CallbackSet(callback_dt_month),
     )
 
     @test called_month[] == expected_called_month
