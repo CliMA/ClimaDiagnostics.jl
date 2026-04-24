@@ -8,6 +8,18 @@ import ClimaUtilities.TimeManager: ITime, date
 
 import NCDatasets
 import NVTX
+import HDF5  # thread-safety fix: serialise libhdf5 calls across NCDatasets + HDF5.jl
+
+# HDF5_jll is built without --enable-threadsafe (see libhdf5.settings:
+# "Threadsafety: no"). NCDatasets' NETCDF_LOCK and HDF5.jl's `liblock`
+# are independent ReentrantLocks — so if one Julia thread is inside an
+# NCDatasets write while another is in HDF5.jl (e.g. a checkpoint
+# writer), both ccall into the same libhdf5 and corrupt its internal
+# skip-list / property-list state. We serialise every libhdf5 entry
+# from this writer through HDF5.jl's `liblock`; the same lock is
+# already used by HDF5.jl itself, so a single global barrier covers
+# all libhdf5 calls made through both wrappers.
+const LIBHDF5_LOCK = HDF5.API.liblock
 
 # Defines target_coordinates, add_space_coordinates_maybe!, add_time_maybe! for a bunch of
 # Spaces
@@ -549,16 +561,19 @@ Attributes are appended to the dataset:
 - `comments`
 - `start_date`
 """
-NVTX.@annotate function write_field!(
-    writer::NetCDFWriter,
-    field,
-    diagnostic,
-    u,
-    p,
-    t,
-)
+NVTX.@annotate function write_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
     # Only the root process has to write
     ClimaComms.iamroot(ClimaComms.context(field)) || return nothing
+
+    # libhdf5 thread-safety barrier (see LIBHDF5_LOCK comment above).
+    # Serialises every libhdf5 entry from this writer with every other
+    # libhdf5 user (HDF5.jl, etc.) in this Julia process.
+    return lock(LIBHDF5_LOCK) do
+        _write_field_impl!(writer, field, diagnostic, u, p, t)
+    end
+end
+
+function _write_field_impl!(writer::NetCDFWriter, field, diagnostic, u, p, t)
 
     space = axes(field)
 
@@ -866,8 +881,11 @@ Call `NCDatasets.sync` on all the files in the `writer.unsynced_datasets` list.
 `NCDatasets.sync` ensures that the values are written to file.
 """
 function sync(writer::NetCDFWriter)
-    foreach(NCDatasets.sync, writer.unsynced_datasets)
-    empty!(writer.unsynced_datasets)
+    # libhdf5 thread-safety barrier (see LIBHDF5_LOCK).
+    lock(LIBHDF5_LOCK) do
+        foreach(NCDatasets.sync, writer.unsynced_datasets)
+        empty!(writer.unsynced_datasets)
+    end
     return nothing
 end
 
