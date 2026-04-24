@@ -29,13 +29,21 @@ steps:
     command:
       - "julia --color=yes --project=.buildkite test/runtests.jl"
 
-  - label: "Run tests on GPU"
+  - label: "Run thread-safety tests on CPU (8 threads)"
+    key: "cpu_mt_tests"
+    command:
+      - "julia --color=yes --threads=8 --project=.buildkite test/libhdf5_thread_safety.jl"
+    agents:
+      slurm_cpus_per_task: 8
+
+  - label: "Run tests on GPU (8 threads)"
     key: "gpu_tests"
     command:
-      - "julia --color=yes --project=.buildkite test/runtests.jl"
+      - "julia --color=yes --threads=8 --project=.buildkite test/runtests.jl"
     env:
       CLIMACOMMS_DEVICE: "CUDA"
     agents:
+      slurm_cpus_per_task: 8
       slurm_gpus: 1
 
   - label: "Run tests with MPI"

@@ -1658,3 +1658,22 @@ end
         end
     end
 end
+
+@testset "libhdf5 thread-safety lock" begin
+    # `HDF5_jll` is built without `--enable-threadsafe`
+    # ("Threadsafety: no" in libhdf5.settings). NCDatasets and HDF5.jl
+    # each ccall into the same non-threadsafe libhdf5 shared object
+    # from their own independent locks, so multi-threaded Julia
+    # processes can corrupt libhdf5 internal state.
+    #
+    # ClimaDiagnostics v0.3.5 fixes this by acquiring `HDF5.API.liblock`
+    # (the lock HDF5.jl already uses) around every libhdf5 entry made
+    # from `NetCDFWriter`. This test verifies the lock is the right
+    # object (shared with HDF5.jl), so both wrappers serialise on one
+    # barrier.
+    import HDF5
+
+    @test isdefined(Writers, :LIBHDF5_LOCK)
+    @test Writers.LIBHDF5_LOCK isa ReentrantLock
+    @test Writers.LIBHDF5_LOCK === HDF5.API.liblock
+end

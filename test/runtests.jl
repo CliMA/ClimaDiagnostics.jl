@@ -9,6 +9,7 @@ using Test
 @safetestset "Interpolators" begin @time include("interpolators.jl") end
 
 @safetestset "Writers" begin @time include("writers.jl") end
+@safetestset "libhdf5 thread safety" begin @time include("libhdf5_thread_safety.jl") end
 
 @safetestset "Schedules" begin @time include("schedules.jl") end
 @safetestset "DiagnosticVariable" begin @time include("diagnostic_variable.jl") end

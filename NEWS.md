@@ -4,6 +4,51 @@ main
 -------
 
 
+v0.3.5
+------
+
+## Bug fixes
+
+### Serialise `libhdf5` calls in `NetCDFWriter` against the HDF5.jl lock
+
+`HDF5_jll` is built without `--enable-threadsafe` (`Threadsafety: no`
+in `libhdf5.settings`). `NCDatasets.jl` and `HDF5.jl` each have their
+own internal `ReentrantLock`, but the two locks are independent, so
+concurrent calls through the two wrappers from different Julia threads
+can enter `libhdf5` simultaneously and corrupt its internal skip-list
+/ property-list state.
+
+On a multi-threaded Julia process (e.g. when running with
+`julia --project --threads=8 ...`) this manifests as
+`NetCDF error: NetCDF: HDF error (NetCDF error code: -101)` or, more
+commonly, `"double free or corruption (fasttop)"` + `SIGSEGV` in
+`libhdf5.so → H5SL_insert / H5P_create_id`, typically 20–40 NetCDF
+write cycles into the simulation (stochastic — depending on when a
+concurrent HDF5.jl checkpoint write happens to interleave).
+
+`NetCDFWriter.write_field!` and `NetCDFWriter.sync` now acquire
+`HDF5.API.liblock` around their libhdf5 entries. Because HDF5.jl
+already uses the same lock for its own ccalls, this single barrier
+serialises **all** libhdf5 entries in the Julia process, regardless
+of which wrapper made the call.
+
+Adds `HDF5.jl` as a direct dependency (it is already a transitive
+dep via `ClimaCore.InputOutput` for any ClimaDiagnostics consumer,
+so this does not add a new root package to the ecosystem).
+
+v0.3.4
+------
+
+## Migrate from `SciMLBase` to `ClimaTimeSteppers` interface
+
+All ODE and callback types (`DiscreteCallback`, `CallbackSet`,
+`ODEProblem`, `solve`, `init`, `solve!`) are now accessed through
+`ClimaTimeSteppers` instead of `SciMLBase`.
+
+`SciMLBase` is removed as a direct dependency and `ClimaTimeSteppers`
+(≥ 0.8.11) is added as a direct dependency, as it re-exports the
+required SciML interface.
+
 v0.3.3
 ------
 
