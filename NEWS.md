@@ -4,6 +4,20 @@ main
 -------
 
 
+v0.3.5
+------
+
+#### Allow ClimaTimeSteppers v0.9 PR[#168](https://github.com/CliMA/ClimaDiagnostics.jl/pull/168)
+
+v0.3.4
+------
+
+#### Use updated ClimaTimeSteppers interface PR[#164](https://github.com/CliMA/ClimaDiagnostics.jl/pull/164)
+
+#### Use Julia v1.12 in CI PR[#158](https://github.com/CliMA/ClimaDiagnostics.jl/pull/158)
+
+#### Bump GHA versions PR[#163](https://github.com/CliMA/ClimaDiagnostics.jl/pull/163) PR[#162](https://github.com/CliMA/ClimaDiagnostics.jl/pull/162)
+
 v0.3.3
 ------
 
