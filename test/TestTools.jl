@@ -84,7 +84,7 @@ function SphericalShellSpace(;
         z_surface =
             Geometry.ZPoint.(
                 cosd.(Fields.coordinate_field(horzspace).lat) .+
-                cosd.(Fields.coordinate_field(horzspace).long) .+ 1
+                cosd.(Fields.coordinate_field(horzspace).long) .+ 1,
             )
         hypsography = ClimaCore.Hypsography.LinearAdaption(z_surface)
     else
