@@ -1658,3 +1658,231 @@ end
         end
     end
 end
+
+@testset "NamedTuple diagnostics" begin
+    space = SphericalShellSpace()
+    NUM = 10
+    z = Fields.coordinate_field(space).z
+
+    p = (; start_date = Dates.DateTime(2010, 1, 1))
+    t = 10.0
+
+    # `field` is passed directly to interpolate_field!/write_field! below
+    # (matching the pattern used throughout this file), so this is never called.
+    nt_compute!(out, u, p, t) = nothing
+
+    # --- Flat NamedTuple: one variable per key, units via a NamedTuple ---
+    flat_field = map(zz -> (; cond = zz, evap = 2 * zz, acc = 3 * zz), z)
+    flat_writer = Writers.NetCDFWriter(
+        space,
+        output_dir;
+        num_points = (NUM, 2NUM, 3NUM),
+        start_date = Dates.DateTime(2010, 1, 1),
+    )
+    flat_diag = ClimaDiagnostics.ScheduledDiagnostic(;
+        variable = ClimaDiagnostics.DiagnosticVariable(;
+            compute! = nt_compute!,
+            short_name = "clw_tend",
+            long_name = "cloud tendency",
+            units = (; cond = "kg/kg/s", evap = "kg/kg/s", acc = "1/s"),
+        ),
+        output_short_name = "nt_flat",
+        output_long_name = "cloud tendency",
+        output_writer = flat_writer,
+    )
+    Writers.interpolate_field!(flat_writer, flat_field, flat_diag, (;), p, t)
+    Writers.write_field!(flat_writer, flat_field, flat_diag, (;), p, t)
+    # Write a second time: regression for the shared-time-index bug (all
+    # components must land at the same time index, and time/date bounds for
+    # every index must be written, i.e. no fill values).
+    Writers.write_field!(flat_writer, flat_field, flat_diag, (;), p, t)
+    close(flat_writer)
+
+    NCDatasets.NCDataset(joinpath(output_dir, "nt_flat.nc")) do nc
+        comps = sort([k for k in keys(nc) if startswith(k, "clw_tend")])
+        @test comps == ["clw_tend_acc", "clw_tend_cond", "clw_tend_evap"]
+        @test nc["clw_tend_cond"].attrib["units"] == "kg/kg/s"
+        @test nc["clw_tend_acc"].attrib["units"] == "1/s"
+        @test nc["clw_tend_cond"].attrib["short_name"] == "clw_tend_cond"
+        @test occursin("cond", nc["clw_tend_cond"].attrib["long_name"])
+        # 2 writes (time), horizontal dims; vertical uses the space levels
+        @test size(nc["clw_tend_cond"])[1:3] == (2, NUM, 2NUM)
+        @test nc["time"][:] == [10.0, 10.0]
+        @test !any(>(1e30), Array(nc["date_bnds"].var))
+        # The flat field is z -> (cond=z, evap=2z, acc=3z); the per-component
+        # scaling must be preserved after the (independent) interpolations.
+        cond_arr = Array(nc["clw_tend_cond"])
+        evap_arr = Array(nc["clw_tend_evap"])
+        acc_arr = Array(nc["clw_tend_acc"])
+        @test evap_arr ≈ 2 .* cond_arr
+        @test acc_arr ≈ 3 .* cond_arr
+    end
+
+    # --- Nested NamedTuple: recursive flatten, units via a function ---
+    nested_field =
+        map(zz -> (; warm = (; au = zz, ac = 2 * zz), tot = 9 * zz), z)
+    nested_writer = Writers.NetCDFWriter(
+        space,
+        output_dir;
+        num_points = (NUM, 2NUM, 3NUM),
+        start_date = Dates.DateTime(2010, 1, 1),
+    )
+    nested_diag = ClimaDiagnostics.ScheduledDiagnostic(;
+        variable = ClimaDiagnostics.DiagnosticVariable(;
+            compute! = nt_compute!,
+            short_name = "proc",
+            long_name = "processes",
+            units = chain -> "1/s",
+        ),
+        output_short_name = "nt_nested",
+        output_long_name = "processes",
+        output_writer = nested_writer,
+    )
+    Writers.interpolate_field!(
+        nested_writer,
+        nested_field,
+        nested_diag,
+        (;),
+        p,
+        t,
+    )
+    Writers.write_field!(nested_writer, nested_field, nested_diag, (;), p, t)
+    close(nested_writer)
+    NCDatasets.NCDataset(joinpath(output_dir, "nt_nested.nc")) do nc
+        comps = sort([k for k in keys(nc) if startswith(k, "proc")])
+        @test comps == ["proc_tot", "proc_warm_ac", "proc_warm_au"]
+        @test nc["proc_warm_au"].attrib["units"] == "1/s"
+        @test size(nc["proc_tot"])[1:3] == (1, NUM, 2NUM)
+    end
+
+    # --- Scalar diagnostic is unchanged (regression) ---
+    scalar_writer = Writers.NetCDFWriter(
+        space,
+        output_dir;
+        num_points = (NUM, 2NUM, 3NUM),
+        start_date = Dates.DateTime(2010, 1, 1),
+    )
+    scalar_diag = ClimaDiagnostics.ScheduledDiagnostic(;
+        variable = ClimaDiagnostics.DiagnosticVariable(;
+            compute! = nt_compute!,
+            short_name = "rho",
+            long_name = "density",
+            units = "kg/m3",
+        ),
+        output_short_name = "nt_scalar",
+        output_long_name = "density",
+        output_writer = scalar_writer,
+    )
+    Writers.interpolate_field!(scalar_writer, z, scalar_diag, (;), p, t)
+    Writers.write_field!(scalar_writer, z, scalar_diag, (;), p, t)
+    close(scalar_writer)
+    NCDatasets.NCDataset(joinpath(output_dir, "nt_scalar.nc")) do nc
+        @test haskey(nc, "rho")  # bare short name, no component suffix
+        @test nc["rho"].attrib["units"] == "kg/m3"
+        @test nc["rho"].attrib["short_name"] == "rho"
+        @test nc["rho"].attrib["long_name"] == "density"
+    end
+
+    # --- PointSpace fan-out via set_pointspace_output! ---
+    point_space = Spaces.PointSpace(ClimaComms.context(), Geometry.ZPoint(1.0))
+    point_nt = map(
+        _z -> (; cond = 1.0, evap = 2.0),
+        Fields.coordinate_field(point_space).z,
+    )
+    point_writer = Writers.NetCDFWriter(point_space, output_dir)
+    point_diag = ClimaDiagnostics.ScheduledDiagnostic(;
+        variable = ClimaDiagnostics.DiagnosticVariable(;
+            compute! = nt_compute!,
+            short_name = "pnt",
+            long_name = "point nt",
+            units = (; cond = "a", evap = "b"),
+        ),
+        output_short_name = "nt_point",
+        output_long_name = "point nt",
+        output_writer = point_writer,
+    )
+    Writers.set_pointspace_output!(point_writer, point_diag, point_nt)
+    Writers.write_field!(point_writer, point_nt, point_diag, (;), p, t)
+    Writers.set_pointspace_output!(point_writer, point_diag, point_nt)
+    Writers.write_field!(point_writer, point_nt, point_diag, (;), p, t)
+    close(point_writer)
+    NCDatasets.NCDataset(joinpath(output_dir, "nt_point.nc")) do nc
+        @test nc["pnt_cond"][:] == [1.0, 1.0]
+        @test nc["pnt_evap"][:] == [2.0, 2.0]
+        @test nc["pnt_cond"].attrib["units"] == "a"
+        @test nc["pnt_evap"].attrib["units"] == "b"
+    end
+
+    # --- HDF5Writer + DictWriter take NamedTuple fields unsplit ---
+    # (HDF5 also exercises the non-String `units` attribute path)
+    h5_writer = Writers.HDF5Writer(output_dir)
+    h5_diag = ClimaDiagnostics.ScheduledDiagnostic(;
+        variable = ClimaDiagnostics.DiagnosticVariable(;
+            compute! = nt_compute!,
+            short_name = "h5nt",
+            units = chain -> "1/s",
+        ),
+        output_short_name = "nt_h5",
+        output_long_name = "nt h5",
+        output_writer = h5_writer,
+    )
+    Writers.write_field!(h5_writer, nested_field, h5_diag, (;), p, 0.0)
+    @test isfile(joinpath(output_dir, "nt_h5_0.0.h5"))
+    # The whole NamedTuple field is stored as one dataset, so per-component
+    # `units` (here a function of the property chain) are resolved for every
+    # leaf and flattened into the single `variable_units` attribute.
+    h5 = ClimaCore.InputOutput.HDF5
+    h5_units = h5.h5open(joinpath(output_dir, "nt_h5_0.0.h5"), "r") do f
+        h5.read_attribute(f, "variable_units")
+    end
+    @test h5_units == "warm.au: 1/s, warm.ac: 1/s, tot: 1/s"
+
+    # Same, but with per-component units given as a NamedTuple
+    h5_writer_nt = Writers.HDF5Writer(output_dir)
+    h5_diag_nt = ClimaDiagnostics.ScheduledDiagnostic(;
+        variable = ClimaDiagnostics.DiagnosticVariable(;
+            compute! = nt_compute!,
+            short_name = "h5ntnt",
+            units = (; warm = (; au = "a", ac = "b"), tot = "c"),
+        ),
+        output_short_name = "nt_h5_nt",
+        output_long_name = "nt h5 nt",
+        output_writer = h5_writer_nt,
+    )
+    Writers.write_field!(h5_writer_nt, nested_field, h5_diag_nt, (;), p, 0.0)
+    h5_units_nt = h5.h5open(joinpath(output_dir, "nt_h5_nt_0.0.h5"), "r") do f
+        h5.read_attribute(f, "variable_units")
+    end
+    @test h5_units_nt == "warm.au: a, warm.ac: b, tot: c"
+
+    # A plain String `units` is written unchanged (unchanged behavior)
+    h5_writer_s = Writers.HDF5Writer(output_dir)
+    h5_diag_s = ClimaDiagnostics.ScheduledDiagnostic(;
+        variable = ClimaDiagnostics.DiagnosticVariable(;
+            compute! = nt_compute!,
+            short_name = "h5s",
+            units = "kg/m3",
+        ),
+        output_short_name = "nt_h5_s",
+        output_long_name = "nt h5 s",
+        output_writer = h5_writer_s,
+    )
+    Writers.write_field!(h5_writer_s, nested_field, h5_diag_s, (;), p, 0.0)
+    h5_units_s = h5.h5open(joinpath(output_dir, "nt_h5_s_0.0.h5"), "r") do f
+        h5.read_attribute(f, "variable_units")
+    end
+    @test h5_units_s == "kg/m3"
+
+    dict_writer = Writers.DictWriter()
+    dict_diag = ClimaDiagnostics.ScheduledDiagnostic(;
+        variable = ClimaDiagnostics.DiagnosticVariable(;
+            compute! = nt_compute!,
+            short_name = "dnt",
+        ),
+        output_short_name = "nt_dict",
+        output_long_name = "nt dict",
+        output_writer = dict_writer,
+    )
+    Writers.write_field!(dict_writer, nested_field, dict_diag, (;), p, 0.0)
+    @test eltype(dict_writer["nt_dict"][0.0]) <: NamedTuple
+end
