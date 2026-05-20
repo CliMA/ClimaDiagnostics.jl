@@ -2,13 +2,13 @@ import Accessors
 import NVTX
 import ClimaTimeSteppers
 import ClimaComms
-import ClimaCore: Grids, Spaces
+import ClimaCore: Fields, Grids, Spaces
 
 import ..Interpolators:
     interpolate_to_pressure_coords, interpolate_to_pressure_coords!, update!
 import .Schedules: DivisorSchedule, EveryDtSchedule
-import .Writers:
-    interpolate_field!, write_field!, sync, AbstractWriter, NetCDFWriter
+import .Writers: interpolate_field!, write_field!, sync, AbstractWriter
+import .Writers: NetCDFWriter, set_pointspace_output!
 
 import ..Writers: AbstractZSamplingMethod, RealPressureLevelsMethod
 
@@ -111,6 +111,16 @@ function DiagnosticsHandler(scheduled_diagnostics, Y, p, t; dt = nothing)
         isa_time_reduction = !isnothing(diag.reduction_time_func)
 
         out_field = compute_field(diag, Y, p, t)
+        # Warn once about misspecified per-component `units`. Guarded because
+        # on scalar / `Geometry.AxisVector` eltypes the property-chain walk
+        # would emit false positives.
+        if eltype(out_field) <: NamedTuple
+            DiagnosticVariables.units_warnings(
+                diag.variable.units,
+                Fields.property_chains(out_field);
+                name = diag.variable.short_name,
+            )
+        end
         # We call `copy` to acquire ownership of the data in case compute! returned a
         # reference.
         push!(storage, copy(out_field))
@@ -123,8 +133,7 @@ function DiagnosticsHandler(scheduled_diagnostics, Y, p, t; dt = nothing)
                 # netCDFWriter expects diagnostic to be in preallocated_output_arrays
                 if diag.output_writer isa NetCDFWriter &&
                    ClimaComms.iamroot(ClimaComms.context(storage[i]))
-                    diag.output_writer.preallocated_output_arrays[diag] =
-                        copy(parent(storage[i]))
+                    set_pointspace_output!(diag.output_writer, diag, storage[i])
                 end
             else
                 interpolate_field!(
@@ -450,8 +459,11 @@ NVTX.@annotate function orchestrate_diagnostics(
             if diag.output_writer isa NetCDFWriter && ClimaComms.iamroot(
                 ClimaComms.context(diagnostic_handler.storage[diag_index]),
             )
-                diag.output_writer.preallocated_output_arrays[diag] =
-                    copy(parent(diagnostic_handler.storage[diag_index]))
+                set_pointspace_output!(
+                    diag.output_writer,
+                    diag,
+                    diagnostic_handler.storage[diag_index],
+                )
             end
         else
             interpolate_field!(

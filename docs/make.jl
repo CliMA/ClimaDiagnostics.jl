@@ -9,6 +9,7 @@ pages = [
     "Overview" => "index.md",
     "User guide" => "user_guide.md",
     "Saving output" => "writers.md",
+    "NamedTuple diagnostics" => "namedtuple_diagnostics.md",
     "How to add ClimaDiagnostics to a package" => "developer_guide.md",
     "Internals" => "internals.md",
     "APIs" => "api.md",

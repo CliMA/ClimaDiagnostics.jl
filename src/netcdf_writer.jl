@@ -64,8 +64,9 @@ struct NetCDFWriter{
     sampled."""
     z_sampling_method::ZSM
 
-    """Areas of memory preallocated where the interpolation output is saved. Only the root
-    process uses this."""
+    """Areas of memory preallocated where the interpolation output is saved.
+    Per diagnostic: a single array for a scalar field, or a `Dict(chain => array)`
+    for a `Field` of `NamedTuple`s. Only the root process uses this."""
     preallocated_output_arrays::DI
 
     """Callable that determines when to call NetCDF.sync. NetCDF.sync is needed to flush the
@@ -247,10 +248,7 @@ function NetCDFWriter(
             maybe_move_to_cpu(interpolate(remapper, coords_z))
     end
 
-    preallocated_arrays =
-        ClimaComms.iamroot(comms_ctx) ?
-        Dict{ScheduledDiagnostic, ClimaComms.array_type(space)}() :
-        Dict{ScheduledDiagnostic, Nothing}()
+    preallocated_arrays = Dict{ScheduledDiagnostic, Any}()
 
     unsynced_datasets = Set{NCDatasets.NCDataset}()
 
@@ -339,10 +337,7 @@ function NetCDFWriter(
             maybe_move_to_cpu(interpolate(remapper, coords_z))
     end
 
-    preallocated_arrays =
-        ClimaComms.iamroot(comms_ctx) ?
-        Dict{ScheduledDiagnostic, ClimaComms.array_type(space)}() :
-        Dict{ScheduledDiagnostic, Nothing}()
+    preallocated_arrays = Dict{ScheduledDiagnostic, Any}()
 
     unsynced_datasets = Set{NCDatasets.NCDataset}()
     return NetCDFWriter{
@@ -389,10 +384,7 @@ function NetCDFWriter(
     kwargs...,
 )
     comms_ctx = ClimaComms.context(space)
-    preallocated_arrays =
-        ClimaComms.iamroot(comms_ctx) ?
-        Dict{ScheduledDiagnostic, ClimaComms.array_type(space)}() :
-        Dict{ScheduledDiagnostic, Nothing}()
+    preallocated_arrays = Dict{ScheduledDiagnostic, Any}()
     unsynced_datasets = Set{NCDatasets.NCDataset}()
     horizontal_method = SpectralElementRemapping() # no horizontal remapping for point space
     return NetCDFWriter{
@@ -425,6 +417,61 @@ function NetCDFWriter(
         init_time,
         horizontal_method,
     )
+end
+
+# A diagnostic whose computed `Field` has a `NamedTuple` element type is written
+# as one scalar NetCDF variable per (possibly nested) component. The remapper is
+# scalar-only, so we always split into scalar sub-fields *before* interpolating.
+
+"""
+    output_property_chains(field)
+
+Return the list of property chains identifying the scalar components to write
+for `field`. For a scalar field this is a single empty chain `()`; for a
+`Field` of `NamedTuple`s it is one chain per (possibly nested) leaf.
+"""
+output_property_chains(field) =
+    eltype(field) <: NamedTuple ? Fields.property_chains(field) : ((),)
+
+"""
+    component_field(field, property_chain)
+
+Return the scalar sub-`Field` of `field` identified by `property_chain` (the
+field itself when the chain is empty).
+"""
+component_field(field, ::Tuple{}) = field
+component_field(field, property_chain) =
+    Fields.single_field(field, property_chain)
+
+# NetCDF variable name for a component: the bare short name for a scalar
+# diagnostic (unchanged), or `<short_name>_<chain...>` for a component.
+component_short_name(short_name, ::Tuple{}) = short_name
+component_short_name(short_name, property_chain) =
+    string(short_name, "_", join(string.(property_chain), "_"))
+
+component_long_name(long_name, ::Tuple{}) = long_name
+component_long_name(long_name, property_chain) =
+    string(long_name, " (", join(string.(property_chain), "."), ")")
+
+"""
+    set_pointspace_output!(writer::NetCDFWriter, diagnostic, field)
+
+Populate `writer.preallocated_output_arrays` for a `PointSpace` `field`, which
+needs no remapping. `NamedTuple`-valued fields are split into one entry per
+scalar component (keyed by property chain), mirroring [`interpolate_field!`].
+"""
+function set_pointspace_output!(writer::NetCDFWriter, diagnostic, field)
+    if eltype(field) <: NamedTuple
+        store = Dict{Tuple, Any}()
+        for property_chain in Fields.property_chains(field)
+            store[property_chain] =
+                copy(parent(component_field(field, property_chain)))
+        end
+        writer.preallocated_output_arrays[diagnostic] = store
+    else
+        writer.preallocated_output_arrays[diagnostic] = copy(parent(field))
+    end
+    return nothing
 end
 
 """
@@ -509,7 +556,22 @@ NVTX.@annotate function interpolate_field!(
     #
     # The first time we call this, we call interpolate and allocate a new array.
     # Future calls are in-place
-    if haskey(writer.preallocated_output_arrays, diagnostic)
+    if eltype(field) <: NamedTuple
+        # One scalar sub-field per (possibly nested) NamedTuple component.
+        # The remapper is shared (it only depends on the space).
+        if !haskey(writer.preallocated_output_arrays, diagnostic)
+            writer.preallocated_output_arrays[diagnostic] = Dict{Tuple, Any}()
+        end
+        store = writer.preallocated_output_arrays[diagnostic]
+        for property_chain in Fields.property_chains(field)
+            sub = component_field(field, property_chain)
+            if haskey(store, property_chain)
+                interpolate!(store[property_chain], remapper, sub)
+            else
+                store[property_chain] = interpolate(remapper, sub)
+            end
+        end
+    elseif haskey(writer.preallocated_output_arrays, diagnostic)
         interpolate!(
             writer.preallocated_output_arrays[diagnostic],
             remapper,
@@ -564,13 +626,8 @@ NVTX.@annotate function write_field!(
 
     maybe_move_to_cpu =
         ClimaComms.device(field) isa ClimaComms.CUDADevice ? Array : identity
-    interpolated_field =
-        maybe_move_to_cpu(writer.preallocated_output_arrays[diagnostic])
-
-    if space isa Spaces.PointSpace
-        # If the space is a point space, we have to remove the singleton dimension
-        interpolated_field = interpolated_field[]
-    end
+    # Per-component `Dict` for NamedTuple diagnostics; an array for scalars.
+    prealloc = writer.preallocated_output_arrays[diagnostic]
 
     FT = Spaces.undertype(space)
 
@@ -645,20 +702,6 @@ NVTX.@annotate function write_field!(
         )
     end
 
-    (v, temporal_size) = get_var_and_t_index!(
-        nc,
-        FT,
-        writer,
-        interpolated_field,
-        diagnostic,
-        dim_names,
-        start_date,
-    )
-
-    # We need to write to the next position after what we read from the data (or the first
-    # position ever if we are writing the file for the first time)
-    time_index = temporal_size + 1
-
     # Time handling for reduced vs instantaneous diagnostics:
     # - For reduced diagnostics: store time as the START of the reduction
     #   period, with time_bnds showing [start, end] of the period.
@@ -666,17 +709,56 @@ NVTX.@annotate function write_field!(
     #   time_bnds showing [previous_time, current_time].
     isa_time_reduction = !isnothing(diagnostic.reduction_time_func)
     (; init_time) = writer
-    append_temporal_values!(
-        nc,
-        isa_time_reduction,
-        t,
-        start_date,
-        init_time,
-        time_index,
-    )
-
+    var = diagnostic.variable
     colons = ntuple(_ -> Colon(), length(dim_names))
-    v[time_index, colons...] = interpolated_field
+
+    # All components share the `time` dimension, so the time coordinate is
+    # appended once per write, not once per component.
+    time_index = nothing
+    for property_chain in output_property_chains(field)
+        arr = prealloc isa AbstractDict ? prealloc[property_chain] : prealloc
+        interpolated_field = maybe_move_to_cpu(arr)
+        if space isa Spaces.PointSpace
+            # Point space: remove the singleton dimension
+            interpolated_field = interpolated_field[]
+        end
+
+        varname = component_short_name(var.short_name, property_chain)
+        long_name =
+            component_long_name(output_long_name(diagnostic), property_chain)
+        units =
+            string(something(component_units(var.units, property_chain), ""))
+
+        (v, temporal_size) = get_var_and_t_index!(
+            nc,
+            FT,
+            writer,
+            interpolated_field,
+            diagnostic,
+            varname,
+            long_name,
+            units,
+            dim_names,
+            start_date,
+        )
+
+        # Time index captured once before any component is written: each
+        # write extends the shared unlimited `time` dim, which would
+        # otherwise inflate the index seen by later components.
+        if isnothing(time_index)
+            time_index = temporal_size + 1
+            append_temporal_values!(
+                nc,
+                isa_time_reduction,
+                t,
+                start_date,
+                init_time,
+                time_index,
+            )
+        end
+
+        v[time_index, colons...] = interpolated_field
+    end
 
     # Add file to list of files that might need manual sync
     push!(writer.unsynced_datasets, nc)
@@ -703,14 +785,77 @@ end
         writer::NetCDFWriter,
         interpolated_field,
         diagnostic,
+        varname,
+        long_name,
+        units,
         dim_names,
         start_date,
     )
 
-Return the `var`iable stored in `nc` and the current temporal size, or if the
-`var`iable does not exist, then initialize and store the variable in `nc` with
-attributes about the `var`iable, and return the new NetCDF variable and 0 as the
-temporal size.
+Return the variable named `varname` stored in `nc` and the current temporal
+size, or if the variable does not exist, then initialize and store it in `nc`
+with `long_name`/`units` (and the other variable attributes), returning the new
+NetCDF variable and 0 as the temporal size.
+
+`varname`/`long_name`/`units` are passed in (rather than read off
+`diagnostic.variable`) because a `NamedTuple`-valued diagnostic produces one
+NetCDF variable per component, each with its own name, long name, and units.
+"""
+function get_var_and_t_index!(
+    nc,
+    FT,
+    writer::NetCDFWriter,
+    interpolated_field,
+    diagnostic,
+    varname,
+    long_name,
+    units,
+    dim_names,
+    start_date,
+)
+    var = diagnostic.variable
+    if haskey(nc, "$(varname)")
+        # We already have something in the file
+        v = nc["$(varname)"]
+        temporal_size, spatial_size... = size(v)
+        interpolated_size = size(interpolated_field)
+        spatial_size == interpolated_size ||
+            error("incompatible dimensions for $(varname)")
+    else
+        v = NCDatasets.defVar(
+            nc,
+            "$(varname)",
+            FT,
+            ("time", dim_names...),
+            deflatelevel = writer.compression_level,
+        )
+        v.attrib["short_name"] = varname::String
+        v.attrib["long_name"] = long_name::String
+        v.attrib["units"] = units::String
+        v.attrib["comments"] = var.comments::String
+        if !isnothing(start_date) && !haskey(v.attrib, "start_date")
+            v.attrib["start_date"] = string(start_date)::String
+        end
+        temporal_size = 0
+    end
+    return (v, temporal_size)
+end
+
+"""
+    get_var_and_t_index!(
+        nc,
+        FT,
+        writer::NetCDFWriter,
+        interpolated_field,
+        diagnostic,
+        dim_names,
+        start_date,
+    )
+
+Backwards-compatible method that derives the variable name, long name, and
+units from `diagnostic` (`short_name`, [`output_long_name`](@ref), and `units`
+respectively). This is the scalar/single-variable behavior; the
+`NamedTuple`-aware fan-out uses the explicit-name method above.
 """
 function get_var_and_t_index!(
     nc,
@@ -722,31 +867,18 @@ function get_var_and_t_index!(
     start_date,
 )
     var = diagnostic.variable
-    if haskey(nc, "$(var.short_name)")
-        # We already have something in the file
-        v = nc["$(var.short_name)"]
-        temporal_size, spatial_size... = size(v)
-        interpolated_size = size(interpolated_field)
-        spatial_size == interpolated_size ||
-            error("incompatible dimensions for $(var.short_name)")
-    else
-        v = NCDatasets.defVar(
-            nc,
-            "$(var.short_name)",
-            FT,
-            ("time", dim_names...),
-            deflatelevel = writer.compression_level,
-        )
-        v.attrib["short_name"] = var.short_name::String
-        v.attrib["long_name"] = output_long_name(diagnostic)::String
-        v.attrib["units"] = var.units::String
-        v.attrib["comments"] = var.comments::String
-        if !isnothing(start_date) && !haskey(v.attrib, "start_date")
-            v.attrib["start_date"] = string(start_date)::String
-        end
-        temporal_size = 0
-    end
-    return (v, temporal_size)
+    return get_var_and_t_index!(
+        nc,
+        FT,
+        writer,
+        interpolated_field,
+        diagnostic,
+        var.short_name,
+        output_long_name(diagnostic),
+        string(var.units),
+        dim_names,
+        start_date,
+    )
 end
 
 """

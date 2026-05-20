@@ -3,6 +3,39 @@
 main
 -------
 
+v0.3.6
+------
+
+## Features
+
+### Support `NamedTuple`-valued diagnostics (one variable per component)
+
+A `DiagnosticVariable` whose `compute`/`compute!` returns a `Field` whose
+pointwise element type is a `NamedTuple` is now automatically written as one
+scalar diagnostic per (possibly nested) component. A single compute function
+(for example, the per-process tendencies of a parameterization in a debug
+mode) therefore fans out into per-component diagnostics with no extra code.
+
+For the `NetCDFWriter`, each component becomes its own variable named
+`<short_name>_<component_path>` (e.g. `clw_tend_cond`, `clw_tend_evap`),
+written through the usual scalar path; scalar diagnostics are unchanged. The
+`HDF5Writer` and `DictWriter` store the `NamedTuple` field whole, as before.
+
+`units` (and `long_name`) may now be specified per component, either as a
+`NamedTuple` mapping each component to its units, or as a function
+`property_chain -> units`. A plain `String` is still applied to every
+component.
+
+```julia
+var = DiagnosticVariable(;
+    short_name = "clw_tend",
+    long_name = "cloud liquid water tendency",
+    units = (; cond = "kg kg^-1 s^-1", evap = "kg kg^-1 s^-1"),
+    compute = (state, cache, time) -> state.microphysics_tendencies,
+)
+```
+
+See the "NamedTuple diagnostics" page in the documentation for details.
 
 v0.3.5
 ------

@@ -19,6 +19,7 @@ import ClimaCore
 
 import ..AbstractWriter, ..ScheduledDiagnostic
 import ..ScheduledDiagnostics: output_short_name, output_long_name
+import ..DiagnosticVariables: component_units, units_attribute
 
 function write_field!(writer::AbstractWriter, field, diagnostic, u, p, t)
     # Nothing to be done here :)

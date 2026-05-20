@@ -184,3 +184,62 @@ include("TestTools.jl")
     @test length(handler_dup.scheduled_diagnostics) == 2
 
 end
+
+@testset "Diagnostics: NamedTuple-valued reduction" begin
+    # Regression for the per-leaf reduction path: a NamedTuple-eltype
+    # diagnostic with `reduction_time_func = +` driven through the real
+    # handler (the `writers.jl` tests call `write_field!` directly and
+    # skip this path).
+    t0 = 0.0
+    tf = 1.0
+    dt = 0.1
+    space = ColumnCenterFiniteDifferenceSpace()
+    Y = ClimaCore.Fields.FieldVector(; my_var = ones(space))
+    p = (; tau = -0.1)
+
+    exp_tendency!(dY, Y, p, _) = @. dY.my_var = p.tau * Y.my_var
+
+    # Returns a Field whose pointwise eltype is `NamedTuple{(:a, :b)}` with
+    # per-leaf values `(a = t, b = 2t)`.
+    function compute_nt(u, _, t)
+        z = ClimaCore.Fields.coordinate_field(axes(u.my_var)).z
+        return map(_ -> (; a = float(t), b = 2 * float(t)), z)
+    end
+
+    nt_var = ClimaDiagnostics.DiagnosticVariable(;
+        compute = compute_nt,
+        short_name = "nt",
+        long_name = "named tuple",
+        units = (; a = "u", b = "u"),
+    )
+
+    dict_writer = Writers.DictWriter()
+    nt_diag = ClimaDiagnostics.ScheduledDiagnostic(;
+        variable = nt_var,
+        output_writer = dict_writer,
+        reduction_time_func = +,
+        output_schedule_func = Schedules.DivisorSchedule(5),
+    )
+    short_name = ScheduledDiagnostics.output_short_name(nt_diag)
+
+    handler = ClimaDiagnostics.DiagnosticsHandler([nt_diag], Y, p, t0; dt)
+    diag_cb = ClimaDiagnostics.DiagnosticsCallback(handler)
+
+    prob = ClimaTimeSteppers.ODEProblem(
+        ClimaTimeSteppers.ClimaODEFunction(T_exp! = exp_tendency!),
+        Y,
+        (t0, tf),
+        p,
+    )
+    algo = ClimaTimeSteppers.ExplicitAlgorithm(ClimaTimeSteppers.RK4())
+    ClimaTimeSteppers.solve(prob, algo, dt = dt, callback = diag_cb)
+
+    # `DictWriter` keeps the NamedTuple-eltype field whole.
+    out = dict_writer[short_name][0.5]
+    @test eltype(out) <: NamedTuple
+    # The `+` accumulator broadcasts per-leaf: at t = 0.5 it has summed
+    # 0.0, 0.1, ..., 0.5 in `a` and twice that in `b`.
+    expected_a = sum(t0:dt:0.5)
+    @test all(parent(out.a) .≈ expected_a)
+    @test all(parent(out.b) .≈ 2 * expected_a)
+end

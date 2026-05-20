@@ -49,7 +49,12 @@ Keyword arguments
 - `standard_name`: Standard name, as in
                    http://cfconventions.org/Data/cf-standard-names/71/build/cf-standard-name-table.html
 
-- `units`: Physical units of the variable.
+- `units`: Physical units of the variable. For a diagnostic whose `compute`/`compute!`
+           returns a `Field` of `NamedTuple`s (one scalar diagnostic per entry), `units`
+           may also be a `NamedTuple` mapping each component to its own units string, or a
+           function `property_chain -> units` (where `property_chain` is a tuple of
+           `Symbol`s identifying the component, e.g. `(:warm, :autoconversion)`). A plain
+           string is applied to every component.
 
 - `comments`: More verbose explanation of what the variable is, or comments related to how
               it is defined or computed.
@@ -63,7 +68,7 @@ struct DiagnosticVariable{
     short_name::String
     long_name::String
     standard_name::String
-    units::String
+    units::Union{AbstractString, NamedTuple, Function}
     comments::String
 end
 
@@ -195,5 +200,95 @@ function descriptive_long_name(
         suffix = "Instantaneous"
     end
     return "$(var), $(suffix)"
+end
+
+"""
+    component_units(units, property_chain)
+
+Resolve the units for one scalar component of a (possibly composite,
+i.e. `NamedTuple`-valued) diagnostic field.
+
+`property_chain` is the `Tuple` of accessors identifying the component, as
+produced by `ClimaCore.Fields.property_chains`: `Symbol`s for `NamedTuple`
+field names and `Int`s for `Tuple`/`NTuple` element indices. Its length is
+the nesting depth, and it is the empty tuple `()` for a plain scalar field.
+
+- a `String` (or any `AbstractString`) is used for every component;
+- a `Function` is called as `units(property_chain)`; it should return the
+  units string, or `nothing` if the component has no units;
+- a `NamedTuple` is descended following `property_chain` (supporting nested
+  `NamedTuple`s); as a convenience, a flat `NamedTuple` keyed by the leaf
+  name is also accepted.
+
+Returns `nothing` when there is no entry for the component (callers turn this
+into an empty units field; [`units_warnings`](@ref) reports it). An entry
+explicitly set to `""` is returned as `""`: a deliberate empty value, not a
+mismatch.
+"""
+component_units(units::AbstractString, _) = units
+component_units(units, property_chain) = units(property_chain)
+function component_units(units::NamedTuple, property_chain)
+    isempty(property_chain) && return units
+    key = first(property_chain)
+    rest = Base.tail(property_chain)
+    # `haskey(::NamedTuple, ::Int)` is positional indexing — an `Int` chain
+    # element (a `Tuple`/`NTuple` index) must NOT match a `NamedTuple` key.
+    # Guard both branches on `Symbol`; a non-`Symbol` resolves to `nothing`.
+    if key isa Symbol && haskey(units, key)
+        sub = getfield(units, key)
+        return isempty(rest) ? sub : component_units(sub, rest)
+    end
+    leaf = last(property_chain)
+    if leaf isa Symbol && haskey(units, leaf)
+        return getfield(units, leaf)
+    end
+    return nothing
+end
+
+"""
+    units_warnings(units, property_chains; name = "")
+
+Emit a one-time warning listing the components in `property_chains` whose
+`units` resolve to `nothing` (no entry) - their units field is left empty.
+
+A `String` never resolves to `nothing` (it is shared by every component, and
+the default `units` is `""`), so it is implicitly exempt. For a `Function`,
+returning `nothing` signals "no units" (warned) while returning `""` is a
+deliberate empty value (not warned); likewise a `NamedTuple` entry explicitly
+set to `""` is deliberate and not warned about.
+
+Intended to be called once per diagnostic (at `DiagnosticsHandler`
+construction).
+"""
+function units_warnings(units, property_chains; name = "")
+    no_units =
+        filter(c -> isnothing(component_units(units, c)), property_chains)
+    isempty(no_units) && return nothing
+    label = isempty(name) ? "" : " for \"$name\""
+    components = join((join(string.(c), '.') for c in no_units), ", ")
+    @warn "Missing `units`$label for component(s): $components. \
+           Their units attribute will be left empty."
+    return nothing
+end
+
+"""
+    units_attribute(units, property_chains)
+
+Render `units` as a single string, for a writer that stores a (possibly
+`NamedTuple`-valued) field as one dataset and therefore has a single `units`
+attribute for the whole field (e.g. the `HDF5Writer`).
+
+A plain `String` is returned unchanged. Otherwise the units of every component
+in `property_chains` are resolved with [`component_units`](@ref) and joined,
+e.g. `"warm.au: 1/s, warm.ac: 1/s, tot: 1/s"`. This keeps the attribute
+consistent with the per-variable `units` the `NetCDFWriter` writes.
+"""
+units_attribute(units::AbstractString, _) = units
+function units_attribute(units, property_chains)
+    labeled = map(property_chains) do chain
+        u = something(component_units(units, chain), "")
+        "$(join(string.(chain), '.')): $u"
+    end
+    return join(labeled, ", ")
 end
 end

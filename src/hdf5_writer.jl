@@ -1,5 +1,5 @@
 import ClimaComms
-import ClimaCore: InputOutput, Spaces
+import ClimaCore: Fields, InputOutput, Spaces
 import ClimaUtilities.TimeManager: ITime
 
 import NVTX
@@ -66,7 +66,8 @@ NVTX.@annotate function write_field!(
         "time" => time,
         "short_name" => diagnostic.output_short_name,
         "long_name" => diagnostic.output_long_name,
-        "variable_units" => var.units,
+        "variable_units" =>
+            units_attribute(var.units, Fields.property_chains(field)),
         "standard_variable_name" => var.standard_name,
     )
 
