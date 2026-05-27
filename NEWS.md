@@ -3,6 +3,9 @@
 main
 -------
 
+- `IntegratorWithDiagnostics` no longer reads `integrator.callback.continuous_callbacks`.
+  `CallbackSet` is now constructed from discrete callbacks only, matching the
+  corresponding upcoming change in ClimaTimeSteppers v1.0.
 
 v0.3.5
 ------
@@ -122,6 +125,7 @@ v0.2.13
 ## Features
 
 ### Add time and date bounds for netCDF files
+
 In a netCDF file produced by ClimaDiagnostics, there are now the dimensions
 `time_bnds` and `date_bnds`. Each time or date value is a representative of the
 corresponding time or date bound. For example, if the time is `10.0` and
@@ -145,6 +149,7 @@ specified with un-evaluated expressions (as provided by
 [LazyBroadcast.jl](https://github.com/CliMA/LazyBroadcast.jl)).
 
 Instead of
+
 ```julia
 function compute_ta!(out, state, cache, time)
     if isnothing(out)
@@ -154,7 +159,9 @@ function compute_ta!(out, state, cache, time)
     end
 end
 ```
+
 You can now write
+
 ```julia
 import LazyBroadcast: lazy
 
@@ -162,7 +169,9 @@ function compute_ta(state, cache, time)
     return lazy.(state.ta .- 273.15)
 end
 ```
+
 Or, for `Field`s
+
 ```julia
 function compute_ta(state, cache, time)
     return state.ta
@@ -183,18 +192,21 @@ small changes to the writers to support `ITime`s.
 
 v0.2.12
 -------
+
 ## Bug fixes
 
 - `NetCDFWriter` now correctly writes purely vertical and point spaces.
 
 v0.2.11
 -------
+
 ## Bug fixes
 
 - Times in `DictWriter` are now correctly sorted.
 
 v0.2.10
 -------
+
 ## Bug fixes
 
 Fixed broken `start_date` feature.
@@ -204,7 +216,7 @@ v0.2.9
 
 ## Features
 
-### Add a `start_date` attribute to NetCDFWriter PR [#94](https://github.com/CliMA/ClimaDiagnostics.jl/pull/94).
+### Add a `start_date` attribute to NetCDFWriter PR [#94](https://github.com/CliMA/ClimaDiagnostics.jl/pull/94)
 
 Prior to this version, users had to go to the simulation to find the start date.
 It can now be saved as an attribute, making it easily accessible.
@@ -212,7 +224,7 @@ To do so, users need to pass the kwarg `start_date` when calling `NetCDFWriter`.
 
 ## Bug fixes
 
-### Acquiring ownership with `compute!` PR [#88](https://github.com/CliMA/ClimaDiagnostics.jl/pull/88).
+### Acquiring ownership with `compute!` PR [#88](https://github.com/CliMA/ClimaDiagnostics.jl/pull/88)
 
 Prior to this version, `ClimaDiagnostics` would directly store use the output
 returned by `compute!` functions the first time they are called. This leads to
@@ -221,7 +233,7 @@ diagnostics would modify the same object. Now, `ClimaDiagnostics` makes a copy
 of the return object so that it is no longer necessary to do so in the
 `compute!` function.
 
-### Correctly de-duplicate `ScheduledDiagnostics` [#93](https://github.com/CliMA/ClimaDiagnostics.jl/pull/93).
+### Correctly de-duplicate `ScheduledDiagnostics` [#93](https://github.com/CliMA/ClimaDiagnostics.jl/pull/93)
 
 This version fixes a bug where `ScheduledDiagnostics` were not correctly
 de-duplicated because `==` was not implemented correctly.
@@ -252,6 +264,7 @@ v0.2.6
 ### More matadata in NetCDF files
 
 Release `0.2.6` improves compatibility with CF conventions by adding
+
 - standard and long name for the `time`, `longitude`, and `latitude` dimensions
 
 ## Bug fixes
@@ -270,7 +283,7 @@ v0.2.5
 
 ## Features
 
-### Add support for box spaces with LatLong points in `NetCDFWriter`.
+### Add support for box spaces with LatLong points in `NetCDFWriter`
 
 The `NetCDFWriter` can now work with regional boxes with `LatLong` points. Due
 to incompatibility in `ClimaCore`, only `LatLong` points are supported (and not
@@ -285,7 +298,6 @@ v0.2.4
 -------
 
 - Add `EveryCalendarDtSchedule` for schedules with calendar periods.
-
 
 v0.2.3
 -------

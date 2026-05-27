@@ -561,11 +561,9 @@ function IntegratorWithDiagnostics(
     )
     diagnostics_callback = DiagnosticsCallback(diagnostics_handler)
 
-    continuous_callbacks = integrator.callback.continuous_callbacks
     discrete_callbacks =
         (integrator.callback.discrete_callbacks..., diagnostics_callback)
-    callback =
-        ClimaTimeSteppers.CallbackSet(continuous_callbacks, discrete_callbacks)
+    callback = ClimaTimeSteppers.CallbackSet(discrete_callbacks...)
 
     Accessors.@reset integrator.callback = callback
 
