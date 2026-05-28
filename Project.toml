@@ -1,6 +1,6 @@
 name = "ClimaDiagnostics"
 uuid = "1ecacbb8-0713-4841-9a07-eb5aa8a2d53f"
-version = "0.3.5"
+version = "0.3.6"
 authors = ["CliMA Contributors <clima-software@caltech.edu>"]
 
 [deps]

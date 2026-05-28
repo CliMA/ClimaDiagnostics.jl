@@ -1,7 +1,7 @@
 # NEWS
 
-main
--------
+v0.3.6
+------
 
 - `IntegratorWithDiagnostics` no longer reads `integrator.callback.continuous_callbacks`.
   `CallbackSet` is now constructed from discrete callbacks only, matching the
