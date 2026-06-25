@@ -6,7 +6,7 @@ import ClimaCore: Grids, Spaces
 
 import ..Interpolators:
     interpolate_to_pressure_coords, interpolate_to_pressure_coords!, update!
-import .Schedules: DivisorSchedule, EveryDtSchedule
+import .Schedules: DivisorSchedule, EveryDtSchedule, should_accumulate
 import .Writers:
     interpolate_field!, write_field!, sync, AbstractWriter, NetCDFWriter
 
@@ -114,10 +114,10 @@ function DiagnosticsHandler(scheduled_diagnostics, Y, p, t; dt = nothing)
         # We call `copy` to acquire ownership of the data in case compute! returned a
         # reference.
         push!(storage, copy(out_field))
-        push!(counters, 1)
 
         # If it is not a reduction, call the output writer as well
         if !isa_time_reduction
+            push!(counters, 1)
             # no need to interpolate for point spaces
             if axes(storage[i]) isa Spaces.PointSpace
                 # netCDFWriter expects diagnostic to be in preallocated_output_arrays
@@ -138,14 +138,20 @@ function DiagnosticsHandler(scheduled_diagnostics, Y, p, t; dt = nothing)
             end
             write_field!(diag.output_writer, storage[i], diag, Y, p, t)
         else
-            # Add to the accumulator
-
-            # We use similar + .= instead of copy because CUDA 5.2 does not supported nested
-            # wrappers with view(reshape(view)) objects. See discussion in
-            # https://github.com/CliMA/ClimaAtmos.jl/pull/2579 and
-            # https://github.com/JuliaGPU/Adapt.jl/issues/21
+            # Seed with the t0 sample if its window is active, else the reduction identity.
+            accumulates = should_accumulate(diag.output_schedule_func, (; t))
+            push!(counters, accumulates ? 1 : 0)
+            # similar + .= instead of copy: CUDA 5.2 lacks nested view(reshape(view)) wrappers.
+            # See CliMA/ClimaAtmos.jl#2579 and JuliaGPU/Adapt.jl#21
             accumulators[i] = similar(storage[i])
-            accumulators[i] .= storage[i]
+            if accumulates
+                accumulators[i] .= storage[i]
+            else
+                fill!(
+                    parent(accumulators[i]),
+                    identity_of_reduction(diag.reduction_time_func),
+                )
+            end
         end
     end
     storage = value_types(storage)[storage...]
@@ -386,11 +392,15 @@ NVTX.@annotate function orchestrate_diagnostics(
     (; scheduled_diagnostics, scheduled_diagnostics_keys) = diagnostic_handler
     active_compute = Bool[]
     active_output = Bool[]
+    active_accumulate = Bool[]
     active_sync = Bool[]
 
     for diag in scheduled_diagnostics
+        sched = diag.output_schedule_func
+        # Evaluate `should_accumulate` before calling `sched`, which may advance its window.
+        push!(active_accumulate, should_accumulate(sched, integrator))
+        push!(active_output, sched(integrator))
         push!(active_compute, diag.compute_schedule_func(integrator))
-        push!(active_output, diag.output_schedule_func(integrator))
         push!(active_sync, _needs_sync(diag, integrator))
     end
 
@@ -399,7 +409,6 @@ NVTX.@annotate function orchestrate_diagnostics(
         active_compute[diag_index] || continue
         diag = scheduled_diagnostics[diag_index]
 
-        diagnostic_handler.counters[diag_index] += 1
         compute_field!(
             diagnostic_handler.storage[diag_index],
             diag,
@@ -412,10 +421,14 @@ NVTX.@annotate function orchestrate_diagnostics(
     # Process possible time reductions (now we have evaluated storage[diag])
     for diag_index in 1:length(scheduled_diagnostics)
         active_compute[diag_index] || continue
+        # Fold a sample only inside an active accumulation window.
+        active_accumulate[diag_index] || continue
         diag = scheduled_diagnostics[diag_index]
 
         isa_time_reduction = !isnothing(diag.reduction_time_func)
         if isa_time_reduction
+            # Count only the samples we actually fold, so averages divide by the right N.
+            diagnostic_handler.counters[diag_index] += 1
             diagnostic_handler.accumulators[diag_index] .=
                 diag.reduction_time_func.(
                     diagnostic_handler.accumulators[diag_index],

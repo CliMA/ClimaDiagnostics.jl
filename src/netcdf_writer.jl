@@ -3,7 +3,7 @@ import Dates
 import ClimaCore: Domains, Geometry, Grids, Fields, Meshes, Spaces
 import ClimaCore.Remapping: Remapper, interpolate, interpolate!
 import ClimaCore.Remapping: AbstractRemappingMethod, SpectralElementRemapping
-import ..Schedules: EveryStepSchedule
+import ..Schedules: EveryStepSchedule, output_period_bounds
 import ClimaUtilities.TimeManager: ITime, date
 
 import NCDatasets
@@ -666,13 +666,17 @@ NVTX.@annotate function write_field!(
     #   time_bnds showing [previous_time, current_time].
     isa_time_reduction = !isnothing(diagnostic.reduction_time_func)
     (; init_time) = writer
+    # Window reported by the output schedule (reductions only); `nothing` reconstructs bounds.
+    period_bounds =
+        isa_time_reduction ? _period_bounds(diagnostic, start_date) : nothing
     append_temporal_values!(
         nc,
         isa_time_reduction,
         t,
         start_date,
         init_time,
-        time_index,
+        time_index;
+        period_bounds,
     )
 
     colons = ntuple(_ -> Colon(), length(dim_names))
@@ -756,7 +760,8 @@ end
         t,
         start_date,
         init_time,
-        time_index,
+        time_index;
+        period_bounds = nothing,
     )
 
 Append temporal data to the temporal dimensions of `nc`.
@@ -775,18 +780,45 @@ function append_temporal_values!(
     t,
     start_date,
     init_time,
-    time_index,
+    time_index;
+    period_bounds = nothing,
 )
-    append_time_values!(nc, isa_time_reduction, time_index, t, init_time)
+    append_time_values!(
+        nc,
+        isa_time_reduction,
+        time_index,
+        t,
+        init_time;
+        period_bounds,
+    )
     append_date_values!(
         nc,
         isa_time_reduction,
         time_index,
         t,
         start_date,
-        init_time,
+        init_time;
+        period_bounds,
     )
     return nothing
+end
+
+"""
+    _period_bounds(diagnostic, start_date)
+
+If the output schedule reports an interval (`Schedules.output_period_bounds`) and a
+`start_date` is set, return its `(lo, hi]` window as `(; time, date)`, with `time` in seconds
+since `start_date`. Otherwise return `nothing` (bounds are reconstructed as before).
+"""
+function _period_bounds(diagnostic, start_date)
+    hasproperty(diagnostic, :output_schedule_func) || return nothing
+    interval = output_period_bounds(diagnostic.output_schedule_func)
+    (isnothing(interval) || isnothing(start_date)) && return nothing
+    sd = Dates.DateTime(start_date)
+    lo = Dates.DateTime(interval.lo)
+    hi = Dates.DateTime(interval.hi)
+    to_seconds(d) = Dates.value(Dates.Millisecond(d - sd)) / 1000
+    return (; time = (to_seconds(lo), to_seconds(hi)), date = (lo, hi))
 end
 
 """
@@ -796,7 +828,8 @@ end
         time_index,
         t,
         start_date,
-        init_time,
+        init_time;
+        period_bounds = nothing,
     )
 
 Append date values to the `date` and `date_bnds` dimension in `nc`.
@@ -807,7 +840,8 @@ function append_date_values!(
     time_index,
     t,
     start_date,
-    init_time,
+    init_time;
+    period_bounds = nothing,
 )
     # FIXME: We are hardcoding p.start_date !
     # FIXME: We are rounding t
@@ -815,6 +849,14 @@ function append_date_values!(
         # TODO: Use ITime here
         curr_date = start_date + Dates.Millisecond(round(1000 * float(t)))
         date_type = typeof(curr_date) # not necessarily a Dates.DateTime
+
+        # Reductions only: write the window reported by the schedule, timestamped at its start.
+        if !isnothing(period_bounds)
+            (lo, hi) = period_bounds.date
+            nc["date"][time_index] = date_type(lo)
+            nc["date_bnds"][:, time_index] = [date_type(lo); date_type(hi)]
+            return nothing
+        end
 
         if time_index == 1
             init_date =
@@ -836,11 +878,33 @@ function append_date_values!(
 end
 
 """
-    append_time_values!(nc, isa_time_reduction, time_index, t, init_time)
+    append_time_values!(
+        nc,
+        isa_time_reduction,
+        time_index,
+        t,
+        init_time;
+        period_bounds = nothing,
+    )
 
 Append time values to the `time` and `time_bnds` dimension in `nc`.
 """
-function append_time_values!(nc, isa_time_reduction, time_index, t, init_time)
+function append_time_values!(
+    nc,
+    isa_time_reduction,
+    time_index,
+    t,
+    init_time;
+    period_bounds = nothing,
+)
+    # Reductions only: write the window (in seconds) reported by the schedule, timestamped at
+    # its start.
+    if !isnothing(period_bounds)
+        (lo, hi) = period_bounds.time
+        nc["time"][time_index] = lo
+        nc["time_bnds"][:, time_index] = [lo; hi]
+        return nothing
+    end
     # TODO: Use ITime here
     if isa_time_reduction
         # For reductions, timestamp at the start of the reduction period.

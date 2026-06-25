@@ -358,4 +358,8 @@ function long_name(schedule::EveryCalendarDtSchedule)
     return period_to_str_long(schedule.dt)
 end
 
+# Interval-based output schedules: the should_accumulate/output_period_bounds protocol and
+# CalendarIntervalSchedule.
+include("interval_schedules.jl")
+
 end

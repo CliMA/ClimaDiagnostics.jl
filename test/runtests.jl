@@ -11,6 +11,7 @@ using Test
 @safetestset "Writers" begin @time include("writers.jl") end
 
 @safetestset "Schedules" begin @time include("schedules.jl") end
+@safetestset "CalendarIntervalSchedules" begin @time include("calendar_interval_schedules.jl") end
 @safetestset "DiagnosticVariable" begin @time include("diagnostic_variable.jl") end
 @safetestset "ScheduledDiagnostics" begin @time include("diagnostics.jl") end
 
