@@ -105,7 +105,7 @@ function Base.show(io::IO, ::MIME"text/plain", dv::DiagnosticVariable)
         println(
             io,
             "  mode      : ",
-            isnothing(dv.compute!) ? "compute" : "compute!",
+            isnothing(dv.compute!) ? "out-of-place" : "in-place",
         )
     end
 end
