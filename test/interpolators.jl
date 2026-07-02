@@ -97,3 +97,25 @@ include("TestTools.jl")
         )
     end
 end
+
+@testset "PressureInterpolator show" begin
+    space = ColumnCenterFiniteDifferenceSpace(FT = Float32)
+    u = Fields.FieldVector(; field = ones(space))
+    pfull_intp = Interpolators.PressureInterpolator(u.field, 0.0)
+
+    out = sprint(show, MIME("text/plain"), pfull_intp)
+    @test occursin("PressureInterpolator", out)
+    @test count(==('\n'), out) <= 10
+
+    out2 = sprint(show, pfull_intp)
+    @test occursin("PressureInterpolator", out2)
+    @test !occursin('\n', out2)
+
+    out3 =
+        sprint(show, MIME("text/plain"), pfull_intp; context = :compact => true)
+    @test out2 == out3
+
+    out_summary = sprint(summary, pfull_intp)
+    @test occursin("PressureInterpolator", out_summary)
+    @test !occursin('\n', out_summary)
+end

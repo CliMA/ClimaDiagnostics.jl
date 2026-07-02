@@ -1658,3 +1658,33 @@ end
         end
     end
 end
+
+@testset "RealPressureLevelsMethod show" begin
+    space = ColumnCenterFiniteDifferenceSpace()
+    u = Fields.FieldVector(; field = ones(space))
+    z_sampling_method = Writers.RealPressureLevelsMethod(
+        u.field,
+        0.0;
+        pressure_attribs = (; YO = "HI"),
+    )
+
+    out = sprint(show, MIME("text/plain"), z_sampling_method)
+    @test occursin("RealPressureLevelsMethod", out)
+    @test count(==('\n'), out) <= 10
+
+    out2 = sprint(show, z_sampling_method)
+    @test occursin("RealPressureLevelsMethod", out2)
+    @test !occursin('\n', out2)
+
+    out3 = sprint(
+        show,
+        MIME("text/plain"),
+        z_sampling_method;
+        context = :compact => true,
+    )
+    @test out2 == out3
+
+    out_summary = sprint(summary, z_sampling_method)
+    @test occursin("RealPressureLevelsMethod", out_summary)
+    @test !occursin('\n', out_summary)
+end

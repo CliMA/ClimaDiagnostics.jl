@@ -79,6 +79,38 @@ function PressureInterpolator(
     )
 end
 
+function Base.show(io::IO, ::MIME"text/plain", pintp::PressureInterpolator)
+    if get(io, :compact, false)
+        show(io, pintp)
+    else
+        println(io, "PressureInterpolator")
+        println(
+            io,
+            "  pressure levels: ",
+            length(pintp.pressure_intp.pressure_levels),
+        )
+        println(io, "  last_t         : ", pintp.last_t[])
+    end
+end
+
+function Base.show(io::IO, pintp::PressureInterpolator)
+    print(
+        io,
+        "PressureInterpolator (",
+        length(pintp.pressure_intp.pressure_levels),
+        " levels)",
+    )
+end
+
+function Base.summary(io::IO, pintp::PressureInterpolator)
+    print(
+        io,
+        "PressureInterpolator (",
+        length(pintp.pressure_intp.pressure_levels),
+        " levels)",
+    )
+end
+
 """
     force_update!(pfull_intp::PressureInterpolator, t)
 

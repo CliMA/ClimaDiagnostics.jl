@@ -95,6 +95,31 @@ function DiagnosticVariable(;
     )
 end
 
+function Base.show(io::IO, ::MIME"text/plain", dv::DiagnosticVariable)
+    if get(io, :compact, false)
+        show(io, dv)
+    else
+        println(io, "DiagnosticVariable")
+        println(io, "  short_name: ", dv.short_name)
+        println(io, "  long_name : ", dv.long_name)
+        println(
+            io,
+            "  mode      : ",
+            isnothing(dv.compute!) ? "compute" : "compute!",
+        )
+    end
+end
+
+function Base.show(io::IO, dv::DiagnosticVariable)
+    name = isempty(dv.short_name) ? "unnamed" : dv.short_name
+    print(io, "DiagnosticVariable (", name, ")")
+end
+
+function Base.summary(io::IO, dv::DiagnosticVariable)
+    name = isempty(dv.short_name) ? "unnamed" : dv.short_name
+    print(io, "DiagnosticVariable (", name, ")")
+end
+
 """
     short_name(dv::DiagnosticVariable)
 
