@@ -95,28 +95,24 @@ function DiagnosticVariable(;
     )
 end
 
-function Base.show(io::IO, ::MIME"text/plain", dv::DiagnosticVariable)
+function Base.show(io::IO, ::MIME"text/plain", variable::DiagnosticVariable)
     if get(io, :compact, false)
-        show(io, dv)
+        show(io, variable)
     else
         println(io, "DiagnosticVariable")
-        println(io, "  short_name: ", dv.short_name)
-        println(io, "  long_name : ", dv.long_name)
-        println(
-            io,
-            "  mode      : ",
-            isnothing(dv.compute!) ? "out-of-place" : "in-place",
-        )
+        println(io, "  short_name: ", variable.short_name)
+        println(io, "  long_name : ", variable.long_name)
+        println(io, "  units     : ", variable.units)
     end
 end
 
-function Base.show(io::IO, dv::DiagnosticVariable)
-    name = isempty(dv.short_name) ? "unnamed" : dv.short_name
+function Base.show(io::IO, variable::DiagnosticVariable)
+    name = isempty(variable.short_name) ? "unnamed" : variable.short_name
     print(io, "DiagnosticVariable (", name, ")")
 end
 
-function Base.summary(io::IO, dv::DiagnosticVariable)
-    name = isempty(dv.short_name) ? "unnamed" : dv.short_name
+function Base.summary(io::IO, variable::DiagnosticVariable)
+    name = isempty(variable.short_name) ? "unnamed" : variable.short_name
     print(io, "DiagnosticVariable (", name, ")")
 end
 

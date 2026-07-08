@@ -110,7 +110,7 @@ function Base.show(io::IO, ::MIME"text/plain", m::RealPressureLevelsMethod)
         println(
             io,
             "  pressure levels   : ",
-            length(m.pfull_intp.pressure_intp.pressure_levels),
+            m.pfull_intp.pressure_intp.pressure_levels,
         )
         println(io, "  cached diagnostics: ", length(m.diag_to_scratch))
     end

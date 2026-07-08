@@ -84,11 +84,7 @@ function Base.show(io::IO, ::MIME"text/plain", pintp::PressureInterpolator)
         show(io, pintp)
     else
         println(io, "PressureInterpolator")
-        println(
-            io,
-            "  pressure levels: ",
-            length(pintp.pressure_intp.pressure_levels),
-        )
+        println(io, "  pressure levels: ", pintp.pressure_intp.pressure_levels)
         println(io, "  last_t         : ", pintp.last_t[])
     end
 end
