@@ -200,29 +200,6 @@ function ScheduledDiagnostic(;
     )
 end
 
-function Base.show(io::IO, ::MIME"text/plain", sd::ScheduledDiagnostic)
-    if get(io, :compact, false)
-        show(io, sd)
-    else
-        println(io, "ScheduledDiagnostic (", sd.output_short_name, ")")
-        println(io, "  variable  : ", sd.variable.short_name)
-        println(io, "  schedule  : ", sprint(show, sd.output_schedule_func))
-        println(io, "  writer    : ", sprint(show, sd.output_writer))
-        reduction =
-            isnothing(sd.reduction_time_func) ? "none" :
-            string(sd.reduction_time_func)
-        println(io, "  reduction : ", reduction)
-    end
-end
-
-function Base.show(io::IO, sd::ScheduledDiagnostic)
-    print(io, "ScheduledDiagnostic (", sd.output_short_name, ")")
-end
-
-function Base.summary(io::IO, sd::ScheduledDiagnostic)
-    print(io, "ScheduledDiagnostic (", sd.output_short_name, ")")
-end
-
 """
     output_short_name(sd::ScheduledDiagnostic)
 
@@ -249,5 +226,27 @@ function Base.:(==)(sd1::T, sd2::T) where {T <: ScheduledDiagnostic}
     )
 end
 
+function Base.show(io::IO, ::MIME"text/plain", sd::ScheduledDiagnostic)
+    if get(io, :compact, false)
+        show(io, sd)
+    else
+        println(io, "ScheduledDiagnostic (", sd.output_short_name, ")")
+        println(io, "  variable  : ", sd.variable.short_name)
+        println(io, "  schedule  : ", sprint(show, sd.output_schedule_func))
+        println(io, "  writer    : ", sprint(show, sd.output_writer))
+        reduction =
+            isnothing(sd.reduction_time_func) ? "none" :
+            string(sd.reduction_time_func)
+        println(io, "  reduction : ", reduction)
+    end
+end
+
+function Base.show(io::IO, sd::ScheduledDiagnostic)
+    print(io, "ScheduledDiagnostic (", sd.output_short_name, ")")
+end
+
+function Base.summary(io::IO, sd::ScheduledDiagnostic)
+    print(io, "ScheduledDiagnostic (", sd.output_short_name, ")")
+end
 
 end

@@ -160,44 +160,6 @@ function DiagnosticsHandler(scheduled_diagnostics, Y, p, t; dt = nothing)
     )
 end
 
-function Base.show(
-    io::IO,
-    ::MIME"text/plain",
-    diagnostic_handler::DiagnosticsHandler,
-)
-    if get(io, :compact, false)
-        show(io, diagnostic_handler)
-    else
-        n = length(diagnostic_handler.scheduled_diagnostics)
-        println(
-            io,
-            "DiagnosticsHandler with ",
-            n,
-            " diagnostic",
-            n == 1 ? "" : "s",
-        )
-        max_show = 8
-        for i in 1:min(n, max_show)
-            println(
-                io,
-                "  ",
-                sprint(show, diagnostic_handler.scheduled_diagnostics[i]),
-            )
-        end
-        n > max_show && println(io, "  … and ", n - max_show, " more")
-    end
-end
-
-function Base.show(io::IO, diagnostic_handler::DiagnosticsHandler)
-    n = length(diagnostic_handler.scheduled_diagnostics)
-    print(io, "DiagnosticsHandler (", n, " diagnostic", n == 1 ? "" : "s", ")")
-end
-
-function Base.summary(io::IO, diagnostic_handler::DiagnosticsHandler)
-    n = length(diagnostic_handler.scheduled_diagnostics)
-    print(io, "DiagnosticsHandler (", n, " diagnostic", n == 1 ? "" : "s", ")")
-end
-
 """
     _check_dt_schedules(dt, diagnostics)
 
@@ -606,4 +568,42 @@ function IntegratorWithDiagnostics(
     Accessors.@reset integrator.callback = callback
 
     return integrator
+end
+
+function Base.show(
+    io::IO,
+    ::MIME"text/plain",
+    diagnostic_handler::DiagnosticsHandler,
+)
+    if get(io, :compact, false)
+        show(io, diagnostic_handler)
+    else
+        n = length(diagnostic_handler.scheduled_diagnostics)
+        println(
+            io,
+            "DiagnosticsHandler with ",
+            n,
+            " diagnostic",
+            n == 1 ? "" : "s",
+        )
+        max_show = 8
+        for i in 1:min(n, max_show)
+            println(
+                io,
+                "  ",
+                sprint(show, diagnostic_handler.scheduled_diagnostics[i]),
+            )
+        end
+        n > max_show && println(io, "  … and ", n - max_show, " more")
+    end
+end
+
+function Base.show(io::IO, diagnostic_handler::DiagnosticsHandler)
+    n = length(diagnostic_handler.scheduled_diagnostics)
+    print(io, "DiagnosticsHandler (", n, " diagnostic", n == 1 ? "" : "s", ")")
+end
+
+function Base.summary(io::IO, diagnostic_handler::DiagnosticsHandler)
+    n = length(diagnostic_handler.scheduled_diagnostics)
+    print(io, "DiagnosticsHandler (", n, " diagnostic", n == 1 ? "" : "s", ")")
 end

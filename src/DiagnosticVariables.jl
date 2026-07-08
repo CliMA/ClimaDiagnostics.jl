@@ -95,27 +95,6 @@ function DiagnosticVariable(;
     )
 end
 
-function Base.show(io::IO, ::MIME"text/plain", variable::DiagnosticVariable)
-    if get(io, :compact, false)
-        show(io, variable)
-    else
-        println(io, "DiagnosticVariable")
-        println(io, "  short_name: ", variable.short_name)
-        println(io, "  long_name : ", variable.long_name)
-        println(io, "  units     : ", variable.units)
-    end
-end
-
-function Base.show(io::IO, variable::DiagnosticVariable)
-    name = isempty(variable.short_name) ? "unnamed" : variable.short_name
-    print(io, "DiagnosticVariable (", name, ")")
-end
-
-function Base.summary(io::IO, variable::DiagnosticVariable)
-    name = isempty(variable.short_name) ? "unnamed" : variable.short_name
-    print(io, "DiagnosticVariable (", name, ")")
-end
-
 """
     short_name(dv::DiagnosticVariable)
 
@@ -216,5 +195,26 @@ function descriptive_long_name(
         suffix = "Instantaneous"
     end
     return "$(var), $(suffix)"
+end
+
+function Base.show(io::IO, ::MIME"text/plain", variable::DiagnosticVariable)
+    if get(io, :compact, false)
+        show(io, variable)
+    else
+        println(io, "DiagnosticVariable")
+        println(io, "  short_name: ", variable.short_name)
+        println(io, "  long_name : ", variable.long_name)
+        println(io, "  units     : ", variable.units)
+    end
+end
+
+function Base.show(io::IO, variable::DiagnosticVariable)
+    name = isempty(variable.short_name) ? "unnamed" : variable.short_name
+    print(io, "DiagnosticVariable (", name, ")")
+end
+
+function Base.summary(io::IO, variable::DiagnosticVariable)
+    name = isempty(variable.short_name) ? "unnamed" : variable.short_name
+    print(io, "DiagnosticVariable (", name, ")")
 end
 end

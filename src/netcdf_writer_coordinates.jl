@@ -102,38 +102,6 @@ function RealPressureLevelsMethod(
     )
 end
 
-function Base.show(io::IO, ::MIME"text/plain", m::RealPressureLevelsMethod)
-    if get(io, :compact, false)
-        show(io, m)
-    else
-        println(io, "RealPressureLevelsMethod")
-        println(
-            io,
-            "  pressure levels   : ",
-            m.pfull_intp.pressure_intp.pressure_levels,
-        )
-        println(io, "  cached diagnostics: ", length(m.diag_to_scratch))
-    end
-end
-
-function Base.show(io::IO, m::RealPressureLevelsMethod)
-    print(
-        io,
-        "RealPressureLevelsMethod (",
-        length(m.pfull_intp.pressure_intp.pressure_levels),
-        " levels)",
-    )
-end
-
-function Base.summary(io::IO, m::RealPressureLevelsMethod)
-    print(
-        io,
-        "RealPressureLevelsMethod (",
-        length(m.pfull_intp.pressure_intp.pressure_levels),
-        " levels)",
-    )
-end
-
 """
     pressure_space(pfull_intp::PressureInterpolator)
 
@@ -927,4 +895,36 @@ function default_num_points(space::Spaces.FiniteDifferenceSpace)
     # We always want the center space for interpolation
     cspace = Spaces.center_space(space)
     return (Spaces.nlevels(cspace),)
+end
+
+function Base.show(io::IO, ::MIME"text/plain", m::RealPressureLevelsMethod)
+    if get(io, :compact, false)
+        show(io, m)
+    else
+        println(io, "RealPressureLevelsMethod")
+        println(
+            io,
+            "  pressure levels   : ",
+            m.pfull_intp.pressure_intp.pressure_levels,
+        )
+        println(io, "  cached diagnostics: ", length(m.diag_to_scratch))
+    end
+end
+
+function Base.show(io::IO, m::RealPressureLevelsMethod)
+    print(
+        io,
+        "RealPressureLevelsMethod (",
+        length(m.pfull_intp.pressure_intp.pressure_levels),
+        " levels)",
+    )
+end
+
+function Base.summary(io::IO, m::RealPressureLevelsMethod)
+    print(
+        io,
+        "RealPressureLevelsMethod (",
+        length(m.pfull_intp.pressure_intp.pressure_levels),
+        " levels)",
+    )
 end
