@@ -197,6 +197,12 @@ function descriptive_long_name(
     return "$(var), $(suffix)"
 end
 
+"""
+    Base.show(io::IO, ::MIME"text/plain", variable::DiagnosticVariable)
+
+Print a verbose description of `variable`, including its short name, long
+name, and units.
+"""
 function Base.show(io::IO, ::MIME"text/plain", variable::DiagnosticVariable)
     if get(io, :compact, false)
         show(io, variable)
@@ -208,11 +214,21 @@ function Base.show(io::IO, ::MIME"text/plain", variable::DiagnosticVariable)
     end
 end
 
+"""
+    Base.show(io::IO, variable::DiagnosticVariable)
+
+Print a compact, single-line description of `variable`.
+"""
 function Base.show(io::IO, variable::DiagnosticVariable)
     name = isempty(variable.short_name) ? "unnamed" : variable.short_name
     print(io, "DiagnosticVariable (", name, ")")
 end
 
+"""
+    Base.summary(io::IO, variable::DiagnosticVariable)
+
+Print a compact, single-line description of `variable`.
+"""
 function Base.summary(io::IO, variable::DiagnosticVariable)
     name = isempty(variable.short_name) ? "unnamed" : variable.short_name
     print(io, "DiagnosticVariable (", name, ")")

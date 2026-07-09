@@ -897,6 +897,12 @@ function default_num_points(space::Spaces.FiniteDifferenceSpace)
     return (Spaces.nlevels(cspace),)
 end
 
+"""
+    Base.show(io::IO, ::MIME"text/plain", pressure_sampling_method::RealPressureLevelsMethod)
+
+Print a verbose description of `pressure_sampling_method`, including its
+pressure levels and the number of cached diagnostics.
+"""
 function Base.show(
     io::IO,
     ::MIME"text/plain",
@@ -919,6 +925,11 @@ function Base.show(
     end
 end
 
+"""
+    Base.show(io::IO, pressure_sampling_method::RealPressureLevelsMethod)
+
+Print a compact, single-line description of `pressure_sampling_method`.
+"""
 function Base.show(io::IO, pressure_sampling_method::RealPressureLevelsMethod)
     print(
         io,
@@ -930,6 +941,11 @@ function Base.show(io::IO, pressure_sampling_method::RealPressureLevelsMethod)
     )
 end
 
+"""
+    Base.summary(io::IO, pressure_sampling_method::RealPressureLevelsMethod)
+
+Print a compact, single-line description of `pressure_sampling_method`.
+"""
 function Base.summary(
     io::IO,
     pressure_sampling_method::RealPressureLevelsMethod,

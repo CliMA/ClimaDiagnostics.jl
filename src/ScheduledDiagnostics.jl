@@ -226,6 +226,12 @@ function Base.:(==)(sd1::T, sd2::T) where {T <: ScheduledDiagnostic}
     )
 end
 
+"""
+    Base.show(io::IO, ::MIME"text/plain", sd::ScheduledDiagnostic)
+
+Print a verbose description of `sd`, including its variable, schedule,
+writer, and reduction.
+"""
 function Base.show(io::IO, ::MIME"text/plain", sd::ScheduledDiagnostic)
     if get(io, :compact, false)
         show(io, sd)
@@ -241,10 +247,20 @@ function Base.show(io::IO, ::MIME"text/plain", sd::ScheduledDiagnostic)
     end
 end
 
+"""
+    Base.show(io::IO, sd::ScheduledDiagnostic)
+
+Print a compact, single-line description of `sd`.
+"""
 function Base.show(io::IO, sd::ScheduledDiagnostic)
     print(io, "ScheduledDiagnostic (", sd.output_short_name, ")")
 end
 
+"""
+    Base.summary(io::IO, sd::ScheduledDiagnostic)
+
+Print a compact, single-line description of `sd`.
+"""
 function Base.summary(io::IO, sd::ScheduledDiagnostic)
     print(io, "ScheduledDiagnostic (", sd.output_short_name, ")")
 end
