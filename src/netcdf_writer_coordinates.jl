@@ -897,34 +897,49 @@ function default_num_points(space::Spaces.FiniteDifferenceSpace)
     return (Spaces.nlevels(cspace),)
 end
 
-function Base.show(io::IO, ::MIME"text/plain", m::RealPressureLevelsMethod)
+function Base.show(
+    io::IO,
+    ::MIME"text/plain",
+    pressure_sampling_method::RealPressureLevelsMethod,
+)
     if get(io, :compact, false)
-        show(io, m)
+        show(io, pressure_sampling_method)
     else
         println(io, "RealPressureLevelsMethod")
         println(
             io,
             "  pressure levels   : ",
-            m.pfull_intp.pressure_intp.pressure_levels,
+            pressure_sampling_method.pfull_intp.pressure_intp.pressure_levels,
         )
-        println(io, "  cached diagnostics: ", length(m.diag_to_scratch))
+        println(
+            io,
+            "  cached diagnostics: ",
+            length(pressure_sampling_method.diag_to_scratch),
+        )
     end
 end
 
-function Base.show(io::IO, m::RealPressureLevelsMethod)
+function Base.show(io::IO, pressure_sampling_method::RealPressureLevelsMethod)
     print(
         io,
         "RealPressureLevelsMethod (",
-        length(m.pfull_intp.pressure_intp.pressure_levels),
+        length(
+            pressure_sampling_method.pfull_intp.pressure_intp.pressure_levels,
+        ),
         " levels)",
     )
 end
 
-function Base.summary(io::IO, m::RealPressureLevelsMethod)
+function Base.summary(
+    io::IO,
+    pressure_sampling_method::RealPressureLevelsMethod,
+)
     print(
         io,
         "RealPressureLevelsMethod (",
-        length(m.pfull_intp.pressure_intp.pressure_levels),
+        length(
+            pressure_sampling_method.pfull_intp.pressure_intp.pressure_levels,
+        ),
         " levels)",
     )
 end

@@ -570,6 +570,12 @@ function IntegratorWithDiagnostics(
     return integrator
 end
 
+"""
+    Base.show(io::IO, ::MIME"text/plain", diagnostic_handler::DiagnosticsHandler)
+
+Print a verbose description of `diagnostic_handler`, listing up to 8 of its
+`scheduled_diagnostics`.
+"""
 function Base.show(
     io::IO,
     ::MIME"text/plain",
@@ -598,11 +604,21 @@ function Base.show(
     end
 end
 
+"""
+    Base.show(io::IO, diagnostic_handler::DiagnosticsHandler)
+
+Print a compact, single-line description of `diagnostic_handler`.
+"""
 function Base.show(io::IO, diagnostic_handler::DiagnosticsHandler)
     n = length(diagnostic_handler.scheduled_diagnostics)
     print(io, "DiagnosticsHandler (", n, " diagnostic", n == 1 ? "" : "s", ")")
 end
 
+"""
+    Base.summary(io::IO, diagnostic_handler::DiagnosticsHandler)
+
+Print a compact, single-line description of `diagnostic_handler`.
+"""
 function Base.summary(io::IO, diagnostic_handler::DiagnosticsHandler)
     n = length(diagnostic_handler.scheduled_diagnostics)
     print(io, "DiagnosticsHandler (", n, " diagnostic", n == 1 ? "" : "s", ")")

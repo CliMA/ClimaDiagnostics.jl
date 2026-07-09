@@ -164,30 +164,34 @@ era5_pressure_levels() = return 100.0 .* [
 ]
 #! format: on
 
-function Base.show(io::IO, ::MIME"text/plain", pintp::PressureInterpolator)
+function Base.show(io::IO, ::MIME"text/plain", pfull_intp::PressureInterpolator)
     if get(io, :compact, false)
-        show(io, pintp)
+        show(io, pfull_intp)
     else
         println(io, "PressureInterpolator")
-        println(io, "  pressure levels: ", pintp.pressure_intp.pressure_levels)
-        println(io, "  last_t         : ", pintp.last_t[])
+        println(
+            io,
+            "  pressure levels: ",
+            pfull_intp.pressure_intp.pressure_levels,
+        )
+        println(io, "  last_t         : ", pfull_intp.last_t[])
     end
 end
 
-function Base.show(io::IO, pintp::PressureInterpolator)
+function Base.show(io::IO, pfull_intp::PressureInterpolator)
     print(
         io,
         "PressureInterpolator (",
-        length(pintp.pressure_intp.pressure_levels),
+        length(pfull_intp.pressure_intp.pressure_levels),
         " levels)",
     )
 end
 
-function Base.summary(io::IO, pintp::PressureInterpolator)
+function Base.summary(io::IO, pfull_intp::PressureInterpolator)
     print(
         io,
         "PressureInterpolator (",
-        length(pintp.pressure_intp.pressure_levels),
+        length(pfull_intp.pressure_intp.pressure_levels),
         " levels)",
     )
 end
