@@ -164,4 +164,52 @@ era5_pressure_levels() = return 100.0 .* [
 ]
 #! format: on
 
+"""
+    Base.show(io::IO, ::MIME"text/plain", pfull_intp::PressureInterpolator)
+
+Print a verbose description of `pfull_intp`, including its pressure levels and
+the last time it was updated.
+"""
+function Base.show(io::IO, ::MIME"text/plain", pfull_intp::PressureInterpolator)
+    if get(io, :compact, false)
+        show(io, pfull_intp)
+    else
+        println(io, "PressureInterpolator")
+        println(
+            io,
+            "  pressure levels: ",
+            pfull_intp.pressure_intp.pressure_levels,
+        )
+        println(io, "  last_t         : ", pfull_intp.last_t[])
+    end
+end
+
+"""
+    Base.show(io::IO, pfull_intp::PressureInterpolator)
+
+Print a compact, single-line description of `pfull_intp`.
+"""
+function Base.show(io::IO, pfull_intp::PressureInterpolator)
+    print(
+        io,
+        "PressureInterpolator (",
+        length(pfull_intp.pressure_intp.pressure_levels),
+        " levels)",
+    )
+end
+
+"""
+    Base.summary(io::IO, pfull_intp::PressureInterpolator)
+
+Print a compact, single-line description of `pfull_intp`.
+"""
+function Base.summary(io::IO, pfull_intp::PressureInterpolator)
+    print(
+        io,
+        "PressureInterpolator (",
+        length(pfull_intp.pressure_intp.pressure_levels),
+        " levels)",
+    )
+end
+
 end

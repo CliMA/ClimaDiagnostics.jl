@@ -184,3 +184,56 @@ include("TestTools.jl")
     @test length(handler_dup.scheduled_diagnostics) == 2
 
 end
+
+@testset "ScheduledDiagnostic and DiagnosticsHandler show" begin
+    t0 = 0.0
+    dt = 0.1
+
+    space = ColumnCenterFiniteDifferenceSpace()
+    Y = ClimaCore.Fields.FieldVector(; my_var = ones(space))
+    p = (; tau = -0.1)
+
+    simple_var = ClimaDiagnostics.DiagnosticVariable(;
+        compute! = (out, u, p, t) -> isnothing(out) ? [t] : (out .= t),
+        short_name = "YO",
+        long_name = "YO YO",
+    )
+    dict_writer = Writers.DictWriter()
+    diagnostic = ClimaDiagnostics.ScheduledDiagnostic(
+        variable = simple_var,
+        output_writer = dict_writer,
+    )
+
+    out = sprint(show, MIME("text/plain"), diagnostic)
+    @test occursin("ScheduledDiagnostic", out)
+    @test count(==('\n'), out) <= 10
+
+    out2 = sprint(show, diagnostic)
+    @test occursin("ScheduledDiagnostic", out2)
+    @test !occursin('\n', out2)
+
+    out3 =
+        sprint(show, MIME("text/plain"), diagnostic; context = :compact => true)
+    @test out2 == out3
+
+    out_summary = sprint(summary, diagnostic)
+    @test occursin("ScheduledDiagnostic", out_summary)
+    @test !occursin('\n', out_summary)
+
+    handler = ClimaDiagnostics.DiagnosticsHandler([diagnostic], Y, p, t0; dt)
+
+    out = sprint(show, MIME("text/plain"), handler)
+    @test occursin("DiagnosticsHandler", out)
+    @test count(==('\n'), out) <= 10
+
+    out2 = sprint(show, handler)
+    @test occursin("DiagnosticsHandler", out2)
+    @test !occursin('\n', out2)
+
+    out3 = sprint(show, MIME("text/plain"), handler; context = :compact => true)
+    @test out2 == out3
+
+    out_summary = sprint(summary, handler)
+    @test occursin("DiagnosticsHandler", out_summary)
+    @test !occursin('\n', out_summary)
+end

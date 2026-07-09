@@ -896,3 +896,66 @@ function default_num_points(space::Spaces.FiniteDifferenceSpace)
     cspace = Spaces.center_space(space)
     return (Spaces.nlevels(cspace),)
 end
+
+"""
+    Base.show(io::IO, ::MIME"text/plain", pressure_sampling_method::RealPressureLevelsMethod)
+
+Print a verbose description of `pressure_sampling_method`, including its
+pressure levels and the number of cached diagnostics.
+"""
+function Base.show(
+    io::IO,
+    ::MIME"text/plain",
+    pressure_sampling_method::RealPressureLevelsMethod,
+)
+    if get(io, :compact, false)
+        show(io, pressure_sampling_method)
+    else
+        println(io, "RealPressureLevelsMethod")
+        println(
+            io,
+            "  pressure levels   : ",
+            pressure_sampling_method.pfull_intp.pressure_intp.pressure_levels,
+        )
+        println(
+            io,
+            "  cached diagnostics: ",
+            length(pressure_sampling_method.diag_to_scratch),
+        )
+    end
+end
+
+"""
+    Base.show(io::IO, pressure_sampling_method::RealPressureLevelsMethod)
+
+Print a compact, single-line description of `pressure_sampling_method`.
+"""
+function Base.show(io::IO, pressure_sampling_method::RealPressureLevelsMethod)
+    print(
+        io,
+        "RealPressureLevelsMethod (",
+        length(
+            pressure_sampling_method.pfull_intp.pressure_intp.pressure_levels,
+        ),
+        " levels)",
+    )
+end
+
+"""
+    Base.summary(io::IO, pressure_sampling_method::RealPressureLevelsMethod)
+
+Print a compact, single-line description of `pressure_sampling_method`.
+"""
+function Base.summary(
+    io::IO,
+    pressure_sampling_method::RealPressureLevelsMethod,
+)
+    print(
+        io,
+        "RealPressureLevelsMethod (",
+        length(
+            pressure_sampling_method.pfull_intp.pressure_intp.pressure_levels,
+        ),
+        " levels)",
+    )
+end
