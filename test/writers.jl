@@ -1350,10 +1350,12 @@ end
             "time" => [-1.0, -1.0],
             "date" => [Dates.DateTime(2009), Dates.DateTime(2009)],
             "time_bnds" => [[-1.0, -1.0] [-2.0, -2.0]],
-            "date_bnds" => [[Dates.DateTime(2009), Dates.DateTime(2009)] [
-                Dates.DateTime(2009),
-                Dates.DateTime(2009),
-            ]],
+            "date_bnds" => [
+                [Dates.DateTime(2009), Dates.DateTime(2009)] [
+                    Dates.DateTime(2009),
+                    Dates.DateTime(2009),
+                ]
+            ],
         )
     end
 
@@ -1389,13 +1391,15 @@ end
             Dates.DateTime("2010-01-01T00:00:01"),
         ]
         @test nc["time_bnds"] == [[0.0, 0.0] [0.0, 1.0]]
-        @test nc["date_bnds"] == [[
-            Dates.DateTime("2010-01-01T00:00:00"),
-            Dates.DateTime("2010-01-01T00:00:00"),
-        ] [
-            Dates.DateTime("2010-01-01T00:00:00"),
-            Dates.DateTime("2010-01-01T00:00:01"),
-        ]]
+        @test nc["date_bnds"] == [
+            [
+                Dates.DateTime("2010-01-01T00:00:00"),
+                Dates.DateTime("2010-01-01T00:00:00"),
+            ] [
+                Dates.DateTime("2010-01-01T00:00:00"),
+                Dates.DateTime("2010-01-01T00:00:01"),
+            ]
+        ]
     end
 
     start_date = Dates.DateTime(2010)
@@ -1430,13 +1434,15 @@ end
             Dates.DateTime("2010-01-01T00:00:01"),
         ]
         @test nc["time_bnds"] == [[0.0, 1.0] [1.0, 2.0]]
-        @test nc["date_bnds"] == [[
-            Dates.DateTime("2010-01-01T00:00:00"),
-            Dates.DateTime("2010-01-01T00:00:01"),
-        ] [
-            Dates.DateTime("2010-01-01T00:00:01"),
-            Dates.DateTime("2010-01-01T00:00:02"),
-        ]]
+        @test nc["date_bnds"] == [
+            [
+                Dates.DateTime("2010-01-01T00:00:00"),
+                Dates.DateTime("2010-01-01T00:00:01"),
+            ] [
+                Dates.DateTime("2010-01-01T00:00:01"),
+                Dates.DateTime("2010-01-01T00:00:02"),
+            ]
+        ]
     end
 
     # Test with init_time not equal to 0
@@ -1473,13 +1479,15 @@ end
             Dates.DateTime("2010-01-01T00:00:02"),
         ]
         @test nc["time_bnds"] == [[1.0, 1.0] [1.0, 2.0]]
-        @test nc["date_bnds"] == [[
-            Dates.DateTime("2010-01-01T00:00:01"),
-            Dates.DateTime("2010-01-01T00:00:01"),
-        ] [
-            Dates.DateTime("2010-01-01T00:00:01"),
-            Dates.DateTime("2010-01-01T00:00:02"),
-        ]]
+        @test nc["date_bnds"] == [
+            [
+                Dates.DateTime("2010-01-01T00:00:01"),
+                Dates.DateTime("2010-01-01T00:00:01"),
+            ] [
+                Dates.DateTime("2010-01-01T00:00:01"),
+                Dates.DateTime("2010-01-01T00:00:02"),
+            ]
+        ]
     end
 
     start_date = Dates.DateTime(2010)
@@ -1516,13 +1524,15 @@ end
             Dates.DateTime("2010-01-01T00:00:02"),
         ]
         @test nc["time_bnds"] == [[1.0, 2.0] [2.0, 3.0]]
-        @test nc["date_bnds"] == [[
-            Dates.DateTime("2010-01-01T00:00:01"),
-            Dates.DateTime("2010-01-01T00:00:02"),
-        ] [
-            Dates.DateTime("2010-01-01T00:00:02"),
-            Dates.DateTime("2010-01-01T00:00:03"),
-        ]]
+        @test nc["date_bnds"] == [
+            [
+                Dates.DateTime("2010-01-01T00:00:01"),
+                Dates.DateTime("2010-01-01T00:00:02"),
+            ] [
+                Dates.DateTime("2010-01-01T00:00:02"),
+                Dates.DateTime("2010-01-01T00:00:03"),
+            ]
+        ]
     end
 end
 
