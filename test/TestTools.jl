@@ -81,11 +81,10 @@ function SphericalShellSpace(;
     horzspace = ClimaCore.Spaces.SpectralElementSpace2D(horztopology, quad)
 
     if use_hypsography
-        z_surface =
-            Geometry.ZPoint.(
-                cosd.(Fields.coordinate_field(horzspace).lat) .+
-                cosd.(Fields.coordinate_field(horzspace).long) .+ 1
-            )
+        z_surface = Geometry.ZPoint.(
+            cosd.(Fields.coordinate_field(horzspace).lat) .+
+            cosd.(Fields.coordinate_field(horzspace).long) .+ 1,
+        )
         hypsography = ClimaCore.Hypsography.LinearAdaption(z_surface)
     else
         hypsography = ClimaCore.Grids.Flat()
