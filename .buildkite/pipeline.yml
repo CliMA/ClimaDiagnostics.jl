@@ -14,6 +14,7 @@ steps:
       - "echo $$JULIA_DEPOT_PATH"
 
       - echo "--- Instantiate project"
+      - "julia --project=.buildkite -e 'using Pkg; Pkg.Registry.update()'"
       - "julia --project=.buildkite -e 'using Pkg; Pkg.develop(; path = \".\")'"
       - "julia --project=.buildkite -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
       - "julia --project=.buildkite -e 'using Pkg; Pkg.precompile()'"
