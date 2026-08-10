@@ -1,28 +1,39 @@
 # NEWS
 
+v0.3.8
+-------
+
+- Add concise `Base.show` and `summary` methods for `DiagnosticVariable`,
+  `ScheduledDiagnostic`, `DiagnosticsHandler`, `PressureInterpolator`, and
+  `RealPressureLevelsMethod`.
+- Update compat to allow ClimaCore v0.15.
+
+v0.3.7
+-------
+
+- Update compat to allow ClimaTimeSteppers v0.10.
+
 v0.3.6
-------
+-------
 
 - `IntegratorWithDiagnostics` no longer reads `integrator.callback.continuous_callbacks`.
   `CallbackSet` is now constructed from discrete callbacks only, matching the
   corresponding upcoming change in ClimaTimeSteppers v1.0.
 
 v0.3.5
-------
+-------
 
-#### Allow ClimaTimeSteppers v0.9 PR[#168](https://github.com/CliMA/ClimaDiagnostics.jl/pull/168)
+- Allow ClimaTimeSteppers v0.9. PR [#168](https://github.com/CliMA/ClimaDiagnostics.jl/pull/168)
 
 v0.3.4
-------
+-------
 
-#### Use updated ClimaTimeSteppers interface PR[#164](https://github.com/CliMA/ClimaDiagnostics.jl/pull/164)
-
-#### Use Julia v1.12 in CI PR[#158](https://github.com/CliMA/ClimaDiagnostics.jl/pull/158)
-
-#### Bump GHA versions PR[#163](https://github.com/CliMA/ClimaDiagnostics.jl/pull/163) PR[#162](https://github.com/CliMA/ClimaDiagnostics.jl/pull/162)
+- Use updated ClimaTimeSteppers interface. PR [#164](https://github.com/CliMA/ClimaDiagnostics.jl/pull/164)
+- Use Julia v1.12 in CI. PR [#158](https://github.com/CliMA/ClimaDiagnostics.jl/pull/158)
+- Bump GHA versions. PR [#163](https://github.com/CliMA/ClimaDiagnostics.jl/pull/163), PR [#162](https://github.com/CliMA/ClimaDiagnostics.jl/pull/162)
 
 v0.3.3
-------
+-------
 
 ## Features
 
