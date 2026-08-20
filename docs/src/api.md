@@ -20,6 +20,11 @@ ClimaDiagnostics.Schedules.EveryStepSchedule
 ClimaDiagnostics.Schedules.EveryDtSchedule
 ClimaDiagnostics.Schedules.EveryCalendarDtSchedule
 ClimaDiagnostics.Schedules.EveryCalendarDtSchedule(dt, t::ClimaUtilities.TimeManager.ITime)
+ClimaDiagnostics.Schedules.CalendarIntervalSchedule
+ClimaDiagnostics.Schedules.IntervalSchedule
+ClimaDiagnostics.Schedules.ScheduleInterval
+ClimaDiagnostics.Schedules.should_accumulate
+ClimaDiagnostics.Schedules.output_period_bounds
 ```
 
 ## `DiagnosticVariables`

@@ -379,6 +379,14 @@ function _needs_sync(diag, integrator)
     return diag.output_writer.sync_schedule(integrator)
 end
 
+# The field passed to pre_output_hook!/interpolation/writers: the accumulator for reductions
+# (keeping the fresh sample in `storage` for a possible deferred fold), `storage` otherwise.
+_output_field(diagnostic_handler, diag_index) =
+    isnothing(
+        diagnostic_handler.scheduled_diagnostics[diag_index].reduction_time_func,
+    ) ? diagnostic_handler.storage[diag_index] :
+    diagnostic_handler.accumulators[diag_index]
+
 """
     orchestrate_diagnostics(integrator, diagnostic_handler::DiagnosticsHandler)
 
@@ -393,13 +401,20 @@ NVTX.@annotate function orchestrate_diagnostics(
     active_compute = Bool[]
     active_output = Bool[]
     active_accumulate = Bool[]
+    active_defer = Bool[]
     active_sync = Bool[]
 
     for diag in scheduled_diagnostics
         sched = diag.output_schedule_func
-        # Evaluate `should_accumulate` before calling `sched`, which may advance its window.
-        push!(active_accumulate, should_accumulate(sched, integrator))
+        # The `sched` call advances the schedule's open window, so `should_accumulate` is read
+        # around it: before for the closing window (fold the sample now?) and after for the
+        # newly opened one. A sample in the latter but not the former is a boundary sample and
+        # is folded after the output ("deferred"). A window can also close without output
+        # (e.g. spinup), so deferral does not require the schedule to have fired.
+        accumulates = should_accumulate(sched, integrator)
         push!(active_output, sched(integrator))
+        push!(active_accumulate, accumulates)
+        push!(active_defer, !accumulates && should_accumulate(sched, integrator))
         push!(active_compute, diag.compute_schedule_func(integrator))
         push!(active_sync, _needs_sync(diag, integrator))
     end
@@ -442,34 +457,28 @@ NVTX.@annotate function orchestrate_diagnostics(
         active_output[diag_index] || continue
         diag = scheduled_diagnostics[diag_index]
 
-        # Move accumulated value to storage so that we can output it (for reductions). This
-        # provides a unified interface to pre_output_hook! and output, at the cost of an
-        # additional copy. If this copy turns out to be too expensive, we can move the if
-        # statement below.
-        isnothing(diag.reduction_time_func) || (
-            diagnostic_handler.storage[diag_index] .=
-                diagnostic_handler.accumulators[diag_index]
-        )
+        # Reductions output the accumulator directly; this leaves the fresh sample in
+        # `storage` so a boundary sample can seed the next window after the output.
+        out_field = _output_field(diagnostic_handler, diag_index)
 
         # Any operations we have to perform before writing to output? Here is where we would
         # divide by N to obtain an arithmetic average
         diag.pre_output_hook!(
-            diagnostic_handler.storage[diag_index],
+            out_field,
             diagnostic_handler.counters[diag_index],
         )
         # dont interpolate for point spaces
-        if axes(diagnostic_handler.storage[diag_index]) isa Spaces.PointSpace
+        if axes(out_field) isa Spaces.PointSpace
             # netCDFWriter expects diagnostic to be in preallocated_output_arrays
-            if diag.output_writer isa NetCDFWriter && ClimaComms.iamroot(
-                ClimaComms.context(diagnostic_handler.storage[diag_index]),
-            )
+            if diag.output_writer isa NetCDFWriter &&
+               ClimaComms.iamroot(ClimaComms.context(out_field))
                 diag.output_writer.preallocated_output_arrays[diag] =
-                    copy(parent(diagnostic_handler.storage[diag_index]))
+                    copy(parent(out_field))
             end
         else
             interpolate_field!(
                 diag.output_writer,
-                diagnostic_handler.storage[diag_index],
+                out_field,
                 diag,
                 integrator.u,
                 integrator.p,
@@ -485,7 +494,7 @@ NVTX.@annotate function orchestrate_diagnostics(
 
         write_field!(
             diag.output_writer,
-            diagnostic_handler.storage[diag_index],
+            _output_field(diagnostic_handler, diag_index),
             diag,
             integrator.u,
             integrator.p,
@@ -502,18 +511,35 @@ NVTX.@annotate function orchestrate_diagnostics(
         # typically share writers)
         active_sync[diag_index] && sync(diag.output_writer)
 
-        active_output[diag_index] || continue
-
-        # Reset accumulator
         isa_time_reduction = !isnothing(diag.reduction_time_func)
-        if isa_time_reduction
-            # identity_of_reduction works by dispatching over operation.
-            # The function is defined in reduction_identities.jl
-            identity = identity_of_reduction(diag.reduction_time_func)
-            fill!(parent(diagnostic_handler.accumulators[diag_index]), identity)
+        if active_output[diag_index]
+            # Reset accumulator
+            if isa_time_reduction
+                # identity_of_reduction works by dispatching over operation.
+                # The function is defined in reduction_identities.jl
+                identity = identity_of_reduction(diag.reduction_time_func)
+                fill!(
+                    parent(diagnostic_handler.accumulators[diag_index]),
+                    identity,
+                )
+            end
+            # Reset counter
+            diagnostic_handler.counters[diag_index] = 0
         end
-        # Reset counter
-        diagnostic_handler.counters[diag_index] = 0
+
+        # A boundary sample belongs to the newly opened window: fold it after the reset. This
+        # also covers a window that closed without output (e.g. spinup), whose accumulator is
+        # already at the identity.
+        if isa_time_reduction &&
+           active_defer[diag_index] &&
+           active_compute[diag_index]
+            diagnostic_handler.counters[diag_index] += 1
+            diagnostic_handler.accumulators[diag_index] .=
+                diag.reduction_time_func.(
+                    diagnostic_handler.accumulators[diag_index],
+                    diagnostic_handler.storage[diag_index],
+                )
+        end
     end
 
     return nothing

@@ -236,6 +236,67 @@ is already implemented.
     different `Schedule`s have to be used and created for different purposes.
     You can use the `deepcopy` function to quickly create a new `Schedule`.
 
+###### `CalendarIntervalSchedule`
+
+`EveryCalendarDtSchedule` *fires* every time a calendar period has elapsed and lets the
+writer reconstruct the reduction window from the previous output time. When you need the
+output windows to follow the calendar exactly -- for example monthly means whose `time_bnds`
+must be the first-of-month to first-of-month interval even if a timestep overshoots the
+boundary -- use `CalendarIntervalSchedule`. It partitions time into windows
+`[date_last, date_last + period)` and reports each closed window to the NetCDF writer, which
+then stores it directly as `time_bnds`/`date_bnds`. The partition is exact: a sample at a
+boundary is folded into the window starting there, so restarting a simulation exactly at a
+closed boundary (with `date_last` set to it) reproduces an uninterrupted run exactly.
+
+```julia
+import ClimaDiagnostics.Schedules: CalendarIntervalSchedule
+import Dates
+monthly = CalendarIntervalSchedule(
+    Dates.Month(1);
+    start_date = Dates.DateTime(2024, 1, 1),
+)
+```
+
+To exclude a spin-up period, pass `spinup`. Windows that *start* before `spinup` accumulate
+no samples and produce no output:
+
+```julia
+monthly_after_spinup = CalendarIntervalSchedule(
+    Dates.Month(1);
+    start_date = Dates.DateTime(2024, 1, 1),
+    spinup = Dates.DateTime(2024, 3, 1),  # skip Jan and Feb
+)
+```
+
+!!! note
+
+    Windows follow calendar arithmetic. If `start_date` is not the first of the month,
+    windows can have different lengths (e.g. a window opened on Jan 31 closes on Feb 28/29).
+    The exact window is what is written to `time_bnds`/`date_bnds`. Window reporting applies
+    to reductions only; instantaneous diagnostics use reconstructed bounds.
+
+###### `IntervalSchedule`
+
+To get the same interval semantics with a non-calendar schedule, wrap it in
+`IntervalSchedule`: the wrapped schedule's firing times become the window boundaries, so if
+it fires at `t1, t2, ...` the windows are `[t0, t1)`, `[t1, t2)`, ... with the same exact
+sample attribution, `spinup` gating, and exact `time_bnds`/`date_bnds`.
+
+```julia
+import ClimaDiagnostics.Schedules: IntervalSchedule, EveryDtSchedule
+every30days = IntervalSchedule(
+    EveryDtSchedule(30 * 86400.0);
+    start_date = Dates.DateTime(2024, 1, 1),
+)
+```
+
+Unlike `CalendarIntervalSchedule`, the boundaries are the *realized* firing times: if a step
+overshoots the wrapped schedule's nominal boundary, the overshooting step time becomes the
+window edge. The wrapped schedule is consulted internally by the wrapper, so it must not be
+shared with or called by anything else, and it must only read `integrator.t` (true for
+`EveryDtSchedule` and `EveryCalendarDtSchedule`; step-counting schedules like
+`EveryStepSchedule` cannot be wrapped).
+
 ##### Temporal reductions
 
 It is often useful to compute aggregate data (e.g., monthly averages). In

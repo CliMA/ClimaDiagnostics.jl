@@ -1,5 +1,80 @@
 # NEWS
 
+v0.3.7
+------
+
+## Features
+
+### `CalendarIntervalSchedule`: calendar-partitioned output windows
+
+A new output schedule, `CalendarIntervalSchedule`, partitions time into exact calendar
+windows of a given `Dates.Period` (e.g. `Dates.Month(1)`) and closes the window
+`[date_last, date_last + period)` when the date reaches a period boundary. Unlike
+`EveryCalendarDtSchedule`, it advances `date_last` to the exact calendar boundary (not the
+overshooting step time) and reports the closed window to the writer.
+
+Windows are exact left-closed partitions: a sample at a boundary belongs to the window
+*starting* there and is folded after the previous window's output. As a consequence,
+restarting a simulation exactly at a closed boundary (with `date_last` set to it) reproduces
+an uninterrupted run exactly.
+
+```julia
+import ClimaDiagnostics.Schedules: CalendarIntervalSchedule
+import Dates
+sched = CalendarIntervalSchedule(Dates.Month(1); start_date = Dates.DateTime(2024, 1, 1))
+```
+
+An optional `spinup` date marks windows that *start* before it as inactive: no samples are
+accumulated and nothing is written for them. This is convenient for excluding a model spin-up
+period from a monthly/seasonal mean.
+
+```julia
+sched = CalendarIntervalSchedule(
+    Dates.Month(1);
+    start_date = Dates.DateTime(2024, 1, 1),
+    spinup = Dates.DateTime(2024, 2, 1),   # [Jan 1, Feb 1) is skipped
+)
+```
+
+### `IntervalSchedule`: wrap any schedule into interval windows
+
+`IntervalSchedule` wraps an existing time-based schedule (e.g. `EveryDtSchedule`) and turns
+its firing times into window boundaries: if it fires at `t1, t2, ...`, the windows are
+`[t0, t1)`, `[t1, t2)`, ... with the same exact sample attribution, `spinup` gating, and
+exact `time_bnds`/`date_bnds` as `CalendarIntervalSchedule`. Boundaries are the *realized*
+firing times (they follow the stepper under overshoot); use `CalendarIntervalSchedule` when
+the edges must lie on a calendar grid. The wrapped schedule is consulted by the wrapper and
+must not be shared or called elsewhere, and it must only read `integrator.t` (so
+step-counting schedules like `EveryStepSchedule` cannot be wrapped).
+
+```julia
+import ClimaDiagnostics.Schedules: IntervalSchedule, EveryDtSchedule
+sched = IntervalSchedule(
+    EveryDtSchedule(30 * 86400.0);
+    start_date = Dates.DateTime(2024, 1, 1),
+)
+```
+
+### New schedule protocol: `should_accumulate` / `output_period_bounds`
+
+Schedules may now optionally implement two methods (both have generic fallbacks, so existing
+schedules are unchanged):
+
+- `should_accumulate(schedule, integrator)` — whether the current time is inside the active
+  accumulation window currently open (default `true`). It is read before and after the
+  schedule's output call; a sample that only belongs to the newly opened window (a boundary
+  sample) is folded after the output.
+- `output_period_bounds(schedule)` — the `[lo, hi)` window the schedule last closed, or
+  `nothing` (default `nothing`).
+
+## Behavior change (opt-in)
+
+For time-reduction diagnostics whose output schedule reports a window via
+`output_period_bounds` (currently only `CalendarIntervalSchedule`), the NetCDF writer now
+stamps the schedule's **exact** window in `time_bnds`/`date_bnds`, timestamped at the window
+start, instead of reconstructing `[previous_output, current]`. Diagnostics using any other
+schedule are unaffected.
+
 v0.3.6
 ------
 

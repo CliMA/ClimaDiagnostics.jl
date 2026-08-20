@@ -536,6 +536,10 @@ exists, append to it. If not, create a new file. If the file does not contain di
 they are added the first time something is written.
 
 Time handling:
+- For reduced diagnostics whose output schedule reports a window (via
+  `Schedules.output_period_bounds`, e.g. `CalendarIntervalSchedule`): the schedule's exact
+  window is written to time_bnds/date_bnds, timestamped at the window start. This takes
+  precedence over the reconstruction below.
 - For reduced diagnostics: timestamps are stored at the START of the reduction period, with
   time_bnds showing [start, end] of the period. For the first write, t=0 is assumed; for
   subsequent writes, the end of the previous period is used.
@@ -807,7 +811,7 @@ end
     _period_bounds(diagnostic, start_date)
 
 If the output schedule reports an interval (`Schedules.output_period_bounds`) and a
-`start_date` is set, return its `(lo, hi]` window as `(; time, date)`, with `time` in seconds
+`start_date` is set, return its `[lo, hi)` window as `(; time, date)`, with `time` in seconds
 since `start_date`. Otherwise return `nothing` (bounds are reconstructed as before).
 """
 function _period_bounds(diagnostic, start_date)
