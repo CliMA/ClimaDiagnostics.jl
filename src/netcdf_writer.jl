@@ -186,23 +186,25 @@ function NetCDFWriter(
     else
         if z_sampling_method isa LevelsMethod ||
            z_sampling_method isa RealPressureLevelsMethod
-            # It is a little tricky to override the number of vertical points because we don't
-            # know if the vertical direction is the 2nd (as in a plane) or 3rd index (as in a
-            # box or sphere). To set this value, we check if we are on a plane or not
-
-            # TODO: Get the number of dimensions directly from the space
-            num_horiz_dimensions =
-                Spaces.horizontal_space(space) isa
-                Spaces.SpectralElementSpace1D ? 1 : 2
-
-            num_vpts = Spaces.nlevels(space)
+            if z_sampling_method isa LevelsMethod
+                # With LevelsMethod, fields are always interpolated on the
+                # center levels, so we need the number of levels of the center
+                # space
+                num_vpts = Spaces.nlevels(Spaces.center_space(space))
+            else
+                # With RealPressureLevelsMethod, fields are interpolated on the
+                # pressure levels of the given space (the pressure space)
+                num_vpts = Spaces.nlevels(space)
+            end
 
             # For any configuration, it is reasonable to assume that the last
             # value of `num_pts` is the number of vertical points
             last(num_points) != num_vpts &&
                 @warn "Disabling vertical interpolation, the provided number of points is ignored (using $num_vpts)"
-            num_points =
-                Tuple([num_points[1:num_horiz_dimensions]..., num_vpts])
+            num_points = (
+                num_horizontal_points(horizontal_space, num_points)...,
+                num_vpts,
+            )
         end
         hpts, vpts = target_coordinates(space, num_points, z_sampling_method)
     end
@@ -222,7 +224,7 @@ function NetCDFWriter(
 
     hcoords = hcoords_from_horizontal_space(
         horizontal_space,
-        Meshes.domain(Spaces.topology(horizontal_space)),
+        Meshes.domain(Spaces.grid(horizontal_space)),
         hpts,
     )
     if z_sampling_method isa RealPressureLevelsMethod
@@ -378,7 +380,7 @@ function NetCDFWriter(
 end
 
 function NetCDFWriter(
-    space::Spaces.Spaces.PointSpace,
+    space::Union{Spaces.PointSpace, Spaces.PointCloudSpace},
     output_dir;
     compression_level = 9,
     sync_schedule = ClimaComms.device(space) isa ClimaComms.CUDADevice ?
@@ -389,20 +391,31 @@ function NetCDFWriter(
     kwargs...,
 )
     comms_ctx = ClimaComms.context(space)
+    if space isa Spaces.PointCloudSpace
+        coords = Fields.coordinate_field(space)
+        hpts = Geometry.LatLongPoint.(
+            vec(Array(parent(coords.lat))),
+            vec(Array(parent(coords.long))),
+        )
+        num_points = (Spaces.ncolumns(space),)
+    else
+        hpts = nothing
+        num_points = nothing
+    end
     preallocated_arrays =
         ClimaComms.iamroot(comms_ctx) ?
         Dict{ScheduledDiagnostic, ClimaComms.array_type(space)}() :
         Dict{ScheduledDiagnostic, Nothing}()
     unsynced_datasets = Set{NCDatasets.NCDataset}()
-    horizontal_method = SpectralElementRemapping() # no horizontal remapping for point space
+    horizontal_method = SpectralElementRemapping() # no remapping for point spaces
     return NetCDFWriter{
-        Nothing,
+        typeof(num_points),
         Nothing,
         typeof(preallocated_arrays),
         typeof(sync_schedule),
         Nothing,
         typeof(start_date),
-        Nothing,
+        typeof(hpts),
         Nothing,
         typeof(global_attribs),
         typeof(init_time),
@@ -410,7 +423,7 @@ function NetCDFWriter(
     }(
         output_dir,
         Dict{String, Remapper}(),
-        nothing,
+        num_points,
         compression_level,
         nothing,
         Dict{String, NCDatasets.NCDataset}(),
@@ -419,7 +432,7 @@ function NetCDFWriter(
         sync_schedule,
         unsynced_datasets,
         start_date,
-        nothing,
+        hpts,
         nothing,
         global_attribs,
         init_time,
@@ -481,7 +494,7 @@ NVTX.@annotate function interpolate_field!(
 
             target_hcoords = hcoords_from_horizontal_space(
                 horizontal_space,
-                Meshes.domain(Spaces.topology(horizontal_space)),
+                Meshes.domain(Spaces.grid(horizontal_space)),
                 hpts,
             )
         else
@@ -570,6 +583,9 @@ NVTX.@annotate function write_field!(
     if space isa Spaces.PointSpace
         # If the space is a point space, we have to remove the singleton dimension
         interpolated_field = interpolated_field[]
+    elseif space isa Spaces.PointCloudSpace
+        # vec return the data from the columns in matching order of the coordinates
+        interpolated_field = vec(interpolated_field)
     end
 
     FT = Spaces.undertype(space)
@@ -599,6 +615,16 @@ NVTX.@annotate function write_field!(
     end
 
     nc = writer.open_files[output_path]
+
+    # See section 9.1: Features and feature types of the CF conventions for the
+    # featureType attribute
+    if !haskey(nc.attrib, "featureType")
+        if space isa Spaces.PointCloudSpace
+            nc.attrib["featureType"] = "timeSeries"
+        elseif space isa Spaces.MultiColumnFiniteDifferenceSpace
+            nc.attrib["featureType"] = "timeSeriesProfile"
+        end
+    end
 
     # Save as associated float if t is ITime
     TT = typeof(float(t))
@@ -654,6 +680,15 @@ NVTX.@annotate function write_field!(
         dim_names,
         start_date,
     )
+
+    # Attach the per-column lat/lon auxiliary coordinates according to section
+    # 9.5 "Coordinates and metadata" of the CF conventions. See appendix H.2.1
+    # for an example of this
+    if space isa
+       Union{Spaces.PointCloudSpace, Spaces.MultiColumnFiniteDifferenceSpace} &&
+       !haskey(v.attrib, "coordinates")
+        v.attrib["coordinates"] = "lat lon"
+    end
 
     # We need to write to the next position after what we read from the data (or the first
     # position ever if we are writing the file for the first time)

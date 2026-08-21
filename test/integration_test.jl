@@ -205,6 +205,40 @@ if context isa ClimaComms.SingletonCommsContext
             "purely vertical space",
             (10,),
         ),
+        (
+            MultiColumnCenterFiniteDifferenceSpace(;
+                zelem = 10,
+                points = [
+                    ClimaCore.Geometry.LatLongPoint(0.0, 0.0),
+                    ClimaCore.Geometry.LatLongPoint(10.0, 20.0),
+                ],
+            ),
+            "multiple column vertical space",
+            (2, 10),
+        ),
+        (
+            # Face fields are written on the 10 center levels
+            MultiColumnFaceFiniteDifferenceSpace(;
+                zelem = 10,
+                points = [
+                    ClimaCore.Geometry.LatLongPoint(0.0, 0.0),
+                    ClimaCore.Geometry.LatLongPoint(10.0, 20.0),
+                ],
+            ),
+            "multiple column face vertical space",
+            (2, 10),
+        ),
+        (
+            MultiColumnCenterFiniteDifferenceSpace(;
+                zelem = 10,
+                points = [
+                    ClimaCore.Geometry.LatLongPoint(0.0, 0.0),
+                    ClimaCore.Geometry.LatLongPoint(10.0, 20.0),
+                ],
+            ) |> ClimaCore.Spaces.horizontal_space,
+            "multiple point space",
+            (2,),
+        ),
     ]
 end
 for (space, space_name, written_space_dims) in spaces_test_list

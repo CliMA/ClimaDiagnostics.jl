@@ -119,7 +119,8 @@ function DiagnosticsHandler(scheduled_diagnostics, Y, p, t; dt = nothing)
         # If it is not a reduction, call the output writer as well
         if !isa_time_reduction
             # no need to interpolate for point spaces
-            if axes(storage[i]) isa Spaces.PointSpace
+            if axes(storage[i]) isa
+               Union{Spaces.PointSpace, Spaces.PointCloudSpace}
                 # netCDFWriter expects diagnostic to be in preallocated_output_arrays
                 if diag.output_writer isa NetCDFWriter &&
                    ClimaComms.iamroot(ClimaComms.context(storage[i]))
@@ -445,7 +446,8 @@ NVTX.@annotate function orchestrate_diagnostics(
             diagnostic_handler.counters[diag_index],
         )
         # dont interpolate for point spaces
-        if axes(diagnostic_handler.storage[diag_index]) isa Spaces.PointSpace
+        if axes(diagnostic_handler.storage[diag_index]) isa
+           Union{Spaces.PointSpace, Spaces.PointCloudSpace}
             # netCDFWriter expects diagnostic to be in preallocated_output_arrays
             if diag.output_writer isa NetCDFWriter && ClimaComms.iamroot(
                 ClimaComms.context(diagnostic_handler.storage[diag_index]),
