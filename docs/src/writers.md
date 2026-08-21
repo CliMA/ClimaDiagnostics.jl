@@ -109,6 +109,21 @@ ClimaDiagnostics.Writers.LevelsMethod
 ClimaDiagnostics.Writers.FakePressureLevelsMethod
 ```
 
+### Spaces of multiple columns
+
+The `NetCDFWriter` also supports
+`ClimaCore.Spaces.MultiColumnFiniteDifferenceSpace` (independent columns at
+arbitrary latitudes and longitudes) and `ClimaCore.Spaces.MultiPointSpace` (its
+horizontal space, or one of its levels). These spaces have no horizontal
+connectivity, so no horizontal interpolation is performed: the columns are
+written as they are along a `column` dimension, and the latitude and longitude
+of each column are saved in the `lat` and `lon` auxiliary coordinate variables,
+following the CF conventions for discrete sampling geometries (the `featureType`
+global attribute is `timeSeriesProfile` for columns and `timeSeries` for
+points). The horizontal entry of `num_points` is ignored, while the vertical
+direction is sampled according to `z_sampling_method` as for any other space
+(including `RealPressureLevelsMethod`).
+
 ### Output diagnostics in pressure coordinates
 
 To write diagnostics in pressure coordinates, you must pass a
