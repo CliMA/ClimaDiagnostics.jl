@@ -3,6 +3,16 @@
 main
 -------
 
+- Add support for `ClimaCore.Spaces.MultiColumnFiniteDifferenceSpace` and
+  `ClimaCore.Spaces.MultiPointSpace` in `NetCDFWriter`. Columns are written
+  along a `column` dimension with `lat` and `lon` auxiliary coordinates and a CF
+  `featureType` attribute (`timeSeriesProfile` and `timeSeries`). No horizontal
+  interpolation is performed for these spaces. All the vertical sampling
+  methods, including `RealPressureLevelsMethod`, are available.
+- Fix `NetCDFWriter` constructed from a face-staggered extruded space with
+  `LevelsMethod`: the number of vertical points now matches the center levels
+  that are written, so writing to the same file more than once no longer errors.
+
 v0.3.11
 -------
 

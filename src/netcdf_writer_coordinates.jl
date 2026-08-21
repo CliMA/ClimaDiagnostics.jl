@@ -629,7 +629,10 @@ end
 # and combines the resulting dictionaries
 function add_space_coordinates_maybe!(
     nc::NCDatasets.NCDataset,
-    space::Spaces.ExtrudedFiniteDifferenceSpace,
+    space::Union{
+        Spaces.ExtrudedFiniteDifferenceSpace,
+        Spaces.MultiColumnFiniteDifferenceSpace,
+    },
     num_points,
     hpts,
     vpts;
@@ -738,10 +741,69 @@ function add_space_coordinates_maybe!(
     return [name]
 end
 
+# A space of multiple points are specified at multiple locations specified by
+# longitude and latitude coordinates. These are auxiliary coordinate variables
+# in the NetCDF file. The column dimension enumerate the columns.
+function add_space_coordinates_maybe!(
+    nc::NCDatasets.NCDataset,
+    space::Spaces.MultiPointSpace,
+    num_points,
+    hpts;
+    names = ("column",),
+)
+    name, _... = names
+    num_columns, _... = num_points
+
+    column_dimension_exists = dimension_exists(nc, name, (num_columns,))
+
+    if !column_dimension_exists
+        # See section 9.5 in the CF conventions for the timeseries_id attribute
+        add_dimension!(
+            nc,
+            name,
+            collect(1:num_columns);
+            long_name = "Column index",
+            cf_role = "timeseries_id",
+        )
+        lats = [pt.lat for pt in hpts]
+        longs = [pt.long for pt in hpts]
+        FT = eltype(lats)
+        lat = NCDatasets.defVar(nc, "lat", FT, (name,))
+        lat.attrib["units"] = "degrees_north"
+        lat.attrib["standard_name"] = "latitude"
+        lat.attrib["long_name"] = "Latitude"
+        lat[:] = lats
+        lon = NCDatasets.defVar(nc, "lon", FT, (name,))
+        lon.attrib["units"] = "degrees_east"
+        lon.attrib["standard_name"] = "longitude"
+        lon.attrib["long_name"] = "Longitude"
+        lon[:] = longs
+    end
+
+    return [name]
+end
+
+# A space of multiple points
+function add_space_coordinates_maybe!(
+    nc::NCDatasets.NCDataset,
+    space::Spaces.MultiPointSpace,
+    num_points,
+    hpts,
+    vpts;
+    z_sampling_method = nothing,
+    interpolated_physical_z = nothing,
+    names = ("column",),
+)
+    return add_space_coordinates_maybe!(nc, space, num_points, hpts; names)
+end
+
 # General hybrid space. This calls both the vertical and horizontal add_space_coordinates_maybe!
 # and combines the resulting dictionaries
 function target_coordinates(
-    space::Spaces.ExtrudedFiniteDifferenceSpace,
+    space::Union{
+        Spaces.ExtrudedFiniteDifferenceSpace,
+        Spaces.MultiColumnFiniteDifferenceSpace,
+    },
     num_points,
     z_sampling_method,
 )
@@ -765,6 +827,15 @@ function target_coordinates(
     return hcoords, vcoords
 end
 
+# The columns are written as is, so `num_points` is not used
+function target_coordinates(space::Spaces.MultiPointSpace, num_points)
+    coords = Fields.coordinate_field(space)
+    return Geometry.LatLongPoint.(
+        vec(Array(parent(coords.lat))),
+        vec(Array(parent(coords.long))),
+    )
+end
+
 function hcoords_from_horizontal_space(
     space::Spaces.SpectralElementSpace2D,
     domain::Domains.SphereDomain,
@@ -782,6 +853,17 @@ Geometry._coordinate(pt::Geometry.LatLongPoint, ::Val{1}) =
     Geometry.LatPoint(pt.lat)
 Geometry._coordinate(pt::Geometry.LatLongPoint, ::Val{2}) =
     Geometry.LongPoint(pt.long)
+
+"""
+    hcoords_from_horizontal_space(space, domain, hpts)
+
+Prepare the matrix of horizontal coordinates with the correct type according to the given
+`space` and `domain` (e.g., `ClimaCore.Geometry.LatLongPoint`s).
+
+For `MultiPointSpace`, return `nothing`, since the columns are fixed, so the `Remapper`
+takes no horizontal target coordinates.
+"""
+function hcoords_from_horizontal_space end
 
 function hcoords_from_horizontal_space(
     space::Spaces.SpectralElementSpace2D,
@@ -813,14 +895,25 @@ function hcoords_from_horizontal_space(
     return [PointType(hc1) for hc1 in hpts]
 end
 
-"""
-    hcoords_from_horizontal_space(space, domain, hpts)
+hcoords_from_horizontal_space(::Spaces.MultiPointSpace, domain, hpts) = nothing
 
-Prepare the matrix of horizontal coordinates with the correct type according to the given `space`
-and `domain` (e.g., `ClimaCore.Geometry.LatLongPoint`s).
-"""
-function hcoords_from_horizontal_space(space, domain, hpts) end
 
+"""
+    num_horizontal_points(horizontal_space, num_points)
+
+Return the appropriate number of horizontal points for the diagnostics given
+`num_points` and the `horizontal_space`.
+"""
+num_horizontal_points(::Spaces.SpectralElementSpace1D, num_points) =
+    (num_points[1],)
+num_horizontal_points(::Spaces.AbstractSpectralElementSpace, num_points) =
+    (num_points[1], num_points[2])
+function num_horizontal_points(hspace::Spaces.MultiPointSpace, num_points)
+    num_columns = Spaces.ncolumns(hspace)
+    first(num_points) != num_columns &&
+        @warn "No horizontal interpolation for multiple column spaces, the provided number of horizontal points is ignored (using $num_columns columns)"
+    return (num_columns,)
+end
 
 """
     default_num_points(space)
@@ -895,6 +988,13 @@ function default_num_points(space::Spaces.FiniteDifferenceSpace)
     # We always want the center space for interpolation
     cspace = Spaces.center_space(space)
     return (Spaces.nlevels(cspace),)
+end
+
+# Multiple columns
+function default_num_points(space::Spaces.MultiColumnFiniteDifferenceSpace)
+    # We always want the center space for interpolation
+    cspace = Spaces.center_space(space)
+    return (Spaces.ncolumns(cspace), Spaces.nlevels(cspace))
 end
 
 """
