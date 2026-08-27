@@ -157,6 +157,34 @@ function BoxSpace(;
     )
 end
 
+function MultiColumnCenterFiniteDifferenceSpace(; kwargs...)
+    return _multicolumn(ClimaCore.CellCenter(); kwargs...)
+end
+
+function MultiColumnFaceFiniteDifferenceSpace(; kwargs...)
+    return _multicolumn(ClimaCore.CellFace(); kwargs...)
+end
+
+function _multicolumn(
+    staggering;
+    zelem = 10,
+    points = [
+        ClimaCore.Geometry.LatLongPoint(0.0, 0.0),
+        ClimaCore.Geometry.LatLongPoint(10.0, 20.0),
+    ],
+    FT = Float64,
+)
+    space = ClimaCore.CommonSpaces.PointColumnEnsembleSpace(
+        FT;
+        points = points,
+        z_elem = zelem,
+        z_min = 0,
+        z_max = 10_000,
+        staggering = staggering,
+    )
+    return space
+end
+
 """
     create_problem()
 

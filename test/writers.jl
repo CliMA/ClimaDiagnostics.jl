@@ -158,6 +158,38 @@ end
     @test size(hcoords) == (NUM, 2NUM)
     @test hcoords ==
           [Geometry.LatLongPoint(lat, lon) for lon in lons, lat in lats]
+
+    # Test multiple column space
+    multi_col_space = MultiColumnCenterFiniteDifferenceSpace()
+    hpts, vpts = Writers.target_coordinates(
+        multi_col_space,
+        (2, NUM),
+        ClimaDiagnostics.Writers.LevelsMethod(),
+    )
+    @test hpts ==
+          [Geometry.LatLongPoint(0.0, 0.0), Geometry.LatLongPoint(10.0, 20.0)]
+    @test length(vpts) == 10
+
+    # Test face multiple column space (vertical points are the center levels)
+    face_multi_col_space = MultiColumnFaceFiniteDifferenceSpace()
+    face_hpts, face_vpts = Writers.target_coordinates(
+        face_multi_col_space,
+        (2, NUM),
+        ClimaDiagnostics.Writers.LevelsMethod(),
+    )
+    @test face_hpts == hpts
+    @test face_vpts == vpts
+
+    # Test multiple point space
+    point_cloud_space = Spaces.horizontal_space(multi_col_space)
+    @test Writers.num_horizontal_points(point_cloud_space, (NUM, 2NUM)) == (2,)
+    @test isnothing(
+        Writers.hcoords_from_horizontal_space(
+            point_cloud_space,
+            Meshes.domain(Spaces.grid(point_cloud_space)),
+            hpts,
+        ),
+    )
 end
 
 @testset "NetCDFWriter" begin
@@ -204,6 +236,13 @@ end
                 staggering = CommonSpaces.CellCenter(),
             ),
         ) == (9, 12, 10)
+        @test Writers.default_num_points(
+            MultiColumnCenterFiniteDifferenceSpace(),
+        ) == (2, 10)
+        # For face spaces, the vertical points are the center levels
+        @test Writers.default_num_points(
+            MultiColumnFaceFiniteDifferenceSpace(),
+        ) == (2, 10)
     end
 
     space = SphericalShellSpace()
@@ -717,6 +756,216 @@ end
         lon, lat = Writers.target_coordinates(horizontal_space, (NUM, 2NUM))
         @test nc["lon"][:] == lon
         @test nc["lat"][:] == lat
+    end
+
+    #########################
+    # Multiple Column Space #
+    #########################
+
+    multi_col_space = MultiColumnCenterFiniteDifferenceSpace(;
+        points = [
+            Geometry.LatLongPoint(0.0, 0.0),
+            Geometry.LatLongPoint(10.0, 20.0),
+            Geometry.LatLongPoint(-30.0, 45.0),
+        ],
+    )
+    multi_col_coords = Fields.coordinate_field(multi_col_space)
+    # Vary across columns by adding the column latitude to z
+    multi_col_field = multi_col_coords.z .+ multi_col_coords.lat
+    multi_col_writer = Writers.NetCDFWriter(multi_col_space, output_dir)
+    multi_col_u = (; field = multi_col_field)
+
+    multi_col_diagnostic = ClimaDiagnostics.ScheduledDiagnostic(;
+        variable = ClimaDiagnostics.DiagnosticVariable(;
+            compute!,
+            short_name = "ABC",
+        ),
+        output_short_name = "my_short_name_multicol",
+        output_long_name = "My Long Name Multicol",
+        output_writer = multi_col_writer,
+    )
+    Writers.interpolate_field!(
+        multi_col_writer,
+        multi_col_field,
+        multi_col_diagnostic,
+        multi_col_u,
+        p,
+        t,
+    )
+    Writers.write_field!(
+        multi_col_writer,
+        multi_col_field,
+        multi_col_diagnostic,
+        multi_col_u,
+        p,
+        t,
+    )
+    # Write a second time
+    Writers.write_field!(
+        multi_col_writer,
+        multi_col_field,
+        multi_col_diagnostic,
+        multi_col_u,
+        p,
+        t,
+    )
+    close(multi_col_writer)
+
+    NCDatasets.NCDataset(
+        joinpath(output_dir, "my_short_name_multicol.nc"),
+    ) do nc
+        @test nc.attrib["featureType"] == "timeSeriesProfile"
+        @test nc["ABC"].attrib["coordinates"] == "lat lon"
+        @test size(nc["ABC"]) == (2, 3, 10)
+        @test nc["column"][:] == [1, 2, 3]
+        @test nc["column"].attrib["cf_role"] == "timeseries_id"
+        @test nc["lat"][:] == [0.0, 10.0, -30.0]
+        @test nc["lon"][:] == [0.0, 20.0, 45.0]
+
+        _, vpts = Writers.target_coordinates(
+            multi_col_space,
+            (3, 10),
+            multi_col_writer.z_sampling_method,
+        )
+        @test nc["z"][:] == vpts
+        for (col, lat) in enumerate((0.0, 10.0, -30.0))
+            @test nc["ABC"][1, col, :] == vpts .+ lat
+        end
+        @test nc["ABC"][1, :, :] == nc["ABC"][2, :, :]
+    end
+
+    ##############################
+    # Face Multiple Column Space #
+    ##############################
+
+    # Face fields are interpolated onto the center levels
+    face_multi_col_space = MultiColumnFaceFiniteDifferenceSpace(;
+        points = [
+            Geometry.LatLongPoint(0.0, 0.0),
+            Geometry.LatLongPoint(10.0, 20.0),
+            Geometry.LatLongPoint(-30.0, 45.0),
+        ],
+    )
+    face_multi_col_coords = Fields.coordinate_field(face_multi_col_space)
+    # Vary across columns by adding the column latitude to z
+    face_multi_col_field = face_multi_col_coords.z .+ face_multi_col_coords.lat
+    face_multi_col_writer =
+        Writers.NetCDFWriter(face_multi_col_space, output_dir)
+    @test face_multi_col_writer.num_points == (3, 10)
+    face_multi_col_u = (; field = face_multi_col_field)
+
+    face_multi_col_diagnostic = ClimaDiagnostics.ScheduledDiagnostic(;
+        variable = ClimaDiagnostics.DiagnosticVariable(;
+            compute!,
+            short_name = "ABC",
+        ),
+        output_short_name = "my_short_name_face_multicol",
+        output_long_name = "My Long Name Face Multicol",
+        output_writer = face_multi_col_writer,
+    )
+    Writers.interpolate_field!(
+        face_multi_col_writer,
+        face_multi_col_field,
+        face_multi_col_diagnostic,
+        face_multi_col_u,
+        p,
+        t,
+    )
+    Writers.write_field!(
+        face_multi_col_writer,
+        face_multi_col_field,
+        face_multi_col_diagnostic,
+        face_multi_col_u,
+        p,
+        t,
+    )
+    # Write a second time
+    Writers.write_field!(
+        face_multi_col_writer,
+        face_multi_col_field,
+        face_multi_col_diagnostic,
+        face_multi_col_u,
+        p,
+        t,
+    )
+    close(face_multi_col_writer)
+
+    NCDatasets.NCDataset(
+        joinpath(output_dir, "my_short_name_face_multicol.nc"),
+    ) do nc
+        @test nc.attrib["featureType"] == "timeSeriesProfile"
+        @test nc["ABC"].attrib["coordinates"] == "lat lon"
+        @test size(nc["ABC"]) == (2, 3, 10)
+        @test nc["column"][:] == [1, 2, 3]
+        @test nc["column"].attrib["cf_role"] == "timeseries_id"
+        @test nc["lat"][:] == [0.0, 10.0, -30.0]
+        @test nc["lon"][:] == [0.0, 20.0, 45.0]
+
+        _, vpts = Writers.target_coordinates(
+            face_multi_col_space,
+            (3, 10),
+            face_multi_col_writer.z_sampling_method,
+        )
+        @test nc["z"][:] == vpts
+        # The field is linear in z, so interpolating it from the faces onto the
+        # center levels is exact
+        for (col, lat) in enumerate((0.0, 10.0, -30.0))
+            @test nc["ABC"][1, col, :] == vpts .+ lat
+        end
+        @test nc["ABC"][1, :, :] == nc["ABC"][2, :, :]
+    end
+
+    #####################
+    # Point Cloud Space #
+    #####################
+
+    point_cloud_space = Spaces.horizontal_space(multi_col_space)
+    point_cloud_field = Fields.coordinate_field(point_cloud_space).lat
+    point_cloud_writer = Writers.NetCDFWriter(point_cloud_space, output_dir)
+    point_cloud_u = (; field = point_cloud_field)
+
+    point_cloud_diagnostic = ClimaDiagnostics.ScheduledDiagnostic(;
+        variable = ClimaDiagnostics.DiagnosticVariable(;
+            compute!,
+            short_name = "ABC",
+        ),
+        output_short_name = "my_short_name_point_cloud",
+        output_long_name = "My Long Name Point Cloud",
+        output_writer = point_cloud_writer,
+    )
+    # No interpolation needed for point cloud spaces
+    point_cloud_writer.preallocated_output_arrays[point_cloud_diagnostic] =
+        copy(parent(point_cloud_field))
+    Writers.write_field!(
+        point_cloud_writer,
+        point_cloud_field,
+        point_cloud_diagnostic,
+        point_cloud_u,
+        p,
+        t,
+    )
+    # Write a second time
+    Writers.write_field!(
+        point_cloud_writer,
+        point_cloud_field,
+        point_cloud_diagnostic,
+        point_cloud_u,
+        p,
+        t,
+    )
+    close(point_cloud_writer)
+
+    NCDatasets.NCDataset(
+        joinpath(output_dir, "my_short_name_point_cloud.nc"),
+    ) do nc
+        @test nc.attrib["featureType"] == "timeSeries"
+        @test nc["ABC"].attrib["coordinates"] == "lat lon"
+        @test size(nc["ABC"]) == (2, 3)
+        @test nc["ABC"][1, :] == [0.0, 10.0, -30.0]
+        @test nc["ABC"][2, :] == [0.0, 10.0, -30.0]
+        @test nc["column"][:] == [1, 2, 3]
+        @test nc["lat"][:] == [0.0, 10.0, -30.0]
+        @test nc["lon"][:] == [0.0, 20.0, 45.0]
     end
 
     ###############
