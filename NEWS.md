@@ -1,5 +1,10 @@
 # NEWS
 
+v0.3.9
+-------
+
+- Add ClimaCore v0.16 in the compat
+
 v0.3.8
 -------
 

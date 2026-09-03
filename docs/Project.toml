@@ -5,6 +5,6 @@ ClimaUtilities = "b3f4f4ca-9299-4f7f-bd9b-81e1242a7513"
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 
 [compat]
-ClimaCore = "0.14.41"
+ClimaCore = "0.14.41, 0.15, 0.16"
 ClimaUtilities = "0.1.22"
 Documenter = "1"
