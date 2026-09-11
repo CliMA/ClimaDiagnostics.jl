@@ -205,6 +205,33 @@ if context isa ClimaComms.SingletonCommsContext
             "purely vertical space",
             (10,),
         ),
+        (
+            MultiColumnCenterFiniteDifferenceSpace(;
+                zelem = 10,
+                points = [
+                    ClimaCore.Geometry.LatLongPoint(0.0, 0.0),
+                    ClimaCore.Geometry.LatLongPoint(10.0, 20.0),
+                ],
+            ),
+            "multiple column vertical space",
+            (2, 10),
+        ),
+        (
+            MultiColumnCenterFiniteDifferenceSpace(;
+                zelem = 10,
+                points = [
+                    ClimaCore.Geometry.LatLongPoint(0.0, 0.0),
+                    ClimaCore.Geometry.LatLongPoint(10.0, 20.0),
+                ],
+            ) |> ClimaCore.Spaces.horizontal_space,
+            "multiple point space",
+            (2,),
+        ),
+        (
+            ClimaCore.Spaces.level(MultiColumnCenterFiniteDifferenceSpace(), 1),
+            "level of a multiple column space",
+            (2,),
+        ),
     ]
 end
 for (space, space_name, written_space_dims) in spaces_test_list
@@ -367,7 +394,11 @@ spherical_shell_space = SphericalShellSpace()
 col_space = ColumnCenterFiniteDifferenceSpace()
 spaces_test_list = [(spherical_shell_space, "shell")]
 if context isa ClimaComms.SingletonCommsContext
-    spaces_test_list = [spaces_test_list..., (col_space, "col")]
+    spaces_test_list = [
+        spaces_test_list...,
+        (col_space, "col"),
+        (MultiColumnCenterFiniteDifferenceSpace(), "multicol"),
+    ]
 end
 for (space, space_name) in spaces_test_list
     mktempdir() do output_dir
@@ -388,6 +419,10 @@ for (space, space_name) in spaces_test_list
                             num_lat = length(ds["lat"])
                             @test size(ds["YO"]) ==
                                   (num_time, num_lon, num_lat, num_pfull_levels)
+                        elseif space_name == "multicol"
+                            num_col = length(ds["column"])
+                            @test size(ds["YO"]) ==
+                                  (num_time, num_col, num_pfull_levels)
                         else
                             @test size(ds["YO"]) == (num_time, num_pfull_levels)
                         end
