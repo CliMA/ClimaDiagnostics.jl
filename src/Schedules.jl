@@ -13,8 +13,6 @@ import ..seconds_to_str_short,
     ..period_to_str_short,
     ..period_to_str_long
 
-import ClimaTimeSteppers
-
 import ClimaUtilities.TimeManager: ITime, date, counter, period, epoch
 
 """
