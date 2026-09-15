@@ -1,5 +1,10 @@
 # NEWS
 
+v0.3.10
+-------
+
+- Add ClimaTimeSteppers v1 in the compat
+
 v0.3.9
 -------
 
