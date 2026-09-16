@@ -1,5 +1,13 @@
 # NEWS
 
+main
+-------
+
+v0.3.11
+-------
+
+- Add ClimaCore v1 in the compat
+
 v0.3.10
 -------
 
