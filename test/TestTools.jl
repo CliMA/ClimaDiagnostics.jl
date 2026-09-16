@@ -64,15 +64,10 @@ function SphericalShellSpace(;
         boundary_names = (:bottom, :top),
     )
     vertmesh = ClimaCore.Meshes.IntervalMesh(vertdomain; nelems = zelem)
-    if pkgversion(ClimaCore) >= v"0.14.10"
-        vert_center_space = ClimaCore.Spaces.CenterFiniteDifferenceSpace(
-            ClimaComms.device(context),
-            vertmesh,
-        )
-    else
-        vert_center_space =
-            ClimaCore.Spaces.CenterFiniteDifferenceSpace(vertmesh)
-    end
+    vert_center_space = ClimaCore.Spaces.CenterFiniteDifferenceSpace(
+        ClimaComms.device(context),
+        vertmesh,
+    )
 
     horzdomain = ClimaCore.Domains.SphereDomain(FT(radius))
     horzmesh = ClimaCore.Meshes.EquiangularCubedSphere(horzdomain, nelements)
@@ -114,15 +109,10 @@ function BoxSpace(;
         boundary_names = (:bottom, :top),
     )
     vertmesh = ClimaCore.Meshes.IntervalMesh(vertdomain; nelems = zelem)
-    if pkgversion(ClimaCore) >= v"0.14.10"
-        vert_center_space = ClimaCore.Spaces.CenterFiniteDifferenceSpace(
-            ClimaComms.device(context),
-            vertmesh,
-        )
-    else
-        vert_center_space =
-            ClimaCore.Spaces.CenterFiniteDifferenceSpace(vertmesh)
-    end
+    vert_center_space = ClimaCore.Spaces.CenterFiniteDifferenceSpace(
+        ClimaComms.device(context),
+        vertmesh,
+    )
 
     # NOTE: here we assume LatPoint is first
     XPoint = lonlat ? ClimaCore.Geometry.LatPoint : ClimaCore.Geometry.XPoint
