@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>How to add ClimaDiagnostics to a package · ClimaDiagnostics.jl</title><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.045/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.13.24/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><a class="docs-logo" href="../"><img src="../assets/logo.svg" alt="ClimaDiagnostics.jl logo"/></a><div class="docs-package-name"><span class="docs-autofit"><a href="../">ClimaDiagnostics.jl</a></span></div><form class="docs-search" action="../search/"><input class="docs-search-query" id="documenter-search-query" name="q" type="text" placeholder="Search docs"/></form><ul class="docs-menu"><li><a class="tocitem" href="../">Overview</a></li><li><a class="tocitem" href="../user_guide/">User guide</a></li><li><a class="tocitem" href="../writers/">Saving output</a></li><li class="is-active"><a class="tocitem" href>How to add ClimaDiagnostics to a package</a><ul class="internal"><li><a class="tocitem" href="#Step-2"><span>Step 2</span></a></li><li><a class="tocitem" href="#Step-1"><span>Step 1</span></a></li></ul></li><li><a class="tocitem" href="../internals/">Internals</a></li><li><a class="tocitem" href="../api/">APIs</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><nav class="breadcrumb"><ul class="is-hidden-mobile"><li class="is-active"><a href>How to add ClimaDiagnostics to a package</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>How to add ClimaDiagnostics to a package</a></li></ul></nav><div class="docs-right"><a class="docs-edit-link" href="https://github.com/CliMA/ClimaDiagnostics.jl/blob/main/docs/src/developer_guide.md" title="Edit on GitHub"><span class="docs-icon fab"></span><span class="docs-label is-hidden-touch">Edit on GitHub</span></a><a class="docs-settings-button fas fa-cog" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-sidebar-button fa fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a></div></header><article class="content" id="documenter-page"><h1 id="I-am-a-developer,-how-do-I-add-ClimaDiagnostics.jl-to-my-package?"><a class="docs-heading-anchor" href="#I-am-a-developer,-how-do-I-add-ClimaDiagnostics.jl-to-my-package?">I am a developer, how do I add <code>ClimaDiagnostics.jl</code> to my package?</a><a id="I-am-a-developer,-how-do-I-add-ClimaDiagnostics.jl-to-my-package?-1"></a><a class="docs-heading-anchor-permalink" href="#I-am-a-developer,-how-do-I-add-ClimaDiagnostics.jl-to-my-package?" title="Permalink"></a></h1><p>This page provides additional documentation on abstractions to use <code>ClimaDiagnostics</code>. Before reading this page, make sure you are familiar with the terminology. You need to know what a <a href="../api/#ClimaDiagnostics.DiagnosticVariables.DiagnosticVariable"><code>DiagnosticVariable</code></a> and a <a href="../api/#ClimaDiagnostics.ScheduledDiagnostics.ScheduledDiagnostic"><code>ScheduledDiagnostic</code></a> are.</p><p>There are two components needed to add support for <code>ClimaDiagnostics.jl</code> in your package.</p><ol><li>A way to convert users&#39; intentions to a list of <a href="../api/#ClimaDiagnostics.ScheduledDiagnostics.ScheduledDiagnostic"><code>ScheduledDiagnostic</code></a></li><li>A call to <a href="../api/#ClimaDiagnostics.IntegratorWithDiagnostics"><code>IntegratorWithDiagnostics</code></a>, if you have an integrator (if you do not have an integrator read the <a href="#What-if-I-do-not-have-an-integrator?">What if I do not have an integrator?</a> section)</li></ol><h2 id="Step-2"><a class="docs-heading-anchor" href="#Step-2">Step 2</a><a id="Step-2-1"></a><a class="docs-heading-anchor-permalink" href="#Step-2" title="Permalink"></a></h2><p>Let us assume that <code>scheduled_diagnostics</code> is the list of <code>ScheduledDiagnostic</code>s obtained from step 1. (more on this later), and <code>integrator</code> a <code>SciML</code> integrator.</p><p>All we need to do to add diagnostics is</p><pre><code class="language-julia hljs">import ClimaDiagnostics: IntegratorWithDiagnostics
+
+integrator = IntegratorWithDiagnostics(integrator, scheduled_diagnostics)</code></pre><p>Creating an <code>IntegratorWithDiagnostics</code> results in calling all the diagnostics once. Therefore, the compile and runtime of this function can be significant if you have a large number of diagnostics.</p><p>You can learn about what is happening under the hook in the <a href="../internals/#internals_header">Internals</a> page.</p><p>This is pretty much all that you need to know about step 2.</p><h3 id="What-if-I-do-not-have-an-integrator?"><a class="docs-heading-anchor" href="#What-if-I-do-not-have-an-integrator?">What if I do not have an integrator?</a><a id="What-if-I-do-not-have-an-integrator?-1"></a><a class="docs-heading-anchor-permalink" href="#What-if-I-do-not-have-an-integrator?" title="Permalink"></a></h3><p><code>ClimaDiagnostics</code> does not assume that you are working with an integrator object, so you can use it in your project even when you hold your simulation fields in other data structures. </p><p><code>DiagnosticVariable</code>s in <code>ClimaDiagnostics</code> come with a <code>compute!</code> function with a specific signature <code>compute!(out, state, cache, time)</code>. This is required because <code>ClimaDiagnostics</code> calls them by calling <code>compute!(out, integrator.u, integrator.p, integrator.t)</code>. If you do not have an integrator, all you have to do is create a wrapper that exposes this interface.</p><p>For example, you could have <code>fields</code>, <code>parameters</code>, and <code>time</code>, and you could wrap them in a <code>my_integrator = (; u = fields, p = parameters, t = time)</code> and use the objects in the <code>compute!</code> function as you like. </p><p>The integrator-equivalent object is also used in <a href="../user_guide/#schedules_header"><code>Schedules</code></a>. For time-dependent schedules, <code>integrator.t</code> is used. For step-dependent schedules (e.g., <a href="../api/#ClimaDiagnostics.Schedules.EveryStepSchedule"><code>ClimaDiagnostics.Schedules.EveryStepSchedule</code></a>), the <code>step</code> field is used. If you are using these schedules, do also add <code>step</code> to your <code>my_integrator</code>.</p><p>If you do not have an integrator, it is likely that you do not have a callback system either. In this case, you would have to manually call the <a href="../api/#ClimaDiagnostics.orchestrate_diagnostics"><code>ClimaDiagnostics.orchestrate_diagnostics</code></a> at the end of each of your steps. <code>orchestrate_diagnostics</code> is the heart of <code>ClimaDiagnostics</code>: it runs all the calculations are saves the output. Usually, it is added as a callback called at the end of every step. If this is not possible, you should manually call it.</p><p>In this case, your interface would probably require you to manually construct the <a href="../api/#ClimaDiagnostics.DiagnosticsHandler"><code>ClimaDiagnostics.DiagnosticsHandler</code></a></p><div class="admonition is-category-summary"><header class="admonition-header">Summary</header><div class="admonition-body"><ul><li>Wrap your objects in <code>my_integrator = (; u = fields, p = parameters, t = time, step = step)</code></li><li>Manually construct a <a href="../api/#ClimaDiagnostics.DiagnosticsHandler"><code>ClimaDiagnostics.DiagnosticsHandler</code></a> from your <a href="../api/#ClimaDiagnostics.ScheduledDiagnostics.ScheduledDiagnostic"><code>ClimaDiagnostics.ScheduledDiagnostic</code></a></li><li>Manually call a <a href="../api/#ClimaDiagnostics.orchestrate_diagnostics"><code>ClimaDiagnostics.orchestrate_diagnostics</code></a> at the end of each step</li></ul></div></div><h2 id="Step-1"><a class="docs-heading-anchor" href="#Step-1">Step 1</a><a id="Step-1-1"></a><a class="docs-heading-anchor-permalink" href="#Step-1" title="Permalink"></a></h2><p>Step 1 in the recipe to bring <code>ClimaDiagnostics</code> to your package strongly depends on you.</p><p>In this section, I will present a tower of interfaces that you can put in place to make it more convenient for your users. Keep in mind that each layer trades more convenience for less flexibility. So, as you set up your interfaces, I recommend you keep them exposed so that your users can access lower-level functions if they need to.</p><h3 id="Level-0:-do-nothing"><a class="docs-heading-anchor" href="#Level-0:-do-nothing">Level 0: do nothing</a><a id="Level-0:-do-nothing-1"></a><a class="docs-heading-anchor-permalink" href="#Level-0:-do-nothing" title="Permalink"></a></h3><p>At the zero-th level, you let your users work directly with <code>ClimaDiagnostics</code>. This means that they will have to define their own <code>DiagnosticVariable</code>s and <code>ScheduledDiagnostic</code>s. This also requires that your simulation is executed as a julia script.</p><p>It is a good idea for your users to be aware of this possibility because it brings enormous power. <code>ScheduledDiagnostic</code>s can be triggered on arbitrary conditions, and your users could be creative with that. For example, users might want to compute and output a variable <code>var1</code> when they find that the maximum of variable <code>var2</code> is greater than a threshold (e.g., for debugging).</p><p>Let us see the simplest example to accomplish this</p><pre><code class="language-julia hljs">import ClimaDiagnostics: DiagnosticVariable, ScheduledDiagnostic
+import ClimaDiagnostics.Writers: DictWriter
+
+myvar = DiagnosticVariable(; compute! = (out, u, p, t) -&gt; u.var1)
+
+myschedule = (integrator) -&gt; maximum(integrator.u.var2) &gt; 10.0
+
+diag = ScheduledDiagnostic(variable = myvar,
+                           compute_schedule_func = myschedule,
+                           output_schedule_func = myschedule,
+                           output_writer = DictWriter())</code></pre><p>Now we can go to step 2 and 3 in the previous list and pass <code>[diag]</code> to the <code>DiagnosticsHandler</code>.</p><p>Point your users to the documentation of this package for them to learn how to use it in its full power.</p><h3 id="Level-1:-provide-a-database-of-DiagnosticVariables"><a class="docs-heading-anchor" href="#Level-1:-provide-a-database-of-DiagnosticVariables">Level 1: provide a database of <code>DiagnosticVariable</code>s</a><a id="Level-1:-provide-a-database-of-DiagnosticVariables-1"></a><a class="docs-heading-anchor-permalink" href="#Level-1:-provide-a-database-of-DiagnosticVariables" title="Permalink"></a></h3><p>As a package developer, you know that there is a large collection of variables that several users will be interested in. For example, if you are running an atmospheric simulation, your users will want to be able to look at the air temperature. For this reason, it is a very good (and user-friendly) idea to provide a collection of <code>DiagnosticVariable</code>s ready to be used. In this section, I sketch how you could go about and implement this.</p><p>Your <code>DiagnosticVariable</code>s database can be represented as a dictionary <code>ALL_DIAGNOSTICS</code> indexed over the short name of the variable. Then, you could provide adders and accessors.</p><p>This might look like the following:</p><pre><code class="language-julia hljs">module Diagnostics
+import ClimaDiagnostics: DiagnosticVariable
+
+const ALL_DIAGNOSTICS = Dict{String, DiagnosticVariable}()
+
+&quot;&quot;&quot;
+
+    add_diagnostic_variable!(; short_name,
+                               long_name,
+                               standard_name,
+                               units,
+                               description,
+                               compute!)
+
+
+Add a new variable to the `ALL_DIAGNOSTICS` dictionary (this function mutates the state of
+`ALL_DIAGNOSTICS`).
+
+If possible, please follow the naming scheme outline in
+https://airtable.com/appYNLuWqAgzLbhSq/shrKcLEdssxb8Yvcp/tblL7dJkC3vl5zQLb
+
+Keyword arguments
+=================
+
+- `short_name`: Name used to identify the variable in the output files and in the file
+                names. Short but descriptive. Diagnostics are identified by the short name.
+
+- `long_name`: Name used to identify the variable in the output files.
+
+- `standard_name`: Standard name, as in
+                   http://cfconventions.org/Data/cf-standard-names/71/build/cf-standard-name-table.html
+
+- `units`: Physical units of the variable.
+
+- `comments`: More verbose explanation of what the variable is, or comments related to how
+              it is defined or computed.
+
+- `compute!`: Function that compute the diagnostic variable from the state. It has to take
+              two arguments: the `integrator`, and a pre-allocated area of memory where to
+              write the result of the computation. It the no pre-allocated area is
+              available, a new one will be allocated. To avoid extra allocations, this
+              function should perform the calculation in-place (i.e., using `.=`).
+
+&quot;&quot;&quot;
+function add_diagnostic_variable!(;
+    short_name,
+    long_name,
+    standard_name = &quot;&quot;,
+    units,
+    comments = &quot;&quot;,
+    compute!,
+)
+    haskey(ALL_DIAGNOSTICS, short_name) &amp;&amp; @warn(
+        &quot;overwriting diagnostic `$short_name` entry containing fields\n&quot; *
+        &quot;$(map(
+            field -&gt; &quot;$(getfield(ALL_DIAGNOSTICS[short_name], field))&quot;,
+            # We cannot really compare functions...
+            filter(field -&gt; field != :compute!, fieldnames(DiagnosticVariable)),
+        ))&quot;
+    )
+
+    ALL_DIAGNOSTICS[short_name] = DiagnosticVariable(;
+        short_name,
+        long_name,
+        standard_name,
+        units,
+        comments,
+        compute!,
+    )
+
+&quot;&quot;&quot;
+    get_diagnostic_variable!(short_name)
+
+Return a `DiagnosticVariable` from its `short_name`, if it exists.
+&quot;&quot;&quot;
+function get_diagnostic_variable(short_name)
+    haskey(ALL_DIAGNOSTICS, short_name) ||
+        error(&quot;diagnostic $short_name does not exist&quot;)
+
+    return ALL_DIAGNOSTICS[short_name]
+end
+
+end</code></pre><p>Of course, you should have the fields and comments that are relevant to your package.</p><p>Next, as a developer, you will use <code>add_diagnostic_variable!</code> to populate your database. You can also expose your users to this function so that they can extend their personal database in their simulations.</p><p>A simple example of a new variable might look like</p><pre><code class="language-julia hljs">###
+# Density (3d)
+###
+add_diagnostic_variable!(
+    short_name = &quot;rhoa&quot;,
+    long_name = &quot;Air Density&quot;,
+    standard_name = &quot;air_density&quot;,
+    units = &quot;kg m^-3&quot;,
+    compute! = (out, state, cache, time) -&gt; begin
+        if isnothing(out)
+            return state.c.ρ
+        else
+            out .= state.c.ρ
+        end
+    end,
+)</code></pre><p>It is a good idea to put safeguards in place to ensure that your users will not be allowed to call diagnostics that do not make sense for the simulation they are running. If your package has a notion of <code>Model</code> that is stored in <code>p</code>, you can dispatch over that and return an error. A simple example might be</p><pre><code class="language-julia hljs">###
+# Specific Humidity
+###
+compute_hus!(out, state, cache, time) =
+    compute_hus!(out, state, cache, time, cache.atmos.moisture_model)
+
+compute_hus!(out, state, cache, time) =
+    compute_hus!(out, state, cache, time, cache.model.moisture_model)
+compute_hus!(_, _, _, _, model::T) where {T} =
+    error(&quot;Cannot compute hus with $model&quot;)
+
+function compute_hus!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::T,
+) where {T &lt;: Union{EquilMoistModel, NonEquilMoistModel}}
+    if isnothing(out)
+        return state.c.ρq_tot ./ state.c.ρ
+    else
+        out .= state.c.ρq_tot ./ state.c.ρ
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = &quot;hus&quot;,
+    long_name = &quot;Specific Humidity&quot;,
+    standard_name = &quot;specific_humidity&quot;,
+    units = &quot;kg kg^-1&quot;,
+    comments = &quot;Mass of all water phases per mass of air&quot;,
+    compute! = compute_hus!,
+)</code></pre><p>This relies on dispatching over <code>moisture_model</code>. If <code>model</code> is not in <code>Union{EquilMoistModel, NonEquilMoistModel}</code>, the code returns an informative error.</p><p>If you provide a database, users can create their <code>ScheduledDiagnostic</code>s directly from the <code>DiagnosticVariable</code>s you provided.</p><p>For instance to output the specific humidity every 5 iterations:</p><pre><code class="language-julia hljs">import ClimaDiagnostics: ScheduledDiagnostic
+import ClimaDiagnostics.Callbacks: DivisorSchedule
+import ClimaDiagnostics.Writers: DictWriter
+
+diag = ScheduledDiagnostic(variable = get_diagnostic_variable!(&quot;hus&quot;),
+                           output_schedule_func = DivisorSchedule(5),
+                           output_writer = DictWriter())</code></pre><p>Alongside with providing the <code>DiagnosticVariable</code>s, you can also provide convenience functions for standard operations.</p><p>For example, you could provide</p><pre><code class="language-julia hljs">using ClimaDiagnostics.Callbacks: EveryStepSchedule, EveryDtSchedule
+
+function monthly_average(FT, short_name; output_writer)
+    period = 30 * 24 * 60 * 60 * one(FT)
+    return ScheduledDiagnostic(
+            variable = get_diagnostic_variable(short_name),
+            compute_schedule_func = EveryStepSchedule(),
+            output_schedule_func = EveryDtSchedule(period),
+            reduction_time_func = (+),
+            output_writer = output_writer,
+            pre_output_hook! = average_pre_output_hook!,
+        )
+end</code></pre><p>Allowing users to just call <code>monthly_average(Float32, &quot;hus&quot;, writer)</code>.</p><blockquote><p>Note: <code>ClimaDiagnostics</code> will probably provided these schedules natively at some point in the future.</p></blockquote><h3 id="Level-2:-Provide-higher-level-interfaces-(e.g.,-YAML)"><a class="docs-heading-anchor" href="#Level-2:-Provide-higher-level-interfaces-(e.g.,-YAML)">Level 2: Provide higher-level interfaces (e.g., YAML)</a><a id="Level-2:-Provide-higher-level-interfaces-(e.g.,-YAML)-1"></a><a class="docs-heading-anchor-permalink" href="#Level-2:-Provide-higher-level-interfaces-(e.g.,-YAML)" title="Permalink"></a></h3><p>Finally, you can set in place that parses user input (e.g., from command line or text files) into <code>ScheduledDiagnostics</code> using the short names in your database. Of course, this interface will be limited to what you expose.</p><p>For example, a simple parser that allow users to specify <code>ScheduledDiagnostics</code> by their short name, accumulation/output period, and their writer might look like the following:</p><pre><code class="language-julia hljs">import ClimaDiagnostics: average_pre_output_hook!, HDF5Writer, NetCDFWriter, ScheduledDiagnostic
+
+function parse_yaml(parsed_args, source_space)
+    # We either get the diagnostics section in the YAML file, or we return an empty list
+    # (which will result in an empty list being created by the map below)
+    yaml_diagnostics = get(parsed_args, &quot;diagnostics&quot;, [])
+
+    # ALLOWED_REDUCTIONS is the collection of reductions we support. The keys are the
+    # strings that have to be provided in the YAML file. The values are tuples with the
+    # function that has to be passed to reduction_time_func and the one that has to passed
+    # to pre_output_hook!
+
+    # We make &quot;nothing&quot; a string so that we can accept also the word &quot;nothing&quot;, in addition
+    # to the absence of the value
+    #
+    # NOTE: Everything has to be lowercase in ALLOWED_REDUCTIONS (so that we can match
+    # &quot;max&quot; and &quot;Max&quot;)
+    ALLOWED_REDUCTIONS = Dict(
+        &quot;nothing&quot; =&gt; (nothing, nothing), # nothing is: just dump the variable
+        &quot;max&quot; =&gt; (max, nothing),
+        &quot;min&quot; =&gt; (min, nothing),
+        &quot;average&quot; =&gt; ((+), average_pre_output_hook!),
+    )
+
+    output_dir = parsed_args.output_dir
+
+    hdf5_writer = HDF5Writer(output_dir)
+    netcdf_writer = CAD.NetCDFWriter(
+        source_space,
+        output_dir,
+    )
+    writers = (hdf5_writer, netcdf_writer)
+
+    # The default writer is HDF5
+    ALLOWED_WRITERS = Dict(
+        &quot;nothing&quot; =&gt; netcdf_writer,
+        &quot;h5&quot; =&gt; hdf5_writer,
+        &quot;hdf5&quot; =&gt; hdf5_writer,
+        &quot;nc&quot; =&gt; netcdf_writer,
+        &quot;netcdf&quot; =&gt; netcdf_writer,
+    )
+
+    diagnostics_ragged = map(yaml_diagnostics) do yaml_diag
+        short_names = yaml_diag[&quot;short_name&quot;]
+        output_name = get(yaml_diag, &quot;output_name&quot;, nothing)
+
+        map(short_names) do short_name
+            # Return &quot;nothing&quot; if &quot;reduction_time&quot; is not in the YAML block
+            #
+            # We also normalize everything to lowercase, so that can accept &quot;max&quot; but
+            # also &quot;Max&quot;
+            reduction_time_yaml =
+                lowercase(get(yaml_diag, &quot;reduction_time&quot;, &quot;nothing&quot;))
+
+            if !haskey(ALLOWED_REDUCTIONS, reduction_time_yaml)
+                error(&quot;reduction $reduction_time_yaml not implemented&quot;)
+            else
+                reduction_time_func, pre_output_hook! =
+                    ALLOWED_REDUCTIONS[reduction_time_yaml]
+            end
+
+            writer_ext = lowercase(get(yaml_diag, &quot;writer&quot;, &quot;nothing&quot;))
+
+            if !haskey(ALLOWED_WRITERS, writer_ext)
+                error(&quot;writer $writer_ext not implemented&quot;)
+            else
+                writer = ALLOWED_WRITERS[writer_ext]
+            end
+
+            haskey(yaml_diag, &quot;period&quot;) ||
+                error(&quot;period keyword required for diagnostics&quot;)
+
+            period_seconds = FT(time_to_seconds(yaml_diag[&quot;period&quot;]))
+
+            if isnothing(reduction_time_func)
+                compute_every = CAD.EveryDtSchedule(period_seconds)
+            else
+                compute_every = CAD.EveryStepSchedule()
+            end
+
+            ScheduledDiagnostic(
+                variable = get_diagnostic_variable(short_name),
+                output_schedule_func = CAD.EveryDtSchedule(period_seconds),
+                compute_schedule_func = compute_every,
+                reduction_time_func = reduction_time_func,
+                pre_output_hook! = pre_output_hook!,
+                output_writer = writer,
+            )
+        end
+    end
+
+    # Flatten the array of arrays of diagnostics
+    diagnostics = vcat(diagnostics_ragged...)
+end</code></pre><p>This will be controlled by YAML blocks like</p><pre><code class="language-yaml hljs">diagnostics:
+    - short_name: [&quot;ta&quot;, &quot;va&quot;]
+      period: 60s
+      writer: nc
+    - short_name: [&quot;ua&quot;]
+      period: 1200s
+      reduction_time: &quot;average&quot;</code></pre><p>It is typically a good idea to add the default diagnostics to the set of YAML-specified ones.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../writers/">« Saving output</a><a class="docs-footer-nextpage" href="../internals/">Internals »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.25 on <span class="colophon-date" title="Tuesday 18 March 2025 22:49">Tuesday 18 March 2025</span>. Using Julia version 1.11.4.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
