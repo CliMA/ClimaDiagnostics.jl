@@ -3,6 +3,9 @@
 main
 -------
 
+- `show` for `PressureInterpolator` and `RealPressureLevelsMethod` reads the
+  pressure levels from the pressure space and prints them in ascending order.
+
 v0.3.11
 -------
 

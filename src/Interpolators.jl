@@ -1,6 +1,6 @@
 module Interpolators
 
-import ClimaCore: Fields, Operators, Remapping
+import ClimaCore: Fields, Operators, Remapping, Spaces, Topologies
 import ClimaComms
 
 """
@@ -165,6 +165,17 @@ era5_pressure_levels() = return 100.0 .* [
 #! format: on
 
 """
+    pressure_levels(pfull_intp::PressureInterpolator)
+
+Return the pressure levels of `pfull_intp` in ascending order.
+"""
+function pressure_levels(pfull_intp::PressureInterpolator)
+    space = Remapping.pressure_space(pfull_intp.pressure_intp)
+    mesh = Topologies.mesh(Spaces.vertical_topology(space))
+    return [point.p for point in mesh.faces]
+end
+
+"""
     Base.show(io::IO, ::MIME"text/plain", pfull_intp::PressureInterpolator)
 
 Print a verbose description of `pfull_intp`, including its pressure levels and
@@ -175,11 +186,7 @@ function Base.show(io::IO, ::MIME"text/plain", pfull_intp::PressureInterpolator)
         show(io, pfull_intp)
     else
         println(io, "PressureInterpolator")
-        println(
-            io,
-            "  pressure levels: ",
-            pfull_intp.pressure_intp.pressure_levels,
-        )
+        println(io, "  pressure levels: ", pressure_levels(pfull_intp))
         println(io, "  last_t         : ", pfull_intp.last_t[])
     end
 end
