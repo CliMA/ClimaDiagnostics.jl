@@ -1,4 +1,5 @@
-import ..Interpolators: PressureInterpolator, era5_pressure_levels
+import ..Interpolators:
+    PressureInterpolator, era5_pressure_levels, pressure_levels
 import ClimaCore: Remapping
 
 """
@@ -915,7 +916,7 @@ function Base.show(
         println(
             io,
             "  pressure levels   : ",
-            pressure_sampling_method.pfull_intp.pressure_intp.pressure_levels,
+            pressure_levels(pressure_sampling_method.pfull_intp),
         )
         println(
             io,

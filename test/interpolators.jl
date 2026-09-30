@@ -95,6 +95,8 @@ include("TestTools.jl")
             ),
             Interpolators.era5_pressure_levels(),
         )
+        @test Interpolators.pressure_levels(pfull_intp) ==
+              Interpolators.era5_pressure_levels()
     end
 end
 
