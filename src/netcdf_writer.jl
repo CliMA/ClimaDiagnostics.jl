@@ -140,8 +140,8 @@ Keyword arguments
                     `nothing` or a subtype of `AbstractDict{String, String}`. Default is
                     `nothing`.
 - `horizontal_method`: Horizontal interpolation for remapping to the output grid.
-  `BilinearRemapping()` (default) uses bilinear on the 2-point cell (1D/2D horizontal);
-  `SpectralElementRemapping()` uses Lagrange polynomial at spectral element quadrature points.
+  `SpectralElementRemapping()` (default) uses Lagrange polynomial at spectral element quadrature points;
+  `BilinearRemapping()` uses bilinear on the 2-point cell (1D/2D horizontal).
   Passed to `ClimaCore.Remapping.Remapper`.
 """
 function NetCDFWriter(
