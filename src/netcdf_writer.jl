@@ -151,8 +151,8 @@ Keyword arguments
                the simulation does not begin at `t = 0` and nothing is passed in, then the
                result could be wrong.
 - `horizontal_method`: Horizontal interpolation for remapping to the output grid.
-  `BilinearRemapping()` (default) uses bilinear on the 2-point cell (1D/2D horizontal);
-  `SpectralElementRemapping()` uses Lagrange polynomial at spectral element quadrature points.
+  `SpectralElementRemapping()` (default) uses Lagrange polynomial at spectral element quadrature points;
+  `BilinearRemapping()` uses bilinear on the 2-point cell (1D/2D horizontal).
   Passed to `ClimaCore.Remapping.Remapper`.
 """
 function NetCDFWriter(
