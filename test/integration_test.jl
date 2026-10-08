@@ -10,9 +10,7 @@ import ClimaDiagnostics
 import Dates
 
 import ClimaComms
-@static if pkgversion(ClimaComms) >= v"0.6"
-    ClimaComms.@import_required_backends
-end
+ClimaComms.@import_required_backends
 
 import LazyBroadcast: lazy
 
@@ -239,68 +237,53 @@ for (space, space_name, written_space_dims) in spaces_test_list
         mktempdir() do output_dir
             output_dir = ClimaComms.bcast(context, output_dir)
             dict_writer = ClimaDiagnostics.Writers.DictWriter()
-            if (space isa ClimaCore.Spaces.PointSpace) &&
-               pkgversion(ClimaCore) < v"0.14.27"
-                @test_throws "HDF5Writer only supports Fields with PointSpace for ClimaCore >= 0.14.27" setup_integrator(
-                    output_dir;
-                    context,
-                    space,
-                    dict_writer,
-                )
-            else
-                integrator =
-                    setup_integrator(output_dir; context, space, dict_writer)
+            integrator =
+                setup_integrator(output_dir; context, space, dict_writer)
 
-                ClimaTimeSteppers.solve!(integrator)
+            ClimaTimeSteppers.solve!(integrator)
 
-                if ClimaComms.iamroot(context)
-                    NCDatasets.NCDataset(
-                        joinpath(output_dir, "YO_1it_inst.nc"),
-                    ) do nc
-                        @test nc["YO"].attrib["short_name"] == "YO"
-                        @test nc["YO"].attrib["long_name"] ==
-                              "YO YO, Instantaneous"
-                        @test size(nc["YO"]) == (11, written_space_dims...)
-                        @test nc["YO"].attrib["start_date"] ==
-                              string(Dates.DateTime(2015, 2, 2))
-                    end
-
-                    NCDatasets.NCDataset(
-                        joinpath(output_dir, "YO_2it_average.nc"),
-                    ) do nc
-                        @test nc["YO"].attrib["short_name"] == "YO"
-                        @test nc["YO"].attrib["long_name"] ==
-                              "YO YO, average within every 2 iterations"
-                        @test size(nc["YO"]) == (5, written_space_dims...)
-                    end
-
-                    NCDatasets.NCDataset(
-                        joinpath(output_dir, "YO_3s_inst.nc"),
-                    ) do nc
-                        @test nc["YO"].attrib["short_name"] == "YO"
-                        @test nc["YO"].attrib["long_name"] ==
-                              "YO YO, Instantaneous"
-                        @test size(nc["YO"]) == (4, written_space_dims...)
-                    end
+            if ClimaComms.iamroot(context)
+                NCDatasets.NCDataset(
+                    joinpath(output_dir, "YO_1it_inst.nc"),
+                ) do nc
+                    @test nc["YO"].attrib["short_name"] == "YO"
+                    @test nc["YO"].attrib["long_name"] == "YO YO, Instantaneous"
+                    @test size(nc["YO"]) == (11, written_space_dims...)
+                    @test nc["YO"].attrib["start_date"] ==
+                          string(Dates.DateTime(2015, 2, 2))
                 end
-                @test count(
-                    occursin.(
-                        Ref(r"YO_1it_inst_\d*\.\d\.h5"),
-                        readdir(output_dir),
-                    ),
-                ) == 11
-                reader = ClimaCore.InputOutput.HDF5Reader(
-                    joinpath(output_dir, "YO_1it_inst_10.0.h5"),
-                    context,
-                )
-                @test parent(
-                    ClimaCore.InputOutput.read_field(reader, "YO_1it_inst"),
-                ) == parent(integrator.u.my_var)
-                close(reader)
-                @test length(keys(dict_writer.dict["YO_1it_inst"])) == 11
-                @test dict_writer.dict["YO_1it_inst"][integrator.t] ==
-                      integrator.u.my_var
+
+                NCDatasets.NCDataset(
+                    joinpath(output_dir, "YO_2it_average.nc"),
+                ) do nc
+                    @test nc["YO"].attrib["short_name"] == "YO"
+                    @test nc["YO"].attrib["long_name"] ==
+                          "YO YO, average within every 2 iterations"
+                    @test size(nc["YO"]) == (5, written_space_dims...)
+                end
+
+                NCDatasets.NCDataset(
+                    joinpath(output_dir, "YO_3s_inst.nc"),
+                ) do nc
+                    @test nc["YO"].attrib["short_name"] == "YO"
+                    @test nc["YO"].attrib["long_name"] == "YO YO, Instantaneous"
+                    @test size(nc["YO"]) == (4, written_space_dims...)
+                end
             end
+            @test count(
+                occursin.(Ref(r"YO_1it_inst_\d*\.\d\.h5"), readdir(output_dir)),
+            ) == 11
+            reader = ClimaCore.InputOutput.HDF5Reader(
+                joinpath(output_dir, "YO_1it_inst_10.0.h5"),
+                context,
+            )
+            @test parent(
+                ClimaCore.InputOutput.read_field(reader, "YO_1it_inst"),
+            ) == parent(integrator.u.my_var)
+            close(reader)
+            @test length(keys(dict_writer.dict["YO_1it_inst"])) == 11
+            @test dict_writer.dict["YO_1it_inst"][integrator.t] ==
+                  integrator.u.my_var
         end
     end
 end
