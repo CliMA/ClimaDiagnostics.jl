@@ -653,6 +653,10 @@ end
         Spaces.PointSpace(ClimaComms.context(), Geometry.ZPoint(point_val))
     point_field = Fields.coordinate_field(point_space)
     point_writer = Writers.NetCDFWriter(point_space, output_dir)
+    @test_logs (
+        :warn,
+        "Ignoring keyword arguments for point spaces: num_points",
+    ) Writers.NetCDFWriter(point_space, output_dir; num_points = (NUM,))
 
     point_u = (; field = point_field)
 
