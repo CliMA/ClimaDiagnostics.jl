@@ -29,6 +29,12 @@ https://airtable.com/appYNLuWqAgzLbhSq/shrKcLEdssxb8Yvcp/tblL7dJkC3vl5zQLb
     Support for `compute` was introduced in version `0.2.13`. Prior to this version, the
     in-place `compute!` had to be provided.
 
+!!! compat "ClimaDiagnostics 0.3.12"
+
+    Starting from version `0.3.12`, `DiagnosticVariable` is a concrete type with no type
+    parameters: `compute!` and `compute` are stored as `Function`s. This keeps the
+    compilation cost of the diagnostics pipeline independent of the number of diagnostics.
+
 Keyword arguments
 =================
 
@@ -54,12 +60,16 @@ Keyword arguments
 - `comments`: More verbose explanation of what the variable is, or comments related to how
               it is defined or computed.
 """
-struct DiagnosticVariable{
-    F1 <: Union{Function, Nothing},
-    F2 <: Union{Function, Nothing},
-}
-    compute!::F1
-    compute::F2
+struct DiagnosticVariable
+    # `compute!` and `compute` are stored behind the abstract `Function` type on purpose:
+    # this makes `DiagnosticVariable` (and `ScheduledDiagnostic`) a single concrete type
+    # regardless of which function is used to compute the variable. In this way, the
+    # machinery that computes, accumulates, interpolates, and writes diagnostics is
+    # compiled once per field type instead of once per diagnostic. The price is one
+    # dynamic dispatch per call to `compute!`/`compute`, which is negligible compared to
+    # the cost of computing a `Field`.
+    compute!::Union{Function, Nothing}
+    compute::Union{Function, Nothing}
     short_name::String
     long_name::String
     standard_name::String
@@ -68,8 +78,8 @@ struct DiagnosticVariable{
 end
 
 function DiagnosticVariable(;
-    compute = nothing,
-    compute! = nothing,
+    @nospecialize(compute = nothing),
+    @nospecialize(compute! = nothing),
     short_name = "",
     long_name = "",
     standard_name = "",

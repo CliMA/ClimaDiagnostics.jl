@@ -13,21 +13,14 @@ simulation. For example, it could be the temperature averaged over a day. We can
 multiple `ScheduledDiagnostics` for the same `DiagnosticVariable` (e.g., daily and monthly
 average temperatures).
 """
-struct ScheduledDiagnostic{
-    T1,
-    T2,
-    OW <: AbstractWriter,
-    F1,
-    PO,
-    DV <: DiagnosticVariable,
-}
+struct ScheduledDiagnostic
     """The `DiagnosticVariable` that has to be computed and output"""
-    variable::DV
+    variable::DiagnosticVariable
 
     """A boolean function that determines when this diagnostic should be output. It has to
     take one argument, the integrator. Most typically, only `integrator.t` or
     `integrator.step` are used. Could be a Callback.AbstractSchedule."""
-    output_schedule_func::T1
+    output_schedule_func::Any
 
     """Struct that controls out to save the computed diagnostic variable to disk.
     `output_writer` has to implement a method `write_field!` that takes three arguments: the
@@ -35,7 +28,7 @@ struct ScheduledDiagnostic{
     the integrator contains extra information (such as the current timestep). It is
     responsibility of the `output_writer` to properly use the provided information for
     meaningful output."""
-    output_writer::OW
+    output_writer::AbstractWriter
 
     """If not `nothing`, this `ScheduledDiagnostic` receives an area of scratch space `acc`
     where to accumulate partial results. Then, as directed by the `compute_schedule_func`,
@@ -46,12 +39,12 @@ struct ScheduledDiagnostic{
     `sum`, and a `pre_output_hook!` that renormalizes `acc` by the number of samples has to
     be provided. For custom reductions, it is necessary to also specify the identity of
     operation by defining a new method to `identity_of_reduction`."""
-    reduction_time_func::F1
+    reduction_time_func::Any
 
     """A boolean function that determines when this diagnostic should be computed. It has to
     take one argument, the integrator. Most typically, only `integrator.t` or
     `integrator.step` are used. Could be a Callback.AbstractSchedule."""
-    compute_schedule_func::T2
+    compute_schedule_func::Any
 
     # Design note: pre_output_hook!
     #
@@ -72,7 +65,7 @@ struct ScheduledDiagnostic{
     the last time it was output. `pre_output_hook!` should mutate the accumulator in place. The
     return value of `pre_output_hook!` is discarded. An example of `pre_output_hook!` to compute
     the arithmetic average is `pre_output_hook!(acc, N) = @. acc = acc / N`."""
-    pre_output_hook!::PO
+    pre_output_hook!::Any
 
     """Short name used to output this ScheduledDiagnostic for file names or datasets."""
     output_short_name::String
@@ -154,13 +147,15 @@ end
  """
 function ScheduledDiagnostic(;
     variable::DiagnosticVariable,
-    output_writer,
-    reduction_time_func = nothing,
-    compute_schedule_func = EveryStepSchedule(),
-    output_schedule_func = isnothing(reduction_time_func) ?
-                           deepcopy(compute_schedule_func) :
-                           EveryStepSchedule(),
-    pre_output_hook! = (accum, count) -> nothing,
+    @nospecialize(output_writer),
+    @nospecialize(reduction_time_func = nothing),
+    @nospecialize(compute_schedule_func = EveryStepSchedule()),
+    @nospecialize(
+        output_schedule_func =
+            isnothing(reduction_time_func) ? deepcopy(compute_schedule_func) :
+            EveryStepSchedule()
+    ),
+    @nospecialize(pre_output_hook! = (accum, count) -> nothing),
     output_short_name = descriptive_short_name(
         variable,
         output_schedule_func,
@@ -181,22 +176,15 @@ function ScheduledDiagnostic(;
         pre_output_hook! = (accum, count) -> nothing
     end
 
-    T = typeof(variable)
-    T1 = typeof(output_schedule_func)
-    T2 = typeof(compute_schedule_func)
-    OW = typeof(output_writer)
-    F1 = typeof(reduction_time_func)
-    PO = typeof(pre_output_hook!)
-
-    ScheduledDiagnostic{T1, T2, OW, F1, PO, T}(
+    return ScheduledDiagnostic(
         variable,
         output_schedule_func,
         output_writer,
         reduction_time_func,
         compute_schedule_func,
         pre_output_hook!,
-        output_short_name,
-        output_long_name,
+        String(output_short_name),
+        String(output_long_name),
     )
 end
 
@@ -218,7 +206,7 @@ function output_long_name(sd::ScheduledDiagnostic)
     return sd.output_long_name
 end
 
-function Base.:(==)(sd1::T, sd2::T) where {T <: ScheduledDiagnostic}
+function Base.:(==)(sd1::ScheduledDiagnostic, sd2::ScheduledDiagnostic)
     # We provide == because we don't want to compare with === because we have
     # RefValues
     return all(

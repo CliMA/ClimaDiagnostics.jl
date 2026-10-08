@@ -3,6 +3,18 @@
 main
 -------
 
+- Removed type parameters from `ScheduledDiagnostic` and `DiagnosticVariable`.
+  The compute functions, schedules, reductions, pre-output
+  hooks, and writers are stored behind abstract types, so that all the
+  diagnostics in a simulation share one type. As a result, `DiagnosticsHandler`,
+  `orchestrate_diagnostics`, `interpolate_field!`, and `write_field!` are
+  compiled once per type of `Field` (and writer) rather than once per
+  diagnostic. For simulations with tens of diagnostics this removes most of the
+  compilation time attributable to diagnostics. The runtime cost is a few
+  dynamic dispatches per diagnostic per step. Code that dispatched on the type
+  parameters of `ScheduledDiagnostic{...}` or `DiagnosticVariable{...}` has to
+  be updated.
+
 v0.3.11
 -------
 
