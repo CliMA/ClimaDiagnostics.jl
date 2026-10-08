@@ -367,6 +367,10 @@ function NetCDFWriter(
     global_attribs = nothing,
     kwargs...,
 )
+    isempty(kwargs) || @warn(
+        "Ignoring keyword arguments for point spaces: $(join(keys(kwargs), ", "))",
+        maxlog = 1,
+    )
     comms_ctx = ClimaComms.context(space)
     if space isa Spaces.MultiPointSpace
         num_points = (Spaces.ncolumns(space),)
