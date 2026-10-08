@@ -12,6 +12,7 @@ Writers can implement:
 - `write_field!`
 - `Base.close`
 - `sync`
+- `z_sampling_method`
 """
 module Writers
 
@@ -37,6 +38,17 @@ end
 
 function sync(writer::AbstractWriter)
     # Nothing to be done here :)
+    return nothing
+end
+
+"""
+    z_sampling_method(writer::AbstractWriter)
+
+Return the `AbstractZSamplingMethod` used by `writer` to sample the vertical
+direction, or `nothing` if `writer` does not interpolate along the vertical
+(the default).
+"""
+function z_sampling_method(writer::AbstractWriter)
     return nothing
 end
 
