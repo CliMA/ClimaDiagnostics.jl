@@ -1,5 +1,5 @@
 import ClimaComms
-import ClimaCore: InputOutput, Spaces
+import ClimaCore: InputOutput
 import ClimaUtilities.TimeManager: ITime
 
 import NVTX
@@ -46,11 +46,6 @@ NVTX.@annotate function write_field!(
     p,
     t,
 )
-    axes(field) isa Spaces.PointSpace &&
-        pkgversion(InputOutput) < v"0.14.27" &&
-        error(
-            "HDF5Writer only supports Fields with PointSpace for ClimaCore >= 0.14.27",
-        )
     var = diagnostic.variable
     time = t
 

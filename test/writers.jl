@@ -547,49 +547,47 @@ end
     end
 
     # Check columns
-    if pkgversion(ClimaCore) >= v"0.14.23"
-        # Center space
-        for (i, colspace) in enumerate((
-            ColumnCenterFiniteDifferenceSpace(),
-            ColumnFaceFiniteDifferenceSpace(),
-        ))
-            colfield = Fields.coordinate_field(colspace).z
+    # Center space
+    for (i, colspace) in enumerate((
+        ColumnCenterFiniteDifferenceSpace(),
+        ColumnFaceFiniteDifferenceSpace(),
+    ))
+        colfield = Fields.coordinate_field(colspace).z
 
-            colwriter =
-                Writers.NetCDFWriter(colspace, output_dir; num_points = (NUM,))
-            coldiagnostic = ClimaDiagnostics.ScheduledDiagnostic(;
-                variable = ClimaDiagnostics.DiagnosticVariable(;
-                    compute!,
-                    short_name = "ABC",
-                ),
-                output_short_name = "my_short_name_c$(i)",
-                output_long_name = "My Long Name",
-                output_writer = colwriter,
+        colwriter =
+            Writers.NetCDFWriter(colspace, output_dir; num_points = (NUM,))
+        coldiagnostic = ClimaDiagnostics.ScheduledDiagnostic(;
+            variable = ClimaDiagnostics.DiagnosticVariable(;
+                compute!,
+                short_name = "ABC",
+            ),
+            output_short_name = "my_short_name_c$(i)",
+            output_long_name = "My Long Name",
+            output_writer = colwriter,
+        )
+        colu = (; colfield)
+        Writers.interpolate_field!(
+            colwriter,
+            colfield,
+            coldiagnostic,
+            colu,
+            p,
+            t,
+        )
+        Writers.write_field!(colwriter, colfield, coldiagnostic, colu, p, t)
+        # Write a second time, to check consistency
+        Writers.write_field!(colwriter, colfield, coldiagnostic, colu, p, t)
+        NCDatasets.NCDataset(
+            joinpath(output_dir, "my_short_name_c$(i).nc"),
+        ) do nc
+            # Test dimensions
+            vpts = Writers.target_coordinates(
+                colspace,
+                (NUM,),
+                colwriter.z_sampling_method,
             )
-            colu = (; colfield)
-            Writers.interpolate_field!(
-                colwriter,
-                colfield,
-                coldiagnostic,
-                colu,
-                p,
-                t,
-            )
-            Writers.write_field!(colwriter, colfield, coldiagnostic, colu, p, t)
-            # Write a second time, to check consistency
-            Writers.write_field!(colwriter, colfield, coldiagnostic, colu, p, t)
-            NCDatasets.NCDataset(
-                joinpath(output_dir, "my_short_name_c$(i).nc"),
-            ) do nc
-                # Test dimensions
-                vpts = Writers.target_coordinates(
-                    colspace,
-                    (NUM,),
-                    colwriter.z_sampling_method,
-                )
 
-                @test nc["z"][:] == vpts
-            end
+            @test nc["z"][:] == vpts
         end
     end
 

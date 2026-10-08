@@ -4,9 +4,7 @@ import ClimaTimeSteppers
 
 import ClimaCore
 import ClimaComms
-@static if pkgversion(ClimaComms) >= v"0.6"
-    ClimaComms.@import_required_backends
-end
+ClimaComms.@import_required_backends
 import ClimaTimeSteppers
 
 function ColumnCenterFiniteDifferenceSpace(
