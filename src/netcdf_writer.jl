@@ -111,6 +111,16 @@ function Base.close(writer::NetCDFWriter)
 end
 
 """
+    z_sampling_method(writer::NetCDFWriter)
+
+Return the `AbstractZSamplingMethod` used by `writer` to sample the vertical
+direction (`nothing` for writers on `PointSpace`s).
+"""
+function z_sampling_method(writer::NetCDFWriter)
+    return writer.z_sampling_method
+end
+
+"""
     NetCDFWriter(space, output_dir)
 
 Save a `ScheduledDiagnostic` to a NetCDF file inside the `output_dir` of the simulation by
