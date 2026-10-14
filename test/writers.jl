@@ -269,6 +269,7 @@ end
         @test nc["ABC"].attrib["start_date"] ==
               string(Dates.DateTime(1453, 5, 29))
         @test size(nc["ABC"]) == (2, NUM, 2NUM, 3NUM)
+        @test !haskey(nc["ABC"].attrib, "coordinates")
         @test nc["time"][1] == 10.0
         @test nc["date"][1] == Dates.DateTime(1453, 5, 29) + Dates.Second(10.0)
         @test nc["time"].attrib["standard_name"] == "time"
@@ -408,6 +409,7 @@ end
         @test nc["lat"][:] == lat
         @test nc["z_reference"][:] == vpts
         @test size(nc["z_physical"]) == (NUM, 2NUM, length(vpts))
+        @test nc["ABC"].attrib["coordinates"] == "z_physical"
     end
 
     # Check boxes
