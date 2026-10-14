@@ -751,6 +751,9 @@ function get_var_and_t_index!(
         v.attrib["long_name"] = output_long_name(diagnostic)::String
         v.attrib["units"] = var.units::String
         v.attrib["comments"] = var.comments::String
+        if haskey(nc, "z_physical")
+            v.attrib["coordinates"] = "z_physical"
+        end
         if !isnothing(start_date) && !haskey(v.attrib, "start_date")
             v.attrib["start_date"] = string(start_date)::String
         end
