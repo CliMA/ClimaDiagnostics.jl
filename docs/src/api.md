@@ -50,7 +50,6 @@ ClimaDiagnostics.Writers.NetCDFWriter
 ClimaDiagnostics.Writers.HDF5Writer
 ClimaDiagnostics.Writers.interpolate_field!
 ClimaDiagnostics.Writers.write_field!
-ClimaDiagnostics.Writers.z_sampling_method
 ClimaDiagnostics.Writers.default_num_points
 Base.close
 ```
