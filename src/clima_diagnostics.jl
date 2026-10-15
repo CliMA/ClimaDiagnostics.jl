@@ -8,12 +8,7 @@ import ..Interpolators:
     interpolate_to_pressure_coords, interpolate_to_pressure_coords!, update!
 import .Schedules: DivisorSchedule, EveryDtSchedule
 import .Writers:
-    interpolate_field!,
-    write_field!,
-    sync,
-    AbstractWriter,
-    NetCDFWriter,
-    z_sampling_method
+    interpolate_field!, write_field!, sync, AbstractWriter, NetCDFWriter
 
 import ..Writers: AbstractZSamplingMethod, RealPressureLevelsMethod
 
@@ -95,8 +90,8 @@ function DiagnosticsHandler(scheduled_diagnostics, Y, p, t; dt = nothing)
     # NOTE: unique requires isequal and hash to both be implemented. We don't really want to
     # do that (implement the hash). So, we roll our own `unique`. This is O(N^2) but it is run
     # only once, so it should be fine.
-    seen = ScheduledDiagnostic[]
-    unique_scheduled_diagnostics = ScheduledDiagnostic[]
+    seen = []
+    unique_scheduled_diagnostics = []
     for x in scheduled_diagnostics
         if all(x != sd for sd in seen)
             push!(seen, x)
@@ -150,7 +145,7 @@ function DiagnosticsHandler(scheduled_diagnostics, Y, p, t; dt = nothing)
             # https://github.com/CliMA/ClimaAtmos.jl/pull/2579 and
             # https://github.com/JuliaGPU/Adapt.jl/issues/21
             accumulators[i] = similar(storage[i])
-            _copyto!(accumulators[i], storage[i])
+            accumulators[i] .= storage[i]
         end
     end
     storage = value_types(storage)[storage...]
@@ -196,36 +191,25 @@ function _check_dt_schedules(dt, diagnostics)
 end
 
 """
-    _copyto!(dest, src)
-
-Evaluate `dest .= src` within a function barrier.
-"""
-function _copyto!(dest, src)
-    dest .= src
-    return nothing
-end
-
-"""
-    _accumulate!(reduction_time_func, acc, new_value)
-
-Evaluate `acc .= reduction_time_func.(acc, new_value)` within a function barrier.
-"""
-function _accumulate!(reduction_time_func, acc, new_value)
-    acc .= reduction_time_func.(acc, new_value)
-    return nothing
-end
-
-"""
     compute_field(diag::ScheduledDiagnostic, Y, p, t)
 
 Compute the field from `compute!` or `compute` from the diagnostic variable
 `diag.variable`.
 
 This specializes on `z_sampling_method` if the writer in `diag` is a
-`NetCDFWriter` (`z_sampling_method` returns `nothing` for the other writers).
+`NetCDFWriter`.
 """
 compute_field(diag::ScheduledDiagnostic, Y, p, t) =
-    compute_field(diag, Y, p, t, z_sampling_method(diag.output_writer))
+    compute_field(diag, Y, p, t, nothing)
+
+function compute_field(
+    diag::ScheduledDiagnostic{T1, T2, OW},
+    Y,
+    p,
+    t,
+) where {T1, T2, OW <: NetCDFWriter}
+    compute_field(diag, Y, p, t, diag.output_writer.z_sampling_method)
+end
 
 function compute_field(
     diag::ScheduledDiagnostic,
@@ -304,10 +288,20 @@ Compute a field using `compute!` or `compute` from the diagnostic variable
 `diag.variable` and store the field in `dest`.
 
 This specializes on `z_sampling_method` if the writer in `diag` is a
-`NetCDFWriter` (`z_sampling_method` returns `nothing` for the other writers).
+`NetCDFWriter`.
 """
 compute_field!(dest, diag::ScheduledDiagnostic, Y, p, t) =
-    compute_field!(dest, diag, Y, p, t, z_sampling_method(diag.output_writer))
+    compute_field!(dest, diag, Y, p, t, nothing)
+
+function compute_field!(
+    dest,
+    diag::ScheduledDiagnostic{T1, T2, OW},
+    Y,
+    p,
+    t,
+) where {T1, T2, OW <: NetCDFWriter}
+    compute_field!(dest, diag, Y, p, t, diag.output_writer.z_sampling_method)
+end
 
 function compute_field!(
     dest,
@@ -330,12 +324,12 @@ function compute_field!(
 
     if has_inplace_compute
         # Case 1
-        variable.compute!(dest, Y, p, t)
+        diag.variable.compute!(dest, Y, p, t)
     else
         # Case 2
-        out_or_broadcasted = variable.compute(Y, p, t)
+        out_or_broadcasted = diag.variable.compute(Y, p, t)
 
-        _copyto!(dest, out_or_broadcasted)
+        dest .= out_or_broadcasted
     end
     return nothing
 end
@@ -422,11 +416,11 @@ NVTX.@annotate function orchestrate_diagnostics(
 
         isa_time_reduction = !isnothing(diag.reduction_time_func)
         if isa_time_reduction
-            _accumulate!(
-                diag.reduction_time_func,
-                diagnostic_handler.accumulators[diag_index],
-                diagnostic_handler.storage[diag_index],
-            )
+            diagnostic_handler.accumulators[diag_index] .=
+                diag.reduction_time_func.(
+                    diagnostic_handler.accumulators[diag_index],
+                    diagnostic_handler.storage[diag_index],
+                )
         end
     end
 
@@ -439,9 +433,9 @@ NVTX.@annotate function orchestrate_diagnostics(
         # provides a unified interface to pre_output_hook! and output, at the cost of an
         # additional copy. If this copy turns out to be too expensive, we can move the if
         # statement below.
-        isnothing(diag.reduction_time_func) || _copyto!(
-            diagnostic_handler.storage[diag_index],
-            diagnostic_handler.accumulators[diag_index],
+        isnothing(diag.reduction_time_func) || (
+            diagnostic_handler.storage[diag_index] .=
+                diagnostic_handler.accumulators[diag_index]
         )
 
         # Any operations we have to perform before writing to output? Here is where we would
