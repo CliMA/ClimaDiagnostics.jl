@@ -33,7 +33,10 @@ exist. The `NetCDFWriter` does not overwrite existing data and will error out if
 existing data is inconsistent with the new one.
 
 Optionally (recommended), you can pass an optional argument `start_date`, which
-will be saved as an attribute of your NetCDF file, easily accessible.
+sets the units and calendar of `time`. Following the CF conventions, `time` has
+units `seconds since <start_date>` and calendar `proleptic_gregorian`. Without a
+`start_date`, `time` is in seconds. The `start_date` is also saved as an
+attribute of each variable.
 
 `NetCDFWriter`s take as one of the inputs the desired number of points along
 each of the dimensions. For the horizontal dimensions, points are sampled
