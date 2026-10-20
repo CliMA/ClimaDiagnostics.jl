@@ -9,6 +9,11 @@ main
   The first window has one sample fewer than before, and time-aggregated diagnostics
   after a restart match those of a continuous run when the restart time is an
   output boundary.
+- ![][badge-💥breaking] `NetCDFWriter` no longer writes the `date` and
+  `date_bnds` variables. Following the CF conventions, when a start date is
+  available, `time` has units `seconds since <start date>` and calendar
+  `proleptic_gregorian`. Without a start date, `time` is still in seconds. PR
+  [#204](https://github.com/CliMA/ClimaDiagnostics.jl/pull/204)
 
 v0.3.11
 -------

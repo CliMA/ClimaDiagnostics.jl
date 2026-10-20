@@ -4,7 +4,7 @@ import ClimaCore: Domains, Geometry, Grids, Fields, Meshes, Spaces
 import ClimaCore.Remapping: Remapper, interpolate, interpolate!
 import ClimaCore.Remapping: AbstractRemappingMethod, SpectralElementRemapping
 import ..Schedules: EveryStepSchedule
-import ClimaUtilities.TimeManager: ITime, date
+import ClimaUtilities.TimeManager: ITime, epoch
 
 import NCDatasets
 import NVTX
@@ -96,8 +96,6 @@ struct NetCDFWriter{
 
     """Horizontal interpolation method for remapping. Passed to `ClimaCore.Remapping.Remapper`."""
     horizontal_method::HRM
-
-    # TODO: Add option to write dates as time
 end
 
 """
@@ -137,7 +135,7 @@ Keyword arguments
                    a boolean callable that takes as a single argument the `integrator`.
                    `sync_schedule` can also be set as `nothing`, in which case we let
                    handling buffered writes to disk.
-- `start_date`: Date of the beginning of the simulation.
+- `start_date`: `Date` or `DateTime` of the beginning of the simulation (`t = 0`).
 - `horizontal_pts`: A tuple of vectors of floats meaning Long-Lat or X-Y (the details depend
                     on the configuration being simulated).
 - `global_attribs`: Optional dictionary of global attributes to include in all NetCDF files
@@ -537,8 +535,8 @@ they are added the first time something is written.
 
 Time handling:
 - For reduced diagnostics: timestamps are stored at the START of the reduction period, with
-  time_bnds showing [start, end] of the period. For the first write, t=0 is assumed; for
-  subsequent writes, the end of the previous period is used.
+  time_bnds showing [start, end] of the period. For the first write, `init_time` is used;
+  for subsequent writes, the end of the previous period is used.
 - For instantaneous diagnostics: timestamps are stored at the current time, with time_bnds
   showing [previous_time, current_time].
 
@@ -600,13 +598,16 @@ NVTX.@annotate function write_field!(
 
     nc = writer.open_files[output_path]
 
+    start_date = get_start_date(writer, p)
+    t isa ITime && check_start_date(t, start_date)
+
     # Save as associated float if t is ITime
     TT = typeof(float(t))
     # Define time coordinate
     add_time_maybe!(
         nc,
         TT;
-        units = "s",
+        time_units_and_calendar(start_date)...,
         axis = "T",
         standard_name = "time",
         long_name = "Time",
@@ -623,27 +624,8 @@ NVTX.@annotate function write_field!(
         writer.interpolated_physical_z,
     )
 
-    start_date = get_start_date(writer, p)
-
-    add_time_bounds_maybe!(
-        nc,
-        TT;
-        comments = "time bounds for each time value",
-        units = "s",
-    )
-
-    if !isnothing(start_date)
-        add_date_maybe!(
-            nc;
-            units = "seconds since $start_date",
-            bounds = "date_bnds",
-        )
-        add_date_bounds_maybe!(
-            nc;
-            comments = "date bounds for each date value",
-            units = "seconds since $start_date",
-        )
-    end
+    # Following the CF conventions, time_bnds inherits units and calendar from time
+    add_time_bounds_maybe!(nc, TT)
 
     (v, temporal_size) = get_var_and_t_index!(
         nc,
@@ -666,14 +648,7 @@ NVTX.@annotate function write_field!(
     #   time_bnds showing [previous_time, current_time].
     isa_time_reduction = !isnothing(diagnostic.reduction_time_func)
     (; init_time) = writer
-    append_temporal_values!(
-        nc,
-        isa_time_reduction,
-        t,
-        start_date,
-        init_time,
-        time_index,
-    )
+    append_time_values!(nc, isa_time_reduction, time_index, t, init_time)
 
     colons = ntuple(_ -> Colon(), length(dim_names))
     v[time_index, colons...] = interpolated_field
@@ -687,13 +662,48 @@ end
 """
     get_start_date(writer::NetCDFWriter, p)
 
-Get the start date for the simulation.
+Get the start date for the simulation as a `DateTime`, or `nothing` if there is none.
 """
 function get_start_date(writer::NetCDFWriter, p)
-    if isnothing(writer.start_date) && hasproperty(p, :start_date)
-        return getproperty(p, :start_date)
+    start_date = writer.start_date
+    if isnothing(start_date) && hasproperty(p, :start_date)
+        start_date = getproperty(p, :start_date)
     end
-    return writer.start_date
+    return isnothing(start_date) ? nothing : Dates.DateTime(start_date)
+end
+
+"""
+    check_start_date(t::ITime, start_date)
+
+Error if `t` is an `ITime` whose epoch is not `start_date`.
+"""
+function check_start_date(t::ITime, start_date)
+    t_epoch = epoch(t)
+    if !isnothing(t_epoch) && !isnothing(start_date) && t_epoch != start_date
+        error(
+            "start_date $start_date does not match the epoch $t_epoch of the time",
+        )
+    end
+    return nothing
+end
+
+"""
+    time_units_and_calendar(start_date)
+
+Return the `units` attribute of the `time` coordinate and, if there is a `start_date`, its
+`calendar` attribute. With a `start_date`, times are seconds since `start_date`, so they can
+be decoded as dates.
+"""
+time_units_and_calendar(::Nothing) = (; units = "s")
+function time_units_and_calendar(start_date::Dates.DateTime)
+    reference_date = replace(string(start_date), "T" => " ")
+    # proleptic_gregorian is the calendar of Dates.DateTime
+    # In the future, if we support CFTime.jl with ITime, then this function
+    # should be updated to support different calendar systems
+    return (;
+        units = "seconds since $reference_date",
+        calendar = "proleptic_gregorian",
+    )
 end
 
 """
@@ -753,112 +763,28 @@ function get_var_and_t_index!(
 end
 
 """
-    append_temporal_values!(
-        nc,
-        isa_time_reduction,
-        t,
-        start_date,
-        init_time,
-        time_index,
-    )
-
-Append temporal data to the temporal dimensions of `nc`.
-
-The temporal dimensions are `time`, `time_bnds`, `date`, and `date_bnds`.
-
-Time handling for reduced vs instantaneous diagnostics:
-- For reduced diagnostics: store time as the START of the reduction period, with
-  time_bnds showing [start, end] of the period.
-- For instantaneous diagnostics: store time as the current time, with time_bnds
-  showing [previous_time, current_time].
-"""
-function append_temporal_values!(
-    nc,
-    isa_time_reduction,
-    t,
-    start_date,
-    init_time,
-    time_index,
-)
-    append_time_values!(nc, isa_time_reduction, time_index, t, init_time)
-    append_date_values!(
-        nc,
-        isa_time_reduction,
-        time_index,
-        t,
-        start_date,
-        init_time,
-    )
-    return nothing
-end
-
-"""
-    append_date_values!(
-        nc,
-        isa_time_reduction,
-        time_index,
-        t,
-        start_date,
-        init_time,
-    )
-
-Append date values to the `date` and `date_bnds` dimension in `nc`.
-"""
-function append_date_values!(
-    nc,
-    isa_time_reduction,
-    time_index,
-    t,
-    start_date,
-    init_time,
-)
-    # FIXME: We are hardcoding p.start_date !
-    # FIXME: We are rounding t
-    if !isnothing(start_date)
-        # TODO: Use ITime here
-        curr_date = start_date + Dates.Millisecond(round(1000 * float(t)))
-        date_type = typeof(curr_date) # not necessarily a Dates.DateTime
-
-        if time_index == 1
-            init_date =
-                init_time isa ITime ? date(init_time) :
-                (start_date + Dates.Millisecond(round(1000 * float(init_time))))
-        end
-        if isa_time_reduction
-            date_to_save =
-                time_index == 1 ? init_date :
-                date_type(nc["date_bnds"][2, time_index - 1])
-        else
-            date_to_save = curr_date
-        end
-        nc["date"][time_index] = date_to_save
-        nc["date_bnds"][:, time_index] =
-            time_index == 1 ? [init_date; curr_date] :
-            [date_type(nc["date_bnds"][2, time_index - 1]); curr_date]
-    end
-end
-
-"""
     append_time_values!(nc, isa_time_reduction, time_index, t, init_time)
 
 Append time values to the `time` and `time_bnds` dimension in `nc`.
 """
 function append_time_values!(nc, isa_time_reduction, time_index, t, init_time)
+    # nc["time_bnds"] returns dates when there is a start date which we do not
+    # want
+    time_bnds = NCDatasets.variable(nc, "time_bnds")
     # TODO: Use ITime here
     if isa_time_reduction
         # For reductions, timestamp at the start of the reduction period.
-        # Assume t=0 for the first write or use the end of the previous period.
+        # Use init_time for the first write or the end of the previous period.
         time_to_save =
-            time_index == 1 ? float(init_time) :
-            nc["time_bnds"][2, time_index - 1]
+            time_index == 1 ? float(init_time) : time_bnds[2, time_index - 1]
     else
         # For instantaneous diagnostics, use current time
         time_to_save = float(t)
     end
     nc["time"][time_index] = time_to_save
-    nc["time_bnds"][:, time_index] =
+    time_bnds[:, time_index] =
         time_index == 1 ? [float(init_time); float(t)] :
-        [nc["time_bnds"][2, time_index - 1]; float(t)]
+        [time_bnds[2, time_index - 1]; float(t)]
     return nothing
 end
 
