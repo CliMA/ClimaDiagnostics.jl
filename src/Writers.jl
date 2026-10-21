@@ -20,7 +20,15 @@ import ClimaCore
 import ..AbstractWriter, ..ScheduledDiagnostic
 import ..ScheduledDiagnostics: output_short_name, output_long_name
 
-function write_field!(writer::AbstractWriter, field, diagnostic, u, p, t)
+function write_field!(
+    writer::AbstractWriter,
+    field,
+    diagnostic,
+    u,
+    p,
+    t,
+    window_start,
+)
     # Nothing to be done here :)
     return nothing
 end

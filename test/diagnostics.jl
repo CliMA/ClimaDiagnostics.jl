@@ -127,11 +127,11 @@ include("TestTools.jl")
     # Each window averages the samples in (start, end]
     first_window = (t0 + dt):dt:(tf / 2)
     second_window = (tf / 2 + dt):dt:tf
-    @test dict_writer[short_name][0.5][] ≈
+    @test dict_writer[short_name][t0][] ≈
           sum(first_window) / length(first_window)
-    @test dict_writer[short_name][1.0][] ≈
+    @test dict_writer[short_name][0.5][] ≈
           sum(second_window) / length(second_window)
-    @test dict_writer[min_short_name][0.5][] ≈ first(first_window)
+    @test dict_writer[min_short_name][t0][] ≈ first(first_window)
 
     # Incompatible timestep in output
     diagnostic_incompatible_timestep = ClimaDiagnostics.ScheduledDiagnostic(

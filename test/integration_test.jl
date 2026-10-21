@@ -269,6 +269,10 @@ for (space, space_name, written_space_dims) in spaces_test_list
                 @test parent(
                     ClimaCore.InputOutput.read_field(reader, "YO_1it_inst"),
                 ) == parent(integrator.u.my_var)
+                @test ClimaCore.InputOutput.HDF5.read_attribute(
+                    reader.file,
+                    "time_bnds",
+                ) == [9.0, 10.0]
                 close(reader)
                 @test length(keys(dict_writer.dict["YO_1it_inst"])) == 11
                 @test dict_writer.dict["YO_1it_inst"][integrator.t] ==

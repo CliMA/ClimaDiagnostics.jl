@@ -24,34 +24,50 @@ Example
 ========
 
 Assuming we have a diagnostic with short output name "mydiag" stored in `dictW`.
-`dictW["mydiag"]` will be a dictionary with keys the timesteps when the data was
-saved. The values are the diagnostic output (typically a `ClimaCore` `Field`).
+`dictW["mydiag"]` will be a dictionary with keys the times of the data: the time
+of the output for instantaneous diagnostics, and the start of the output window
+for time-reduced diagnostics. The values are the diagnostic output (typically a
+`ClimaCore` `Field`).
 """
 function DictWriter()
     return DictWriter(Dict())
 end
 
 """
-    write_field!(writer::DictWriter, field, diagnostic, u, p, t)
+    write_field!(writer::DictWriter, field, diagnostic, u, p, t, window_start)
 
-Add an entry to the `writer` at time `t` for the current `diagnostic` with value
-`field`.
+Add an entry to the `writer` for the current `diagnostic` with value `field`.
+For instantaneous diagnostics, the entry is at time `t`. For time-reduced
+diagnostics, it is at `window_start`, the start of the output window that ends
+at `t`.
 
 `DictWriter` is backed by a dictionary. Most typically, the keys of this
 dictionary are either strings, the `output_short_name` of the diagnostic. If the
 `output_short_name` is not available, use the diagnostic itself. The values of
-this dictionary is another dictionary that maps the time `t` to the `field` at
+this dictionary is another dictionary that maps the time to the `field` at
 that value.
 
 `DictWriter` implements a basic read-only dictionary interface to access the
 times and values.
 """
-function write_field!(writer::DictWriter, field, diagnostic, u, p, t)
-    key_name =
-        diagnostic isa ScheduledDiagnostic ? output_short_name(diagnostic) :
-        diagnostic
+function write_field!(
+    writer::DictWriter,
+    field,
+    diagnostic,
+    u,
+    p,
+    t,
+    window_start,
+)
+    if diagnostic isa ScheduledDiagnostic
+        key_name = output_short_name(diagnostic)
+        time = isnothing(diagnostic.reduction_time_func) ? t : window_start
+    else
+        key_name = diagnostic
+        time = t
+    end
     diagnostic_dict = get!(writer.dict, key_name, OrderedDict())
-    diagnostic_dict[t] = copy(field)
+    diagnostic_dict[time] = copy(field)
     return nothing
 end
 
