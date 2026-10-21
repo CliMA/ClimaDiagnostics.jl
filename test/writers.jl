@@ -32,11 +32,11 @@ output_dir = mktempdir(pwd())
     writer = Writers.DictWriter()
 
     # Test with some strings and floats instead of actual Fields and ScheduledDiagnostics
-    Writers.write_field!(writer, 10.0, "mytest", nothing, nothing, 0.0)
+    Writers.write_field!(writer, 10.0, "mytest", nothing, nothing, 0.0, 0.0)
     @test writer.dict["mytest"][0.0] == 10.0
-    Writers.write_field!(writer, 20.0, "mytest", nothing, nothing, 2.0)
+    Writers.write_field!(writer, 20.0, "mytest", nothing, nothing, 2.0, 2.0)
     @test writer.dict["mytest"][2.0] == 20.0
-    Writers.write_field!(writer, 50.0, "mytest2", nothing, nothing, 8.0)
+    Writers.write_field!(writer, 50.0, "mytest2", nothing, nothing, 8.0, 8.0)
     @test writer.dict["mytest2"][8.0] == 50.0
 
     @test issorted(writer.dict["mytest"])
@@ -253,8 +253,8 @@ end
         output_writer = writer,
     )
     Writers.interpolate_field!(writer, field, diagnostic, u, p, t)
-    Writers.write_field!(writer, field, diagnostic, u, p, t)
-    Writers.write_field!(writer, field, diagnostic, u, p, t)
+    Writers.write_field!(writer, field, diagnostic, u, p, t, 0.0)
+    Writers.write_field!(writer, field, diagnostic, u, p, t, t)
 
     @test writer.unsynced_datasets ==
           Set((writer.open_files[joinpath(output_dir, "my_short_name.nc")],))
@@ -327,6 +327,7 @@ end
         u,
         p,
         t,
+        t,
     )
     # Write a second time
     Writers.write_field!(
@@ -335,6 +336,7 @@ end
         diagnostic_novert,
         u,
         p,
+        t,
         t,
     )
 
@@ -387,6 +389,7 @@ end
         space_with_hypsography_u,
         p,
         t,
+        t,
     )
     Writers.write_field!(
         hypsography_writer,
@@ -394,6 +397,7 @@ end
         hypsography_diagnostic,
         space_with_hypsography_u,
         p,
+        t,
         t,
     )
 
@@ -440,8 +444,24 @@ end
         p,
         t,
     )
-    Writers.write_field!(xyboxwriter, xyboxfield, xyboxdiagnostic, xyboxu, p, t)
-    Writers.write_field!(xyboxwriter, xyboxfield, xyboxdiagnostic, xyboxu, p, t)
+    Writers.write_field!(
+        xyboxwriter,
+        xyboxfield,
+        xyboxdiagnostic,
+        xyboxu,
+        p,
+        t,
+        t,
+    )
+    Writers.write_field!(
+        xyboxwriter,
+        xyboxfield,
+        xyboxdiagnostic,
+        xyboxu,
+        p,
+        t,
+        t,
+    )
 
     NCDatasets.NCDataset(joinpath(output_dir, "my_short_name_xybox.nc")) do nc
         # Test dimensions
@@ -490,6 +510,7 @@ end
         longlatboxu,
         p,
         t,
+        t,
     )
     # Write a second time, to check consistency
     Writers.write_field!(
@@ -498,6 +519,7 @@ end
         longlatboxdiagnostic,
         longlatboxu,
         p,
+        t,
         t,
     )
 
@@ -546,9 +568,25 @@ end
                 p,
                 t,
             )
-            Writers.write_field!(colwriter, colfield, coldiagnostic, colu, p, t)
+            Writers.write_field!(
+                colwriter,
+                colfield,
+                coldiagnostic,
+                colu,
+                p,
+                t,
+                t,
+            )
             # Write a second time, to check consistency
-            Writers.write_field!(colwriter, colfield, coldiagnostic, colu, p, t)
+            Writers.write_field!(
+                colwriter,
+                colfield,
+                coldiagnostic,
+                colu,
+                p,
+                t,
+                t,
+            )
             NCDatasets.NCDataset(
                 joinpath(output_dir, "my_short_name_c$(i).nc"),
             ) do nc
@@ -601,6 +639,7 @@ end
         colu_for_3d_writer,
         p,
         t,
+        t,
     )
     # Write a second time to check consistency
     Writers.write_field!(
@@ -609,6 +648,7 @@ end
         col_from_3d_diagnostic,
         colu_for_3d_writer,
         p,
+        t,
         t,
     )
     NCDatasets.NCDataset(
@@ -647,6 +687,7 @@ end
         point_u,
         p,
         t,
+        t,
     )
     # Write a second time
     Writers.write_field!(
@@ -655,6 +696,7 @@ end
         point_diagnostic,
         point_u,
         p,
+        t,
         t,
     )
     close(point_writer)
@@ -701,6 +743,7 @@ end
         horizontal_u,
         p,
         t,
+        t,
     )
     # Write a second time
     Writers.write_field!(
@@ -709,6 +752,7 @@ end
         horizontal_diagnostic,
         horizontal_u,
         p,
+        t,
         t,
     )
     close(horizontal_writer)
@@ -739,7 +783,7 @@ end
     Profile.clear()
 
     # Profile write
-    Profile.@profile Writers.write_field!(writer, field, diagnostic, u, p, t)
+    Profile.@profile Writers.write_field!(writer, field, diagnostic, u, p, t, t)
     ProfileCanvas.html_file("flame_write_netcdf.html", Profile.fetch())
 
     # Benchmark write
@@ -749,6 +793,7 @@ end
         $diagnostic,
         $u,
         $p,
+        $t,
         $t,
     )
 
@@ -836,7 +881,7 @@ end
         output_writer = writer,
     )
     Writers.interpolate_field!(writer, field, diagnostic, u, p, t)
-    Writers.write_field!(writer, field, diagnostic, u, p, t)
+    Writers.write_field!(writer, field, diagnostic, u, p, t, t)
 
     # This is div(2^53, 1000), since 2^53 + 1 is the first integer that cannot be
     # represented exactly as a Float64 due to rounding error
@@ -849,7 +894,7 @@ end
         epoch = Dates.DateTime(2010, 1),
     )
     Writers.interpolate_field!(writer, field, diagnostic, u, p, t)
-    Writers.write_field!(writer, field, diagnostic, u, p, t)
+    Writers.write_field!(writer, field, diagnostic, u, p, t, t)
 
     NCDatasets.NCDataset(joinpath(output_dir, "timetest.nc")) do nc
         times = nc["time"].var[:]
@@ -902,9 +947,17 @@ end
         t1 = 10.0
         t2 = 20.0
         t3 = 30.0
-        for t in [t1, t2, t3]
+        for (window_start, t) in zip([0.0, t1, t2], [t1, t2, t3])
             Writers.interpolate_field!(writer, field, diagnostic, u, p, t)
-            Writers.write_field!(writer, field, diagnostic, u, p, t)
+            Writers.write_field!(
+                writer,
+                field,
+                diagnostic,
+                u,
+                p,
+                t,
+                window_start,
+            )
         end
 
         NCDatasets.NCDataset(joinpath(output_dir, "instant_test.nc")) do nc
@@ -948,9 +1001,17 @@ end
         t1 = 10.0
         t2 = 20.0
         t3 = 30.0
-        for t in [t1, t2, t3]
+        for (window_start, t) in zip([0.0, t1, t2], [t1, t2, t3])
             Writers.interpolate_field!(writer, field, diagnostic, u, p, t)
-            Writers.write_field!(writer, field, diagnostic, u, p, t)
+            Writers.write_field!(
+                writer,
+                field,
+                diagnostic,
+                u,
+                p,
+                t,
+                window_start,
+            )
         end
 
         NCDatasets.NCDataset(joinpath(output_dir, "reduced_test.nc")) do nc
@@ -994,9 +1055,17 @@ end
         )
 
         times = [31, 59] .* 86400.0  # End of Jan and Feb in seconds
-        for t in times
+        for (window_start, t) in zip([0.0, times[1]], times)
             Writers.interpolate_field!(writer, field, diagnostic, u, p, t)
-            Writers.write_field!(writer, field, diagnostic, u, p, t)
+            Writers.write_field!(
+                writer,
+                field,
+                diagnostic,
+                u,
+                p,
+                t,
+                window_start,
+            )
         end
 
         NCDatasets.NCDataset(joinpath(output_dir, "monthly_1M_+.nc")) do nc
@@ -1080,8 +1149,8 @@ end
             ((writer, diagnostic), (writer_diff_pts, diagnostic_diff_pts))
         for (writ, diag) in combinations
             Writers.interpolate_field!(writ, field, diag, u, p, t)
-            Writers.write_field!(writ, field, diag, u, p, t)
-            Writers.write_field!(writ, field, diag, u, p, t)
+            Writers.write_field!(writ, field, diag, u, p, t, t)
+            Writers.write_field!(writ, field, diag, u, p, t, t)
         end
 
         NCDatasets.NCDataset(
@@ -1174,6 +1243,7 @@ end
             horizontal_u,
             p,
             t,
+            t,
         )
         # Write a second time
         Writers.write_field!(
@@ -1182,6 +1252,7 @@ end
             diagnostics,
             horizontal_u,
             p,
+            t,
             t,
         )
     end
@@ -1245,8 +1316,8 @@ end
     )
 
     Writers.interpolate_field!(writer, field, diagnostic, u, p, t)
-    Writers.write_field!(writer, field, diagnostic, u, p, t)
-    Writers.write_field!(writer, field, diagnostic, u, p, t)
+    Writers.write_field!(writer, field, diagnostic, u, p, t, t)
+    Writers.write_field!(writer, field, diagnostic, u, p, t, t)
 
     NCDatasets.NCDataset(joinpath(output_dir, "global_attrib_test.nc")) do nc
         @test nc.attrib["global"] == "attribs"
@@ -1370,149 +1441,40 @@ end
     end
 
     start_date = Dates.DateTime(2010)
-    t_and_init_time_pairs = (
-        (0.0, 0.0),
-        (ITime(0.0, epoch = start_date), ITime(0.0, epoch = start_date)),
-    )
-    for (t, init_time) in t_and_init_time_pairs
-        nc = make_nc(start_date)
-        t_idx = 1
-        isa_time_reduction = false
-        Writers.append_time_values!(nc, isa_time_reduction, t_idx, t, init_time)
-        Writers.append_time_values!(
-            nc,
-            isa_time_reduction,
-            t_idx + 1,
-            t + oneunit(t),
-            init_time,
-        )
-
-        @test nc["time"] == [
-            Dates.DateTime("2010-01-01T00:00:00"),
-            Dates.DateTime("2010-01-01T00:00:01"),
-        ]
-        @test nc["time_bnds"] == [
-            [
-                Dates.DateTime("2010-01-01T00:00:00"),
-                Dates.DateTime("2010-01-01T00:00:00"),
-            ] [
-                Dates.DateTime("2010-01-01T00:00:00"),
-                Dates.DateTime("2010-01-01T00:00:01"),
-            ]
-        ]
-        close(nc)
-    end
-
-    start_date = Dates.DateTime(2010)
-    t_and_init_time_pairs = (
-        (0.0, 0.0),
-        (ITime(0.0, epoch = start_date), ITime(0.0, epoch = start_date)),
-    )
-    for (t, init_time) in t_and_init_time_pairs
-        nc = make_nc(start_date)
-        t_idx = 1
-        isa_time_reduction = true
-        Writers.append_time_values!(
-            nc,
-            isa_time_reduction,
-            t_idx,
-            t + oneunit(t),
-            0.0,
-        )
-        Writers.append_time_values!(
-            nc,
-            isa_time_reduction,
-            t_idx + 1,
-            t + 2 * oneunit(t),
-            0.0,
-        )
-
-        @test nc["time"] == [
-            Dates.DateTime("2010-01-01T00:00:00"),
-            Dates.DateTime("2010-01-01T00:00:01"),
-        ]
-        @test nc["time_bnds"] == [
-            [
-                Dates.DateTime("2010-01-01T00:00:00"),
-                Dates.DateTime("2010-01-01T00:00:01"),
-            ] [
-                Dates.DateTime("2010-01-01T00:00:01"),
-                Dates.DateTime("2010-01-01T00:00:02"),
-            ]
-        ]
-        close(nc)
-    end
-
-    # Test with init_time not equal to 0
-    start_date = Dates.DateTime(2010)
-    t_and_init_time_pairs = (
-        (1.0, 1.0),
-        (ITime(1.0, epoch = start_date), ITime(1.0, epoch = start_date)),
-        (1.0, ITime(1.0, epoch = start_date)),
-        (ITime(1.0, epoch = start_date), 1.0),
-    )
-    for (t, init_time) in t_and_init_time_pairs
-        nc = make_nc(start_date)
-        t_idx = 1
-        isa_time_reduction = false
-        Writers.append_time_values!(nc, isa_time_reduction, t_idx, t, init_time)
-        Writers.append_time_values!(
-            nc,
-            isa_time_reduction,
-            t_idx + 1,
-            t + oneunit(t),
-            init_time,
-        )
-        @test nc["time"] == [
-            Dates.DateTime("2010-01-01T00:00:01"),
-            Dates.DateTime("2010-01-01T00:00:02"),
-        ]
-        @test nc["time_bnds"] == [
-            [
-                Dates.DateTime("2010-01-01T00:00:01"),
-                Dates.DateTime("2010-01-01T00:00:01"),
-            ] [
-                Dates.DateTime("2010-01-01T00:00:01"),
-                Dates.DateTime("2010-01-01T00:00:02"),
-            ]
-        ]
-        close(nc)
-    end
-
-    start_date = Dates.DateTime(2010)
-    t_and_init_time_pairs = (
+    # Float64 and ITime can be mixed (e.g., Float64 t0, ITime integrator.t)
+    t_and_window_start_pairs = (
         (2.0, 1.0),
         (ITime(2.0, epoch = start_date), ITime(1.0, epoch = start_date)),
         (ITime(2.0, epoch = start_date), 1.0),
         (2.0, ITime(1.0, epoch = start_date)),
     )
+    # Two consecutive windows, [1, 2] and [2, 3]
+    window_starts = [1.0, 2.0]
+    window_ends = [2.0, 3.0]
+    time_bnds = [window_starts'; window_ends']
+    for (t, window_start) in t_and_window_start_pairs
+        for isa_time_reduction in (false, true)
+            nc = make_nc(start_date)
+            Writers.append_time_values!(
+                nc,
+                isa_time_reduction,
+                1,
+                t,
+                window_start,
+            )
+            Writers.append_time_values!(
+                nc,
+                isa_time_reduction,
+                2,
+                t + oneunit(t),
+                t,
+            )
 
-    for (t, init_time) in t_and_init_time_pairs
-        nc = make_nc(start_date)
-        t_idx = 1
-        isa_time_reduction = true
-        Writers.append_time_values!(nc, isa_time_reduction, t_idx, t, init_time)
-        Writers.append_time_values!(
-            nc,
-            isa_time_reduction,
-            t_idx + 1,
-            t + oneunit(t),
-            init_time,
-        )
-        @test nc["time"] == [
-            Dates.DateTime("2010-01-01T00:00:01"),
-            Dates.DateTime("2010-01-01T00:00:02"),
-        ]
-        @test nc["time_bnds"] == [
-            [
-                Dates.DateTime("2010-01-01T00:00:01"),
-                Dates.DateTime("2010-01-01T00:00:02"),
-            ] [
-                Dates.DateTime("2010-01-01T00:00:02"),
-                Dates.DateTime("2010-01-01T00:00:03"),
-            ]
-        ]
-        close(nc)
+            saved_times = isa_time_reduction ? window_starts : window_ends
+            @test nc["time"] == start_date .+ Dates.Second.(saved_times)
+            @test nc["time_bnds"] == start_date .+ Dates.Second.(time_bnds)
+            close(nc)
+        end
     end
 end
 
@@ -1648,7 +1610,7 @@ end
                     z_sampling_method,
                 )
                 Writers.interpolate_field!(writer, intp_field, diag, u, p, t)
-                Writers.write_field!(writer, intp_field, diag, u, p, t)
+                Writers.write_field!(writer, intp_field, diag, u, p, t, t)
             end
         end
 

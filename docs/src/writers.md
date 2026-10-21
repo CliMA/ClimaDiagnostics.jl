@@ -100,7 +100,7 @@ from `OrderedCollections.jl`.
 ```@docs; canonical = false
 ClimaDiagnostics.Writers.NetCDFWriter(space::Spaces.AbstractSpace, output_dir)
 ClimaDiagnostics.Writers.interpolate_field!(writer::ClimaDiagnostics.Writers.NetCDFWriter, field, diagnostic, u, p, t)
-ClimaDiagnostics.Writers.write_field!(writer::ClimaDiagnostics.Writers.NetCDFWriter, field, diagnostic, u, p, t)
+ClimaDiagnostics.Writers.write_field!(writer::ClimaDiagnostics.Writers.NetCDFWriter, field, diagnostic, u, p, t, window_start)
 ClimaDiagnostics.Writers.sync(writer::ClimaDiagnostics.Writers.NetCDFWriter)
 Base.close(writer::ClimaDiagnostics.Writers.NetCDFWriter)
 ```
@@ -167,7 +167,7 @@ interactive work and debugging.
 
 ```@docs
 ClimaDiagnostics.Writers.DictWriter()
-ClimaDiagnostics.Writers.write_field!(writer::ClimaDiagnostics.Writers.DictWriter, field, diagnostic, u, p, t)
+ClimaDiagnostics.Writers.write_field!(writer::ClimaDiagnostics.Writers.DictWriter, field, diagnostic, u, p, t, window_start)
 ```
 
 ## `HDF5Writer`
@@ -184,6 +184,6 @@ is being output.
 
 ```@docs; canonical=false
 ClimaDiagnostics.Writers.HDF5Writer
-ClimaDiagnostics.Writers.write_field!(writer::ClimaDiagnostics.Writers.HDF5Writer, field, diagnostic, u, p, t)
+ClimaDiagnostics.Writers.write_field!(writer::ClimaDiagnostics.Writers.HDF5Writer, field, diagnostic, u, p, t, window_start)
 Base.close(writer::ClimaDiagnostics.Writers.HDF5Writer)
 ```

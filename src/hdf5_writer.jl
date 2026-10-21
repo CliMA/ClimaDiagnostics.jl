@@ -29,12 +29,15 @@ function Base.close(writer::HDF5Writer)
 end
 
 """
-    write_field!(writer::HDF5Writer, field, diagnostic, u, p, t)
+    write_field!(writer::HDF5Writer, field, diagnostic, u, p, t, window_start)
 
 Save a `ScheduledDiagnostic` to a HDF5 file inside the `output_dir`.
 
-The name of the file is determined by the `output_short_name` of the output
-`ScheduledDiagnostic`. New files are created for each timestep.
+For instantaneous diagnostics, the output is saved at time `t`. For time-reduced
+diagnostics, it is saved at `window_start`, the start of the output window that
+ends at `t`. The name of the file is determined by the `output_short_name` of
+the output `ScheduledDiagnostic` and this time. New files are created for each
+timestep. The `time_bnds` attribute stores `[window_start, t]`.
 
 `Field`s can be read back using the `InputOutput` module in `ClimaCore`.
 """
@@ -45,6 +48,7 @@ NVTX.@annotate function write_field!(
     u,
     p,
     t,
+    window_start,
 )
     axes(field) isa Spaces.PointSpace &&
         pkgversion(InputOutput) < v"0.14.27" &&
@@ -52,7 +56,7 @@ NVTX.@annotate function write_field!(
             "HDF5Writer only supports Fields with PointSpace for ClimaCore >= 0.14.27",
         )
     var = diagnostic.variable
-    time = t
+    time = isnothing(diagnostic.reduction_time_func) ? t : window_start
 
     output_path = joinpath(
         writer.output_dir,
@@ -64,6 +68,7 @@ NVTX.@annotate function write_field!(
     InputOutput.write!(hdfwriter, field, "$(diagnostic.output_short_name)")
     attributes = Dict(
         "time" => time,
+        "time_bnds" => [float(window_start), float(t)],
         "short_name" => diagnostic.output_short_name,
         "long_name" => diagnostic.output_long_name,
         "variable_units" => var.units,

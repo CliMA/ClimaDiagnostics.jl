@@ -14,6 +14,17 @@ main
   available, `time` has units `seconds since <start date>` and calendar
   `proleptic_gregorian`. Without a start date, `time` is still in seconds. PR
   [#204](https://github.com/CliMA/ClimaDiagnostics.jl/pull/204)
+- ![][badge-💥breaking] `DictWriter` and `HDF5Writer` now save time-reduced
+  diagnostics at the start of the reduction period, like `NetCDFWriter`.
+  Instantaneous diagnostics are still saved at the current time. `HDF5Writer`
+  also saves the start and end of each output window in a `time_bnds`
+  attribute. PR
+  [#205](https://github.com/CliMA/ClimaDiagnostics.jl/pull/205)
+- ![][badge-💥breaking] The `init_time` keyword argument of `NetCDFWriter` is
+  removed. The first reduction period now starts at the time the
+  `DiagnosticsHandler` is constructed with. For `IntegratorWithDiagnostics`, the
+  first reduction period starts with `integrator.t`. PR
+  [#205](https://github.com/CliMA/ClimaDiagnostics.jl/pull/205)
 
 v0.3.11
 -------
