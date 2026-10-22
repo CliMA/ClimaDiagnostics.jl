@@ -66,7 +66,9 @@ An object to instantiate and manage storage spaces for `ScheduledDiagnostics`.
 The `DiagnosticsHandler` calls `compute!(nothing, Y, p, t)` for each diagnostic, or
 `compute(Y, p, t)`, whichever is available. The result is used to allocate the areas of
 memory for storage and accumulation. For diagnostics without reduction,
-`write_field!(output_writer, result, diagnostic, Y, p, t)` is called too.
+`write_field!(output_writer, result, diagnostic, Y, p, t)` is called too. Reduction 
+windows are over the interval `(tᵢ, tᵢ₊₁]`, so the state at the initial `t` is not part 
+of the first window.
 
 Note: initializing a `DiagnosticsHandler` can be expensive.
 
@@ -114,7 +116,7 @@ function DiagnosticsHandler(scheduled_diagnostics, Y, p, t; dt = nothing)
         # We call `copy` to acquire ownership of the data in case compute! returned a
         # reference.
         push!(storage, copy(out_field))
-        push!(counters, 1)
+        push!(counters, 0)
 
         # If it is not a reduction, call the output writer as well
         if !isa_time_reduction
@@ -138,14 +140,11 @@ function DiagnosticsHandler(scheduled_diagnostics, Y, p, t; dt = nothing)
             end
             write_field!(diag.output_writer, storage[i], diag, Y, p, t)
         else
-            # Add to the accumulator
-
-            # We use similar + .= instead of copy because CUDA 5.2 does not supported nested
-            # wrappers with view(reshape(view)) objects. See discussion in
-            # https://github.com/CliMA/ClimaAtmos.jl/pull/2579 and
-            # https://github.com/JuliaGPU/Adapt.jl/issues/21
             accumulators[i] = similar(storage[i])
-            accumulators[i] .= storage[i]
+            fill!(
+                parent(accumulators[i]),
+                identity_of_reduction(diag.reduction_time_func),
+            )
         end
     end
     storage = value_types(storage)[storage...]

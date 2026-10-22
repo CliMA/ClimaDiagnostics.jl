@@ -3,6 +3,13 @@
 main
 -------
 
+- ![][badge-💥breaking] Time reductions no longer include the state at
+  initialization: accumulators start from the identity of `reduction_time_func`
+  with a zero counter, so every window contains the samples in `(start, end]`.
+  The first window has one sample fewer than before, and time-aggregated diagnostics
+  after a restart match those of a continuous run when the restart time is an
+  output boundary.
+
 v0.3.11
 -------
 
