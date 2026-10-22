@@ -88,12 +88,21 @@ include("TestTools.jl")
         output_writer = dict_writer,
         reduction_time_func = +,
         output_schedule_func = Schedules.DivisorSchedule(5),
+        pre_output_hook! = ClimaDiagnostics.average_pre_output_hook!,
     )
     short_name =
         ScheduledDiagnostics.output_short_name(diagnostic_accumulate_every_step)
+    diagnostic_min_every_step = ClimaDiagnostics.ScheduledDiagnostic(
+        variable = simple_var,
+        output_writer = dict_writer,
+        reduction_time_func = min,
+        output_schedule_func = Schedules.DivisorSchedule(5),
+    )
+    min_short_name =
+        ScheduledDiagnostics.output_short_name(diagnostic_min_every_step)
 
     diagnostic_handler = ClimaDiagnostics.DiagnosticsHandler(
-        [diagnostic_accumulate_every_step],
+        [diagnostic_accumulate_every_step, diagnostic_min_every_step],
         Y,
         p,
         t0;
@@ -115,8 +124,14 @@ include("TestTools.jl")
     @test length(keys(dict_writer.dict[short_name])) ==
           convert(Int, (tf - t0) / 5dt)
 
-    @test dict_writer[short_name][0.5][] ≈ sum(t0:dt:(tf / 2))
-    @test dict_writer[short_name][1.0][] ≈ sum((tf / 2 + dt):dt:tf)
+    # Each window averages the samples in (start, end]
+    first_window = (t0 + dt):dt:(tf / 2)
+    second_window = (tf / 2 + dt):dt:tf
+    @test dict_writer[short_name][0.5][] ≈
+          sum(first_window) / length(first_window)
+    @test dict_writer[short_name][1.0][] ≈
+          sum(second_window) / length(second_window)
+    @test dict_writer[min_short_name][0.5][] ≈ first(first_window)
 
     # Incompatible timestep in output
     diagnostic_incompatible_timestep = ClimaDiagnostics.ScheduledDiagnostic(
