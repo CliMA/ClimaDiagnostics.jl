@@ -3,6 +3,9 @@
 main
 -------
 
+v0.4.0
+-------
+
 - ![][badge-💥breaking] Time reductions no longer include the state at
   initialization: accumulators start from the identity of `reduction_time_func`
   with a zero counter, so every window contains the samples in `(start, end]`.
