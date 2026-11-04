@@ -1100,7 +1100,7 @@ end
     longlatboxspace =
         BoxSpace(; lonlat = true, ylim = (-Float64(1), Float64(2)))
     for (i, space) in enumerate((sphericalspace, longlatboxspace))
-        field = deepcopy(Fields.coordinate_field(space).z)
+        field = copy(Fields.coordinate_field(space).z)
         vec(parent(field)) .+= 1:length(parent(field))
 
         u = (; field)
