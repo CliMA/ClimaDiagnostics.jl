@@ -6,7 +6,7 @@ import ClimaCore: Grids, Spaces
 
 import ..Interpolators:
     interpolate_to_pressure_coords, interpolate_to_pressure_coords!, update!
-import .Schedules: DivisorSchedule, EveryDtSchedule
+import .Schedules: DivisorSchedule, EveryDtSchedule, max_samples_per_window
 import .Writers:
     interpolate_field!, write_field!, sync, AbstractWriter, NetCDFWriter
 
@@ -14,6 +14,28 @@ import ..Writers: AbstractZSamplingMethod, RealPressureLevelsMethod
 
 # We define all the known identities in reduction_identities.jl
 include("reduction_identities.jl")
+
+# Hooks the handler calls on the accumulator of a time reduction. The defaults treat
+# `reduction_time_func` as a binary operator broadcast over the field. `max_samples` is the
+# most samples an output window can have, or `nothing` if the schedules don't say, and
+# `name` is the diagnostic's output short name.
+allocate_accumulator(_, storage, _, _) = similar(storage)
+
+reset_accumulator!(accumulator, reduction) =
+    fill!(parent(accumulator), identity_of_reduction(reduction))
+
+function accumulate_sample!(accumulator, reduction, storage, _)
+    accumulator .= reduction.(accumulator, storage)
+    return nothing
+end
+
+function finalize_accumulator!(storage, accumulator, _, _, _)
+    storage .= accumulator
+    return nothing
+end
+
+include("pointwise_heaps.jl")
+include("quantile.jl")
 
 """
     DiagnosticsHandler
@@ -149,11 +171,18 @@ function DiagnosticsHandler(scheduled_diagnostics, Y, p, t; dt = nothing)
             end
             write_field!(diag.output_writer, storage[i], diag, Y, p, t, t)
         else
-            accumulators[i] = similar(storage[i])
-            fill!(
-                parent(accumulators[i]),
-                identity_of_reduction(diag.reduction_time_func),
+            max_samples = max_samples_per_window(
+                diag.compute_schedule_func,
+                diag.output_schedule_func,
+                dt,
             )
+            accumulators[i] = allocate_accumulator(
+                diag.reduction_time_func,
+                storage[i],
+                max_samples,
+                diag.output_short_name,
+            )
+            reset_accumulator!(accumulators[i], diag.reduction_time_func)
         end
     end
     storage = value_types(storage)[storage...]
@@ -425,11 +454,12 @@ NVTX.@annotate function orchestrate_diagnostics(
 
         isa_time_reduction = !isnothing(diag.reduction_time_func)
         if isa_time_reduction
-            diagnostic_handler.accumulators[diag_index] .=
-                diag.reduction_time_func.(
-                    diagnostic_handler.accumulators[diag_index],
-                    diagnostic_handler.storage[diag_index],
-                )
+            accumulate_sample!(
+                diagnostic_handler.accumulators[diag_index],
+                diag.reduction_time_func,
+                diagnostic_handler.storage[diag_index],
+                diagnostic_handler.counters[diag_index],
+            )
         end
     end
 
@@ -442,9 +472,12 @@ NVTX.@annotate function orchestrate_diagnostics(
         # provides a unified interface to pre_output_hook! and output, at the cost of an
         # additional copy. If this copy turns out to be too expensive, we can move the if
         # statement below.
-        isnothing(diag.reduction_time_func) || (
-            diagnostic_handler.storage[diag_index] .=
-                diagnostic_handler.accumulators[diag_index]
+        isnothing(diag.reduction_time_func) || finalize_accumulator!(
+            diagnostic_handler.storage[diag_index],
+            diagnostic_handler.accumulators[diag_index],
+            diag.reduction_time_func,
+            diagnostic_handler.counters[diag_index],
+            diag.output_short_name,
         )
 
         # Any operations we have to perform before writing to output? Here is where we would
@@ -510,10 +543,10 @@ NVTX.@annotate function orchestrate_diagnostics(
         # Reset accumulator
         isa_time_reduction = !isnothing(diag.reduction_time_func)
         if isa_time_reduction
-            # identity_of_reduction works by dispatching over operation.
-            # The function is defined in reduction_identities.jl
-            identity = identity_of_reduction(diag.reduction_time_func)
-            fill!(parent(diagnostic_handler.accumulators[diag_index]), identity)
+            reset_accumulator!(
+                diagnostic_handler.accumulators[diag_index],
+                diag.reduction_time_func,
+            )
         end
         # Reset counter and start the next output window
         diagnostic_handler.counters[diag_index] = 0

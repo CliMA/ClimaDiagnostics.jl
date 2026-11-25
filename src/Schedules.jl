@@ -356,4 +356,58 @@ function long_name(schedule::EveryCalendarDtSchedule)
     return period_to_str_long(schedule.dt)
 end
 
+# The most times `compute_schedule` can fire in one window of `output_schedule`, or `nothing`
+# if the schedules don't bound it. `dt` is the timestep, or `nothing` if unknown.
+function max_samples_per_window(compute_schedule, output_schedule, dt)
+    # A diagnostic is computed at most once per step
+    output_schedule isa DivisorSchedule && return (
+        compute_schedule isa DivisorSchedule ?
+        cld(output_schedule.divisor, compute_schedule.divisor) :
+        output_schedule.divisor
+    )
+    shortest = _shortest_interval(compute_schedule, dt)
+    longest = _longest_interval(output_schedule, dt)
+    (isnothing(shortest) || isnothing(longest)) && return nothing
+    # Schedules fire at the first step at or after their target time, and accept times that
+    # are only approximately equal, either of which can add a sample to a window
+    return ceil(Int, longest / shortest) + 2
+end
+
+# Shortest and longest time between two firings of a schedule, in seconds
+_shortest_interval(schedule::DivisorSchedule, dt) =
+    isnothing(dt) ? nothing : schedule.divisor * _to_seconds(dt)
+_shortest_interval(schedule::EveryDtSchedule, _) = _to_seconds(schedule.dt)
+_shortest_interval(schedule::EveryCalendarDtSchedule, _) =
+    _shortest_seconds(schedule.dt)
+_shortest_interval(_, _) = nothing
+
+_longest_interval(schedule::DivisorSchedule, dt) =
+    _shortest_interval(schedule, dt)
+_longest_interval(schedule::EveryDtSchedule, _) = _to_seconds(schedule.dt)
+_longest_interval(schedule::EveryCalendarDtSchedule, _) =
+    _longest_seconds(schedule.dt)
+_longest_interval(_, _) = nothing
+
+_to_seconds(t::ITime) = float(t)
+_to_seconds(t::Real) = Float64(t)
+_to_seconds(period::Dates.FixedPeriod) =
+    Dates.value(Dates.Nanosecond(period)) / 1e9
+
+# Months, quarters and years vary in length
+const SECONDS_PER_DAY = 86400.0
+_shortest_seconds(period::Dates.FixedPeriod) = _to_seconds(period)
+_shortest_seconds(period::Dates.Month) =
+    28 * SECONDS_PER_DAY * Dates.value(period)
+_shortest_seconds(period::Dates.Quarter) =
+    89 * SECONDS_PER_DAY * Dates.value(period)
+_shortest_seconds(period::Dates.Year) =
+    365 * SECONDS_PER_DAY * Dates.value(period)
+_longest_seconds(period::Dates.FixedPeriod) = _to_seconds(period)
+_longest_seconds(period::Dates.Month) =
+    31 * SECONDS_PER_DAY * Dates.value(period)
+_longest_seconds(period::Dates.Quarter) =
+    92 * SECONDS_PER_DAY * Dates.value(period)
+_longest_seconds(period::Dates.Year) =
+    366 * SECONDS_PER_DAY * Dates.value(period)
+
 end

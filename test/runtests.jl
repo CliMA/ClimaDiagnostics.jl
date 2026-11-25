@@ -13,6 +13,7 @@ using Test
 @safetestset "Schedules" begin @time include("schedules.jl") end
 @safetestset "DiagnosticVariable" begin @time include("diagnostic_variable.jl") end
 @safetestset "ScheduledDiagnostics" begin @time include("diagnostics.jl") end
+@safetestset "Quantiles" begin @time include("quantile.jl") end
 
 @safetestset "Diagnostics helpers" begin @time include("diagnostic_helper.jl") end
 
