@@ -13,6 +13,7 @@ import ClimaCore.Geometry
 import ClimaCore.CommonSpaces
 import ClimaCore.Meshes
 import ClimaCore.Operators
+import ClimaCore.InputOutput
 import ClimaComms
 
 import ClimaDiagnostics
@@ -40,6 +41,64 @@ output_dir = mktempdir(pwd())
     @test writer.dict["mytest2"][8.0] == 50.0
 
     @test issorted(writer.dict["mytest"])
+end
+
+@testset "HDF5Writer" begin
+    writer = Writers.HDF5Writer(output_dir)
+    field = Fields.coordinate_field(SphericalShellSpace()).z
+    variable = ClimaDiagnostics.DiagnosticVariable(;
+        compute = (u, p, t) -> u.field,
+        short_name = "ABC",
+        standard_name = "abc",
+        units = "m",
+    )
+    inst = ClimaDiagnostics.ScheduledDiagnostic(;
+        variable,
+        output_short_name = "hdf5_inst",
+        output_long_name = "Inst ABC",
+        output_writer = writer,
+    )
+    average = ClimaDiagnostics.ScheduledDiagnostic(;
+        variable,
+        reduction_time_func = (+),
+        pre_output_hook! = ClimaDiagnostics.average_pre_output_hook!,
+        output_short_name = "hdf5_average",
+        output_long_name = "Average ABC",
+        output_writer = writer,
+    )
+
+    # Instantaneous diagnostics are saved at t and time-reduced ones at the
+    # window start, in seconds for both Float64 and ITime
+    itime(s) =
+        ITime(s, period = Dates.Second(1), epoch = Dates.DateTime(2010, 1))
+    for (t, window_start) in ((600.0, 0.0), (itime(600), itime(0)))
+        for (diagnostic, time) in ((inst, 600.0), (average, 0.0))
+            name = diagnostic.output_short_name
+            filename = joinpath(output_dir, "$(name)_$(time).h5")
+            Writers.write_field!(
+                writer,
+                field,
+                diagnostic,
+                nothing,
+                nothing,
+                t,
+                window_start,
+            )
+            @test isfile(filename)
+
+            reader = InputOutput.HDF5Reader(filename, ClimaComms.context())
+            attr(key) = InputOutput.HDF5.read_attribute(reader.file, key)
+            @test parent(InputOutput.read_field(reader, name)) == parent(field)
+            @test attr("time") === time
+            @test attr("time_bnds") == [0.0, 600.0]
+            @test attr("short_name") == name
+            @test attr("long_name") == diagnostic.output_long_name
+            @test attr("variable_units") == "m"
+            @test attr("standard_variable_name") == "abc"
+            close(reader)
+            rm(filename)
+        end
+    end
 end
 
 @testset "Target coordinates" begin

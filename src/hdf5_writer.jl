@@ -55,7 +55,7 @@ NVTX.@annotate function write_field!(
 
     output_path = joinpath(
         writer.output_dir,
-        "$(diagnostic.output_short_name)_$(time).h5",
+        "$(diagnostic.output_short_name)_$(float(time)).h5",
     )
 
     comms_ctx = ClimaComms.context(field)
